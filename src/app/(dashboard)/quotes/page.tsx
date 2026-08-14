@@ -2,6 +2,7 @@ import Link from "next/link";
 import { QuoteFilters } from "@/features/quotes/quote-filters";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { KpiCard } from "@/components/dashboard/kpi-card";
 import {
   Table,
   TableBody,
@@ -12,8 +13,19 @@ import {
 } from "@/components/ui/table";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
+import {
+  QUOTE_ENGINEERING_STATUS_LABELS,
+  RFQ_TYPE_LABELS,
+  type QuoteEngineeringStatus,
+  type RfqType,
+} from "@/lib/quotes/rfq";
 import { QUOTE_STATUS_LABELS, type QuoteStatus } from "@/lib/quotes/status";
-import { quoteStatusSchema } from "@/lib/validation/quotes";
+import {
+  quoteEngineeringStatusSchema,
+  quoteStatusSchema,
+  rfqTypeSchema,
+} from "@/lib/validation/quotes";
+import { getQuoteEngineeringStats } from "@/server/services/engineering";
 import { listQuotes } from "@/server/services/quotes";
 
 function first(value: string | string[] | undefined) {
@@ -39,6 +51,8 @@ export default async function QuotesPage({
   searchParams: Promise<{
     q?: string | string[];
     status?: string | string[];
+    rfqType?: string | string[];
+    engineeringStatus?: string | string[];
     page?: string | string[];
   }>;
 }) {
@@ -46,18 +60,29 @@ export default async function QuotesPage({
   const params = await searchParams;
   const q = first(params.q)?.trim() || undefined;
   const statusParsed = quoteStatusSchema.safeParse(first(params.status));
+  const rfqTypeParsed = rfqTypeSchema.safeParse(first(params.rfqType));
+  const engineeringParsed = quoteEngineeringStatusSchema.safeParse(
+    first(params.engineeringStatus),
+  );
   const page = Number(first(params.page) ?? "1") || 1;
   const canWrite = access.permissions.includes(PERMISSION_IDS.quotesWrite);
+  const stats = await getQuoteEngineeringStats();
 
   const result = await listQuotes({
     q,
     status: statusParsed.success ? statusParsed.data : undefined,
+    rfqType: rfqTypeParsed.success ? rfqTypeParsed.data : undefined,
+    engineeringStatus: engineeringParsed.success ? engineeringParsed.data : undefined,
     page,
   });
 
   const query = new URLSearchParams();
   if (q) query.set("q", q);
   if (statusParsed.success) query.set("status", statusParsed.data);
+  if (rfqTypeParsed.success) query.set("rfqType", rfqTypeParsed.data);
+  if (engineeringParsed.success) {
+    query.set("engineeringStatus", engineeringParsed.data);
+  }
 
   function pageHref(nextPage: number) {
     const next = new URLSearchParams(query);
@@ -81,7 +106,35 @@ export default async function QuotesPage({
         ) : null}
       </div>
 
-      <QuoteFilters q={q} status={statusParsed.success ? statusParsed.data : undefined} />
+      <QuoteFilters
+        q={q}
+        status={statusParsed.success ? statusParsed.data : undefined}
+        rfqType={rfqTypeParsed.success ? rfqTypeParsed.data : undefined}
+        engineeringStatus={engineeringParsed.success ? engineeringParsed.data : undefined}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          label="Requieren ingeniería"
+          value={String(stats.requiringEngineering)}
+          hint="RFQ con diseño o validación"
+        />
+        <KpiCard
+          label="Ingeniería pendiente"
+          value={String(stats.engineeringPending)}
+          hint="Solicitud aún no asignada"
+        />
+        <KpiCard
+          label="Ingeniería en proceso"
+          value={String(stats.engineeringInProcess)}
+          hint="Diseño o revisión en curso"
+        />
+        <KpiCard
+          label="Ingeniería liberada"
+          value={String(stats.engineeringReleased)}
+          hint="Listas para cotización final / pedido"
+        />
+      </div>
 
       <div className="overflow-x-auto rounded-lg border">
         <Table>
@@ -89,7 +142,9 @@ export default async function QuotesPage({
             <TableRow>
               <TableHead>Número</TableHead>
               <TableHead>Cliente</TableHead>
+              <TableHead>Tipo RFQ</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead>Ingeniería</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead className="text-right">Margen</TableHead>
@@ -98,7 +153,7 @@ export default async function QuotesPage({
           <TableBody>
             {result.rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
+                <TableCell colSpan={8} className="text-muted-foreground">
                   No hay cotizaciones con esos filtros.
                 </TableCell>
               </TableRow>
@@ -121,7 +176,15 @@ export default async function QuotesPage({
                     </Link>
                   </TableCell>
                   <TableCell>
+                    {RFQ_TYPE_LABELS[row.rfqType as RfqType]}
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={statusVariant(row.status)}>{QUOTE_STATUS_LABELS[row.status]}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={row.requiresEngineering ? "secondary" : "outline"}>
+                      {QUOTE_ENGINEERING_STATUS_LABELS[row.engineeringStatus as QuoteEngineeringStatus]}
+                    </Badge>
                   </TableCell>
                   <TableCell>{row.issueDate.toLocaleDateString("es-MX")}</TableCell>
                   <TableCell className="text-right">{money(row.total, row.currency)}</TableCell>

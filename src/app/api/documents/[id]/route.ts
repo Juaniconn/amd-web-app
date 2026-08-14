@@ -27,6 +27,14 @@ export async function GET(
       if (!allowed) {
         return NextResponse.json({ error: "Sin permiso." }, { status: 403 });
       }
+    } else if (doc.entityType === "engineering_request") {
+      const allowed = await userHasPermission(
+        session.user.id,
+        PERMISSION_IDS.engineeringRead,
+      );
+      if (!allowed) {
+        return NextResponse.json({ error: "Sin permiso." }, { status: 403 });
+      }
     } else {
       return NextResponse.json({ error: "Sin permiso." }, { status: 403 });
     }

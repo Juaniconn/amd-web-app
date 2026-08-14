@@ -24,11 +24,13 @@ import {
 } from "@/lib/validation/customers";
 import { listCustomerActivity } from "@/server/services/activity";
 import { getCustomerById } from "@/server/services/customers";
+import { listEngineeringByCustomer } from "@/server/services/engineering";
 import { listQuotesByCustomer } from "@/server/services/quotes";
+import { ENGINEERING_STATUS_LABELS, type EngineeringStatus } from "@/lib/engineering/status";
 import { QUOTE_STATUS_LABELS } from "@/lib/quotes/status";
 
 const UPCOMING = [
-  { label: "Pedidos", phase: "Fase 4" },
+  { label: "Pedidos", phase: "Fase 5+" },
   { label: "Órdenes de producción", phase: "Fase 5" },
   { label: "Facturación / ventas", phase: "Posterior" },
   { label: "Pagos", phase: "Posterior" },
@@ -64,6 +66,12 @@ export default async function CustomerDetailPage({
   const canWriteQuotes = access.permissions.includes(PERMISSION_IDS.quotesWrite);
   const canReadQuotes = access.permissions.includes(PERMISSION_IDS.quotesRead);
   const quotes = canReadQuotes ? await listQuotesByCustomer(customer.id) : [];
+  const canReadEngineering = access.permissions.includes(
+    PERMISSION_IDS.engineeringRead,
+  );
+  const engineering = canReadEngineering
+    ? await listEngineeringByCustomer(customer.id)
+    : [];
   const archived = Boolean(customer.deletedAt);
 
   return (
@@ -240,6 +248,65 @@ export default async function CustomerDetailPage({
                           style: "currency",
                           currency: quote.currency.toUpperCase(),
                         }).format(Number(quote.total))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {canReadEngineering ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <CardTitle>Ingeniería</CardTitle>
+            {access.permissions.includes(PERMISSION_IDS.engineeringCreate) && !archived ? (
+              <Link
+                href="/engineering/new"
+                className={buttonVariants({ size: "sm" })}
+              >
+                Nueva solicitud
+              </Link>
+            ) : null}
+          </CardHeader>
+          <CardContent>
+            {engineering.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Este cliente aún no tiene solicitudes de ingeniería.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Número</TableHead>
+                    <TableHead>RFQ</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Compromiso</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {engineering.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <Link
+                          href={`/engineering/${item.id}`}
+                          className="font-medium hover:underline"
+                        >
+                          {item.number}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <Link href={`/quotes/${item.quoteId}`} className="hover:underline">
+                          {item.quoteNumber}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        {ENGINEERING_STATUS_LABELS[item.status as EngineeringStatus]}
+                      </TableCell>
+                      <TableCell>
+                        {item.dueDate ? item.dueDate.toLocaleDateString("es-MX") : "—"}
                       </TableCell>
                     </TableRow>
                   ))}

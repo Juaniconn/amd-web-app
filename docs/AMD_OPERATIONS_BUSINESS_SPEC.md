@@ -50,11 +50,12 @@ Esta plataforma será el centro operativo de AMD.
 
 # 0. ESTADO DE IMPLEMENTACIÓN
 
-**Fecha de este estado:** 2026-08-13  
-**Fase actual:** ninguna en desarrollo. **Fase 3 — Cotizaciones / RFQ está ✅ Completada.**  
-**Siguiente fase autorizada:** **Fase 4 — Pedidos** (vista operativa; las tablas mínimas `orders` / `order_items` ya existen por la conversión de Fase 3).
+**Fecha de este estado:** 2026-08-14  
+**Fase actual:** ✅ **Fase 4 — Ingeniería y Diseño (implementada).** Producción es la siguiente.  
+**Ingeniería y Diseño:** ✅ implementada (ADR-031–043). Decisiones de Dirección 2026-08-14 documentadas; ECO/costeo/nomenclatura en código = incremento.  
+**Fases cerradas:** Fase 1 ✅ · Fase 2 ✅ · Fase 3 RFQ ✅ · Fase 4 Ingeniería ✅. Pedido mínimo al convertir: sí (ADR-023). Gate Liberado: sí (ADR-034).
 
-Este bloque describe lo que **existe en el código y en PostgreSQL**. El resto del documento (el prompt maestro) sigue siendo la visión del producto; no se borra.
+Este bloque describe lo que **existe en el código y en PostgreSQL**, más el estado documental. El cuerpo histórico (§47) no se borra. Numeración vigente: [[roadmap]] y **ADR-032** (ADR-026 reemplazada en numeración).
 
 Leyenda: ✅ Completado · 🔄 En progreso · ⬜ Pendiente
 
@@ -66,10 +67,11 @@ Lo que Dirección / Ventas puede hacer hoy, de punta a punta:
 
 1. Iniciar sesión.
 2. Mantener clientes y contactos (CRM).
-3. Capturar una RFQ como cotización en `borrador`.
-4. Cargar partidas, calcular IVA/total/costo/margen, adjuntar archivos.
-5. Recorrer estados hasta `aprobada`.
-6. Convertir a un **pedido mínimo** (`nuevo`, número `AMD-YYYY-NNNNN`). `/orders` sigue deshabilitado.
+4. Capturar una RFQ como cotización en `borrador`, con tipo (solo fabricación / diseño / reverse engineering).
+5. Si requiere ingeniería: se abre una solicitud, se diseña, se aprueba y se **libera**.
+6. Cargar partidas, calcular IVA/total/costo/margen, adjuntar archivos.
+7. Recorrer estados hasta `aprobada`.
+8. Convertir a un **pedido mínimo** (`nuevo`, número `AMD-YYYY-NNNNN`, origen `rfq_directa` o `rfq_ingenieria`). `/orders` sigue deshabilitado. Si la RFQ requería ingeniería, exige `Liberado`.
 
 No existe aún: producción, inventario, compras, calidad, entregas, facturación, notificaciones, búsqueda global, Centro de Operaciones, ni hosting Cloudflare.
 
@@ -83,15 +85,16 @@ La visión (§2) sigue siendo controlar el ciclo operativo completo de AMD. **Ho
 |---|---|---|
 | Fundación (app, auth, RBAC, layout, usuarios, roles, dashboard inicial) | ✅ Completado | Fase 1 |
 | CRM: clientes, contactos, ficha, historial | ✅ Completado | `src/features/customers`, `src/db/schema/crm.ts` |
-| Cotizaciones / RFQ | ✅ Completado | `src/features/quotes`, `src/db/schema/quotes.ts` |
-| Pedidos (UI y ciclo de vida) | ⬜ Pendiente | Sidebar `/orders` deshabilitado. Tablas mínimas sí existen (ADR-023) |
-| Documentos de cotización (storage local) | ✅ Parcial | `documents` + `.data/uploads`; solo entidad `quote` en UI/API |
+| Cotizaciones / RFQ | ✅ Completado | `src/features/quotes`, `src/db/schema/quotes.ts`. Tipo RFQ + ingeniería (Fase 4) |
+| Pedidos (UI y ciclo de vida) | ⬜ Pendiente | Sidebar `/orders` deshabilitado. Tablas mínimas sí existen (ADR-023). `origin` listo (ADR-035) |
+| Documentos de cotización (storage local) | ✅ Parcial | `documents` + `.data/uploads`; entidades `quote` y `engineering_request` |
 | Documentos centrales / R2 / Workers / D1 / KV | ⬜ Pendiente | No hay `wrangler` ni SDK R2 |
-| Producción y máquinas | ⬜ Pendiente | — |
+| Ingeniería y Diseño | ✅ Completado | `src/features/engineering`, `src/db/schema/engineering.ts`. ADR-031–043 |
+| Producción y máquinas | 🔄 Docs / ⬜ Código | Vault `docs/Produccion/`. Fase **5**. Sin tablas ni UI |
 | Inventario | ⬜ Pendiente | — |
 | Compras y proveedores | ⬜ Pendiente | — |
 | Calidad y entregas | ⬜ Pendiente | — |
-| Reportes / Centro de Operaciones | ⬜ Pendiente | Dashboard: fundación + clientes activos + KPIs de cotizaciones |
+| Reportes / Centro de Operaciones | ⬜ Pendiente | Dashboard: fundación + CRM + RFQ + subconjunto de KPI ingeniería |
 | Beta interna / deploy Cloudflare | ⬜ Pendiente | Fuera del plan numerado §47; no hay pipeline |
 
 ## Módulos de negocio
@@ -101,8 +104,9 @@ La visión (§2) sigue siendo controlar el ciclo operativo completo de AMD. **Ho
 | §7 Clientes | Este documento | ✅ Completado (Fase 2). La ficha muestra cotizaciones reales |
 | §8 Contactos | Este documento | ✅ Completado (Fase 2) |
 | §9–12 Cotizaciones | Este documento | ✅ Completado (Fase 3; RFQ = `quotes` en `borrador`, ADR-024) |
+| Ingeniería y Diseño | § añadida 2026-08-13 | ✅ Implementado (Fase 4). ADR-031–043 |
 | §13–14 Pedidos | Este documento | ⬜ Pendiente (UI). Persistencia mínima al convertir |
-| §15–18 Producción | Este documento | ⬜ Pendiente |
+| §15–18 Producción | Este documento | 🔄 Docs + modelo de piso validado (ADR-030). Fase **5**. Código ⬜ |
 | §19–22 Inventario | Este documento | ⬜ Pendiente |
 | §23–26 Compras | Este documento | ⬜ Pendiente |
 | §27 Calidad | Este documento | ⬜ Pendiente |
@@ -115,51 +119,61 @@ La visión (§2) sigue siendo controlar el ciclo operativo completo de AMD. **Ho
 | §36 Búsqueda global | Este documento | ⬜ Pendiente |
 | §51 Centro de Operaciones | Este documento | ⬜ Pendiente |
 
-Ningún módulo de negocio está 🔄 En progreso.
+Ningún **módulo de software** de negocio posterior a Ingeniería está 🔄 En implementación. Fase 4 Ingeniería está ✅. Producción no se implementa todavía.
 
 ## Dependencias entre módulos
 
 ```
 Fase 1 Fundación ✅
     └── Fase 2 CRM ✅
-            └── Fase 3 Cotizaciones ✅
-                    └── Fase 4 Pedidos ⬜   ← siguiente autorizada
-                            ├── Fase 5 Producción ⬜
-                            ├── Fase 6 Inventario ⬜
-                            └── Fase 7 Compras ⬜
-                                    └── Fase 8 Calidad y entregas ⬜
-                                            └── Fase 9 Reportes ⬜
+            └── Fase 3 RFQ ✅
+                    └── Fase 4 Ingeniería y Diseño ✅
+                            └── Fase 5 Producción ⬜ código (docs listas)
+                                    ├── Fase 6 Inventario ⬜
+                                    └── Fase 7 Compras ⬜
+                                            └── Fase 8 Calidad ⬜
+                                                    └── Fase 9 Entregas ⬜
+                                                            └── Fase 10 Facturación ⬜
+                                                                    └── Fase 11 Dashboard Ejecutivo ⬜
+                                                                            └── Fase 12 Beta Interna ⬜
+                                                                                    └── Fase 13 Deploy Cloudflare ⬜
 ```
+
+§47 histórico y ADR-026 no se borran. Vigente: ADR-032.
 
 ## Flujos de negocio ejecutables hoy
 
 ```
 Cliente ✅ → Contactos ✅ → RFQ/borrador ✅ → Partidas + archivos ✅
-    → En revisión / Enviada ✅ → Aprobada o Rechazada o Expirada ✅
-    → Pedido mínimo ✅
+    → Ingeniería (si aplica) ✅ → En revisión / Enviada ✅ → Aprobada o Rechazada o Expirada ✅
+    → Pedido mínimo ✅ (origen RFQ directa o RFQ + Ingeniería)
     → Orden de producción ⬜ → Inventario ⬜ → Compras ⬜
     → Calidad ⬜ → Entrega ⬜ → Pedido cerrado ⬜
 ```
 
 - «Marcar enviada» es **solo cambio de estado**. No hay correo ni PDF generado.
 - La vigencia vencida de una cotización `enviada` se persiste a `expirada` al listar/abrir (lazy expire).
-- Convertir **no** crea orden de producción. Crea `orders` + `order_items` en `nuevo`.
+- Convertir **no** crea orden de producción. Crea `orders` + `order_items` en `nuevo` con `origin`. Si `requires_engineering`, exige solicitud `liberado` (ADR-034). Diseño OP: ADR-025. Ingeniería: ADR-031–035.
 
-## Roadmap funcional (plan §47)
+## Roadmap funcional (numeración vigente; §47 histórico no se borra)
 
 | Fase | Nombre | Estado |
 |---|---|---|
 | 1 | Fundación | ✅ Completado |
 | 2 | CRM | ✅ Completado |
-| 3 | Cotizaciones | ✅ Completado |
-| 4 | Pedidos | ⬜ Pendiente |
-| 5 | Producción | ⬜ Pendiente |
+| 3 | RFQ / Cotizaciones | ✅ Completado |
+| 4 | Ingeniería y Diseño | ✅ Completado |
+| 5 | Producción | ⬜ Código (docs de piso listas, ADR-030) |
 | 6 | Inventario | ⬜ Pendiente |
 | 7 | Compras | ⬜ Pendiente |
-| 8 | Calidad y entregas | ⬜ Pendiente |
-| 9 | Reportes | ⬜ Pendiente |
+| 8 | Calidad | ⬜ Pendiente |
+| 9 | Entregas | ⬜ Pendiente |
+| 10 | Facturación | ⬜ Pendiente |
+| 11 | Dashboard Ejecutivo | ⬜ Pendiente |
+| 12 | Beta Interna | ⬜ Pendiente |
+| 13 | Deploy Cloudflare | ⬜ Pendiente |
 
-Fuera del plan numerado: Centro de Operaciones / dashboard ejecutivo ⬜ · beta interna ⬜ · deploy Cloudflare ⬜.
+UI de Pedidos: ⬜ diferida (tablas mínimas ✅). Ver [[roadmap]].
 
 ## Criterio de éxito del MVP (§54)
 
@@ -170,11 +184,19 @@ Pasos **1–6** ✅ (cliente → cotización → partidas → precio → aprobac
 - Roadmap: [[roadmap]]
 - Módulo CRM: [[crm]]
 - Módulo RFQ: [[rfq]]
-- Proceso: [[Proceso RFQ]]
-- Changelog: [[phase-3]]
-- Auditoría: [[phase-3-audit]]
-- Resumen Dirección: [[phase-3-summary]]
+- Módulo Ingeniería: [[engineering]]
+- Proceso Ingeniería: [[Proceso Ingenieria]]
+- Resumen Dirección Ingeniería: [[Ingenieria Executive Summary]]
+- Módulo Producción: [[production]] (Fase 5)
+- Proceso RFQ: [[Proceso RFQ]]
+- Proceso Producción: [[Proceso Producción]]
+- Resumen Dirección Producción: [[Produccion Executive Summary]]
+- Changelog Fase 3: [[phase-3]]
 - ADRs de Fase 3: ADR-022, ADR-023, ADR-024
+- ADRs de piso (docs, ahora Fase 5): ADR-025, ADR-026 (numeración reemplazada), ADR-027, ADR-028, ADR-029, **ADR-030**
+- ADRs de Ingeniería: **ADR-031** a **ADR-042**
+- Catálogos de piso 2026-08-14: **ADR-043**
+- Modelo operativo de piso aprobado: [[Pendiente Validacion Direccion]]
 
 ---
 
@@ -186,6 +208,7 @@ Quiero una aplicación web que permita controlar de manera centralizada:
 - Clientes
 - Contactos
 - Cotizaciones
+- Ingeniería y diseño
 - Pedidos
 - Órdenes de producción
 - Materiales
@@ -316,7 +339,7 @@ No quiero módulos aislados.
 
 # 5. DASHBOARD PRINCIPAL
 
-> **Estado 2026-08-13:** ✅ Parcial (Fases 1–3). KPIs reales desde PostgreSQL: usuarios, roles, sesiones activas, clientes activos (`customers:read`), cotizaciones abiertas / por vencer 7 días / convertidas del mes (`quotes:read`). Ventas, pedidos activos, producción, material, máquinas y entregas son placeholders sin cifras. No existe «Ventas hoy». Centro de Operaciones (§51) ⬜. Ver [[dashboard]].
+> **Estado 2026-08-14:** ✅ Parcial (Fases 1–4). KPIs reales: usuarios, roles, sesiones, clientes activos, cotizaciones (abiertas / por vencer / convertidas del mes), ingeniería (abiertas / vencidas / liberados). KPI oficiales de Ingeniería y el tablero Dirección (ADR-042, ADR-043) no están completos en `/dashboard`. Placeholders: ventas hoy, pedidos, producción, material, máquinas, entregas. Centro de Operaciones (§51) ⬜. Ver [[dashboard]], [[KPI Ingenieria]].
 
 El Dashboard será la pantalla principal de AMD Operations.
 
@@ -600,9 +623,116 @@ Pedido #XXX
 
 ---
 
+# INGENIERÍA Y DISEÑO (Fase 4 vigente)
+
+> **Estado 2026-08-14:** ✅ Implementado (ADR-031 a ADR-035). Decisiones de Dirección 2026-08-14 documentadas (ADR-036 a ADR-042): CAD oficial, puesto, aprobaciones, nomenclatura, cobro/costeo, ECO, DFM, KPI. Parte de esas decisiones **no está en código** (horas estimadas, tarifa, ECO, patrón AMD-PART, doble firma, DFM de taller). Detalle: [[Proceso Ingenieria]], vault `docs/Ingenieria/`, [[Auditoria Fase 4 Ingenieria]].
+
+AMD México opera bajo **dos escenarios**. La arquitectura CRM → RFQ → Producción es incompleta: omite el diseño cuando el cliente no entrega plano.
+
+## Objetivo
+
+Controlar el trabajo de **ingeniería y diseño** (CAD, revisión, manufacturabilidad, aprobación del cliente y liberación) **antes** de fabricar, cuando AMD debe crear o validar un plano.
+
+No sustituye a la RFQ (precio comercial) ni a la orden de producción (piso). Separa **diseñar**, **cotizar** y **producir**.
+
+## Alcance
+
+**Dentro del módulo (implementado):**
+
+- Solicitud de ingeniería ligada a cliente y a RFQ (1 RFQ → 0..1 activa)
+- Tipos: diseño nuevo, modificación, reverse engineering, validación de manufacturabilidad
+- Asignación, horas reales, revisiones de archivo, estados, liberación
+- Gate de conversión y origen de pedido
+
+**Diseño validado, no persistido (ADR-036–042):**
+
+- Software CAD/CAM oficial (fuera del ERP)
+- Puesto Ingeniero de Diseño y Manufactura / Programador CNC
+- Doble aprobación interna; canal Ventas Técnicas
+- Nomenclatura `AMD-PART-XXXX_REV-*`
+- Costeo: horas estimadas, costo hora, costo total, tipo de cobro
+- ECO/ECN
+- Checklist DFM con Jefe de Taller
+- KPI oficiales incompletos en dashboard
+
+**Fuera de alcance de Fase 4 (no construir ahora):**
+
+- Visor CAD / PDM completo
+- Portal del cliente
+- Ejecución CAM / OEE
+- Órdenes de producción
+
+## Problemas que resuelve
+
+- La RFQ no distingue **fabricar** vs **diseñar**.
+- El piso puede trabajar un adjunto no revisado ni firmado.
+- Las horas de ingeniería no se ven ni se costean aparte del tiempo máquina.
+- No hay versión vigente del plano entre cotización y OP.
+- No hay estados de diseño (pendiente, revisión, esperando cliente, liberado).
+
+## Relación con RFQ
+
+- **Escenario A — el cliente requiere diseño:** RFQ → Ingeniería → CAD → revisión → aprobación cliente → **cotización final** → pedido → producción. Ingeniería es **obligatoria**. El precio firme puede esperar al diseño.
+- **Escenario B — el cliente entrega plano:** RFQ + adjunto → cotización → pedido → producción. Ingeniería es **opcional** (validación o correcciones). El flujo actual de `/quotes` se parece a B.
+- Convertir a pedido (`aprobada` → `convertida`) **exige** solicitud `liberado` si `requires_engineering` (ADR-034).
+- Cobro de ingeniería: [[Costeo Ingenieria]] (A incluido / B-C independiente). Campos de tarifa ⬜.
+- Cliente estratégico: definición en ADR-043; flag CRM ⬜.
+
+## Relación con Producción
+
+- Producción es **Fase 5**. Recibe un plano **liberado** (A) o el adjunto validado (B).
+- Ingeniería **no** programa centros ni máquinas (ADR-030 sigue vigente para el piso).
+- Las rutas de fabricación A/B/C (lámina, CNC, EDM) son de **piso**, no de CAD. No confundir con los escenarios A/B de este módulo.
+- Sin `Liberado` en escenario A, no debe nacer OP.
+
+## Relación con el cliente
+
+- El cliente entrega brief o plano y aprueba o pide correcciones (Cliente / Ingeniería cliente / Calidad cliente).
+- **No es usuario** de AMD Operations; no hay portal.
+- Canal: Ejecutivo de Ventas Técnicas (`engineering:approve`).
+- Aprobación interna de proceso: Líder de Ingeniería + Gerente de Operaciones (no persistida como doble firma).
+
+## Flujos soportados
+
+```
+Escenario A
+Cliente → CRM → RFQ → Ingeniería → Diseño CAD → Revisión
+    → Aprobación cliente → Cotización final → Pedido → Producción
+```
+
+```
+Escenario B
+Cliente → CRM → RFQ → plano adjunto → Cotización → Pedido → Producción
+    (Ingeniería opcional: validación / modificación)
+```
+
+Cadena interna de ingeniería (detalle: [[Flujo Ingenieria]]):
+
+Solicitud → Asignación → Diseño → Revisión interna → Validación manufactura → Aprobación cliente → Liberación → Producción.
+
+## Diseño nuevo
+
+El cliente no entrega plano usable. AMD crea el CAD. Ingeniería **obligatoria** antes de cotización final y OP.
+
+## Modificación de diseño
+
+Cambios sobre un plano existente (cotas, material, features). Puede nacer de RFQ nueva o de un plano ya liberado.
+
+## Reverse engineering
+
+Reconstruir CAD desde pieza física o plano incompleto. Horas de ingeniería suelen ser altas y deben poder costearse aparte.
+
+## Validación de manufacturabilidad
+
+El cliente sí trae plano. Ingeniería no diseña de cero: confirma que AMD puede fabricarlo con sus centros. Puede ser el único paso en escenario B. Si falla, puede convertirse en modificación o diseño nuevo.
+
+Tipos adicionales (optimización, prototipo): [[Tipos de Proyecto]]. Estados: [[Estados Ingenieria]]. Roles: [[Roles Ingenieria]]. KPI: [[KPI Ingenieria]]. Costeo: [[Costeo Ingenieria]]. Versiones: [[Control Documental]]. Cambios: [[ECO ECN]]. CAD: SolidWorks / Mastercam / Fusion 360 / AutoCAD.
+
+---
+
 # 13. MÓDULO PEDIDOS
 
-> **Estado 2026-08-13:** ⬜ Pendiente (Fase 4). Existen filas mínimas creadas al convertir una cotización. No hay pantallas, ni PO del cliente, ni prioridad, ni ciclo de estados más allá de `nuevo`.
+> **Estado 2026-08-13:** ⬜ UI diferida (ADR-026). Existen filas mínimas creadas al convertir una cotización. No hay pantallas, ni PO del cliente, ni prioridad, ni ciclo de estados más allá de `nuevo`. La siguiente fase de software es **Ingeniería y Diseño** (Fase 4, ADR-032), no esta vista ni Producción.
 
 Crear:
 
@@ -699,6 +829,8 @@ Toda actividad realizada sobre el pedido.
 ---
 
 # 15. MÓDULO PRODUCCIÓN
+
+> **Estado 2026-08-14:** 🔄 Documentado y **modelo operativo validado por Dirección** (ADR-030, ADR-043). ⬜ Sin código de OP. Numeración vigente: **Fase 5** (ADR-032). Ingeniería (Fase 4) ✅. En escenario A la OP espera plano `Liberado` / Aprobado para manufactura y pedido con origen `rfq_ingenieria`.
 
 Crear:
 
@@ -1251,7 +1383,11 @@ Dashboard, ventas, producción, compras, inventario, costos y reportes.
 
 ### Ventas
 
-Clientes, cotizaciones y pedidos.
+Clientes, cotizaciones, pedidos y apertura de ingeniería.
+
+### Ingeniería
+
+Solicitudes de diseño, CAD, horas, aprobación y liberación.
 
 ### Compras
 
@@ -1911,7 +2047,7 @@ Deja la arquitectura preparada.
 
 Consideraré que el MVP funciona cuando pueda realizar este flujo completamente:
 
-> **Progreso 2026-08-13:** pasos 1–6 ✅ (cliente → cotización → partidas → precio → aprobación → pedido mínimo). Pasos 7–22 ⬜. El MVP aún no está cerrado.
+> **Progreso 2026-08-14:** pasos 1–6 ✅ (cliente → cotización → partidas → precio → aprobación → pedido mínimo, con Ingeniería cuando aplica). Pasos 7–22 ⬜. El MVP aún no está cerrado.
 
 1. Crear cliente.
 2. Crear cotización.

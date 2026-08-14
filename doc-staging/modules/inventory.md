@@ -6,7 +6,7 @@ Materiales, existencias, reservas, movimientos y alertas de stock.
 
 # Alcance
 
-**No implementado.** Fase 6.  
+**No implementado.** Fase **6** vigente (ADR-032). En BUSINESS_SPEC §47 aparece como Fase 6.  
 No hay tablas `materials`, `inventory`, `inventory_movements`, `material_reservations`.  
 `/inventory` deshabilitado.
 

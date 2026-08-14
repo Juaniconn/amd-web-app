@@ -7,6 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  QUOTE_ENGINEERING_TYPE_LABELS,
+  RFQ_TYPE_LABELS,
+  defaultEngineeringType,
+  rfqTypeForcesEngineering,
+  type QuoteEngineeringType,
+  type RfqType,
+} from "@/lib/quotes/rfq";
+import {
   QUOTE_CURRENCY_LABELS,
   type QuoteCurrency,
 } from "@/lib/validation/quotes";
@@ -40,6 +48,9 @@ type QuoteFormValues = {
   paymentTerms: string;
   leadTime: string;
   notes: string;
+  rfqType: RfqType;
+  requiresEngineering: boolean;
+  engineeringType: QuoteEngineeringType | "";
 };
 
 function toDateInput(value?: Date | string | null) {
@@ -75,15 +86,25 @@ export function QuoteForm({
       paymentTerms: "",
       leadTime: "",
       notes: "",
+      rfqType: "solo_fabricacion",
+      requiresEngineering: false,
+      engineeringType: "",
       ...defaultValues,
     },
   });
 
   const customerId = useWatch({ control: form.control, name: "customerId" });
+  const rfqType = useWatch({ control: form.control, name: "rfqType" });
+  const requiresEngineering = useWatch({
+    control: form.control,
+    name: "requiresEngineering",
+  });
   const contacts = useMemo(
     () => contactsByCustomer[customerId] ?? [],
     [contactsByCustomer, customerId],
   );
+  const forced = rfqTypeForcesEngineering(rfqType);
+  const showEngineeringType = forced || requiresEngineering;
 
   async function onSubmit(values: QuoteFormValues) {
     setError(null);
@@ -96,6 +117,9 @@ export function QuoteForm({
       paymentTerms: values.paymentTerms,
       leadTime: values.leadTime,
       notes: values.notes,
+      rfqType: values.rfqType,
+      requiresEngineering: rfqTypeForcesEngineering(values.rfqType) || values.requiresEngineering,
+      engineeringType: values.engineeringType || null,
     };
 
     const result =
@@ -162,6 +186,71 @@ export function QuoteForm({
             ))}
           </select>
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="rfqType">Tipo de RFQ</Label>
+          <select
+            id="rfqType"
+            className={selectClassName}
+            {...form.register("rfqType")}
+            onChange={(event) => {
+              const next = event.target.value as RfqType;
+              form.setValue("rfqType", next);
+              const needs = rfqTypeForcesEngineering(next);
+              form.setValue("requiresEngineering", needs);
+              form.setValue("engineeringType", defaultEngineeringType(next) ?? "");
+            }}
+          >
+            {(Object.entries(RFQ_TYPE_LABELS) as [RfqType, string][]).map(
+              ([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ),
+            )}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="requiresEngineering">Requiere ingeniería</Label>
+          <select
+            id="requiresEngineering"
+            className={selectClassName}
+            disabled={forced}
+            value={forced || requiresEngineering ? "si" : "no"}
+            onChange={(event) => {
+              const yes = event.target.value === "si";
+              form.setValue("requiresEngineering", yes);
+              if (!yes) form.setValue("engineeringType", "");
+              if (yes && !form.getValues("engineeringType")) {
+                form.setValue("engineeringType", "manufacturabilidad");
+              }
+            }}
+          >
+            <option value="no">No</option>
+            <option value="si">Sí</option>
+          </select>
+        </div>
+        {showEngineeringType ? (
+          <div className="space-y-2">
+            <Label htmlFor="engineeringType">Tipo de ingeniería</Label>
+            <select
+              id="engineeringType"
+              className={selectClassName}
+              {...form.register("engineeringType", { required: showEngineeringType })}
+            >
+              <option value="">Selecciona</option>
+              {(
+                Object.entries(QUOTE_ENGINEERING_TYPE_LABELS) as [
+                  QuoteEngineeringType,
+                  string,
+                ][]
+              ).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <div className="space-y-2">
           <Label htmlFor="issueDate">Fecha</Label>
           <Input id="issueDate" type="date" {...form.register("issueDate")} />

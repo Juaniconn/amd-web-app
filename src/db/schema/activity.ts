@@ -10,6 +10,11 @@ export const activityActionEnum = pgEnum("activity_action", [
   "sent",
   "converted",
   "expired",
+  "assigned",
+  "approved",
+  "released",
+  "cancelled",
+  "hours_logged",
 ]);
 
 export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
@@ -19,6 +24,8 @@ export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "quote_item",
   "document",
   "order",
+  "engineering_request",
+  "engineering_hours",
 ]);
 
 export const activityLogs = pgTable(

@@ -2,6 +2,7 @@ export const ROLE_IDS = {
   administrador: "administrador",
   direccion: "direccion",
   ventas: "ventas",
+  ingenieria: "ingenieria",
   compras: "compras",
   produccion: "produccion",
   calidad: "calidad",
@@ -21,9 +22,26 @@ export const PERMISSION_IDS = {
   customersWrite: "customers:write",
   quotesRead: "quotes:read",
   quotesWrite: "quotes:write",
+  engineeringRead: "engineering:read",
+  engineeringCreate: "engineering:create",
+  engineeringUpdate: "engineering:update",
+  engineeringAssign: "engineering:assign",
+  engineeringApprove: "engineering:approve",
+  engineeringRelease: "engineering:release",
+  engineeringDelete: "engineering:delete",
 } as const;
 
 export type PermissionId = (typeof PERMISSION_IDS)[keyof typeof PERMISSION_IDS];
+
+const ENGINEERING_ALL: PermissionId[] = [
+  PERMISSION_IDS.engineeringRead,
+  PERMISSION_IDS.engineeringCreate,
+  PERMISSION_IDS.engineeringUpdate,
+  PERMISSION_IDS.engineeringAssign,
+  PERMISSION_IDS.engineeringApprove,
+  PERMISSION_IDS.engineeringRelease,
+  PERMISSION_IDS.engineeringDelete,
+];
 
 export const ROLES: Record<
   RoleId,
@@ -44,18 +62,27 @@ export const ROLES: Record<
       PERMISSION_IDS.rolesRead,
       PERMISSION_IDS.customersRead,
       PERMISSION_IDS.quotesRead,
+      PERMISSION_IDS.engineeringRead,
     ],
   },
   ventas: {
     name: "Ventas",
-    description: "Clientes, cotizaciones y pedidos.",
+    description: "Clientes, cotizaciones, pedidos y solicitudes de ingeniería.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
       PERMISSION_IDS.customersRead,
       PERMISSION_IDS.customersWrite,
       PERMISSION_IDS.quotesRead,
       PERMISSION_IDS.quotesWrite,
+      PERMISSION_IDS.engineeringRead,
+      PERMISSION_IDS.engineeringCreate,
+      PERMISSION_IDS.engineeringApprove,
     ],
+  },
+  ingenieria: {
+    name: "Ingeniería",
+    description: "Solicitudes de diseño, CAD, revisión, aprobación y liberación.",
+    permissions: [PERMISSION_IDS.dashboardRead, ...ENGINEERING_ALL],
   },
   compras: {
     name: "Compras",
@@ -64,13 +91,13 @@ export const ROLES: Record<
   },
   produccion: {
     name: "Producción",
-    description: "Órdenes de producción, máquinas y materiales (módulos posteriores).",
-    permissions: [PERMISSION_IDS.dashboardRead],
+    description: "Órdenes de producción y validación de manufacturabilidad.",
+    permissions: [PERMISSION_IDS.dashboardRead, PERMISSION_IDS.engineeringRead],
   },
   calidad: {
     name: "Calidad",
-    description: "Inspecciones y producción (módulos posteriores).",
-    permissions: [PERMISSION_IDS.dashboardRead],
+    description: "Inspecciones y consulta de planos vigentes.",
+    permissions: [PERMISSION_IDS.dashboardRead, PERMISSION_IDS.engineeringRead],
   },
   almacen: {
     name: "Almacén",
@@ -123,6 +150,34 @@ export const PERMISSIONS: Record<
     name: "Gestionar cotizaciones",
     description:
       "Crear y editar cotizaciones, partidas, archivos, estados y conversión a pedido.",
+  },
+  "engineering:read": {
+    name: "Ver ingeniería",
+    description: "Listar solicitudes de ingeniería, archivos CAD y KPIs.",
+  },
+  "engineering:create": {
+    name: "Crear ingeniería",
+    description: "Abrir una solicitud de ingeniería desde una RFQ.",
+  },
+  "engineering:update": {
+    name: "Editar ingeniería",
+    description: "Editar cabecera, horas, archivos y avanzar diseño/correcciones.",
+  },
+  "engineering:assign": {
+    name: "Asignar ingeniería",
+    description: "Asignar un responsable a la solicitud.",
+  },
+  "engineering:approve": {
+    name: "Aprobar ingeniería",
+    description: "Registrar revisión interna o aprobación del cliente.",
+  },
+  "engineering:release": {
+    name: "Liberar ingeniería",
+    description: "Liberar el plano vigente hacia cotización final y producción.",
+  },
+  "engineering:delete": {
+    name: "Eliminar ingeniería",
+    description: "Archivar una solicitud pendiente o cancelada.",
   },
 };
 

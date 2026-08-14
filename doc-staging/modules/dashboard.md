@@ -12,6 +12,7 @@ Pantalla de entrada autenticada. Mostrar identidad del usuario y métricas que y
 - KPIs: usuarios, roles, sesiones activas.
 - KPI clientes activos (si `customers:read`).
 - KPIs de cotizaciones (si `quotes:read`): abiertas; por vencer (7 días, `enviada`); convertidas del mes.
+- KPIs de ingeniería (si `engineering:read`): abiertas, vencidas, diseños liberados.
 - Placeholders sin cifra: ventas hoy, pedidos activos, producción, material, máquinas, entregas.
 
 **No implementado:**
@@ -21,15 +22,15 @@ Pantalla de entrada autenticada. Mostrar identidad del usuario y métricas que y
 
 # Flujo de negocio
 
-El usuario inicia sesión → `/` redirige a `/dashboard` → snapshot desde Postgres (`getDashboardSnapshot` + `getQuoteDashboardStats`).
+El usuario inicia sesión → `/` redirige a `/dashboard` → snapshot desde Postgres (`getDashboardSnapshot` + `getQuoteDashboardStats` + `getEngineeringDashboardStats`).
 
 # Entidades
 
-No tiene tabla propia. Lee `users`, `roles`, `sessions`, `customers`, `quotes`.
+No tiene tabla propia. Lee `users`, `roles`, `sessions`, `customers`, `quotes`, `engineering_requests`.
 
 # Permisos
 
-Cualquier rol sembrado tiene `dashboard:read`. El layout exige sesión. El KPI de clientes se oculta sin `customers:read`. Los KPIs de cotizaciones se ocultan sin `quotes:read`.
+Cualquier rol sembrado tiene `dashboard:read`. El layout exige sesión. El KPI de clientes se oculta sin `customers:read`. Los KPIs de cotizaciones se ocultan sin `quotes:read`. Los de ingeniería, sin `engineering:read`.
 
 # APIs
 
@@ -46,7 +47,7 @@ No aplica.
 
 # Relaciones
 
-Depende de Fase 1 (auth), Fase 2 (clientes) y Fase 3 (cotizaciones). El resto de KPIs depende de fases futuras.
+Depende de Fase 1–4. KPIs de ingeniería si `engineering:read`. Placeholders de piso: Fases 5–11. ADR-042, ADR-043.
 
 # Riesgos
 

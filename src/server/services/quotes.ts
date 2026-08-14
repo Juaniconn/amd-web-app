@@ -10,11 +10,9 @@ import {
   ilike,
   isNotNull,
   isNull,
-  like,
   lt,
   lte,
   or,
-  sql,
 } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -34,6 +32,8 @@ import {
   formatMoney,
   parseMoney,
 } from "@/lib/quotes/money";
+import { quoteOriginForProduction } from "@/lib/quotes/rfq";
+import type { QuoteEngineeringStatus, RfqType } from "@/lib/quotes/rfq";
 import {
   canEditQuote,
   canMarkQuoteSent,
@@ -50,6 +50,11 @@ import type {
 } from "@/lib/validation/quotes";
 import { recordActivity } from "@/server/services/activity";
 import type { Actor } from "@/server/services/customers";
+import {
+  ensureEngineeringRequestForQuote,
+  getActiveEngineeringByQuoteId,
+} from "@/server/services/engineering";
+import { nextDocumentNumber } from "@/server/services/numbering";
 
 export const QUOTE_PAGE_SIZE = 20;
 
@@ -65,27 +70,6 @@ function moneyFields(line: ReturnType<typeof calculateLineTotals>) {
     lineMarginPercent:
       line.lineMarginPercent === null ? null : formatMoney(line.lineMarginPercent),
   };
-}
-
-async function nextDocumentNumber(
-  tx: Tx,
-  table: "quotes" | "orders",
-  prefix: string,
-) {
-  const target = table === "quotes" ? quotes : orders;
-  const column = table === "quotes" ? quotes.number : orders.number;
-  await tx.execute(
-    sql`lock table ${sql.raw(table)} in share row exclusive mode`,
-  );
-  const [row] = await tx
-    .select({ number: column })
-    .from(target)
-    .where(like(column, `${prefix}%`))
-    .orderBy(desc(column))
-    .limit(1);
-  const last = row?.number?.slice(prefix.length) ?? "";
-  const next = (last && /^\d+$/.test(last) ? Number(last) : 0) + 1;
-  return `${prefix}${String(next).padStart(5, "0")}`;
 }
 
 async function requireCustomer(customerId: string) {
@@ -254,11 +238,28 @@ export async function createQuote(input: CreateQuoteInput, actor: Actor) {
       paymentTerms: input.paymentTerms ?? null,
       leadTime: input.leadTime ?? null,
       notes: input.notes ?? null,
+      rfqType: input.rfqType,
+      requiresEngineering: input.requiresEngineering,
+      engineeringType: input.engineeringType,
+      engineeringStatus: input.requiresEngineering ? "pendiente" : "no_requerida",
       status: "borrador",
       isDemo: customer.isDemo,
       createdBy: actor.userId,
       updatedBy: actor.userId,
     });
+    await ensureEngineeringRequestForQuote(
+      tx,
+      {
+        id,
+        customerId: customer.id,
+        number,
+        notes: input.notes ?? null,
+        isDemo: customer.isDemo,
+        requiresEngineering: input.requiresEngineering,
+        engineeringType: input.engineeringType,
+      },
+      actor,
+    );
     await recordActivity(tx, {
       actorUserId: actor.userId,
       actorName: actor.name,
@@ -288,6 +289,9 @@ export async function updateQuote(input: UpdateQuoteInput, actor: Actor) {
     paymentTerms: input.paymentTerms ?? null,
     leadTime: input.leadTime ?? null,
     notes: input.notes ?? null,
+    rfqType: input.rfqType,
+    requiresEngineering: input.requiresEngineering,
+    engineeringType: input.engineeringType,
   };
   const changed = pickChangedFields(
     {
@@ -298,6 +302,9 @@ export async function updateQuote(input: UpdateQuoteInput, actor: Actor) {
       paymentTerms: current.paymentTerms,
       leadTime: current.leadTime,
       notes: current.notes,
+      rfqType: current.rfqType,
+      requiresEngineering: current.requiresEngineering,
+      engineeringType: current.engineeringType,
     },
     {
       contactId: next.contactId,
@@ -307,6 +314,9 @@ export async function updateQuote(input: UpdateQuoteInput, actor: Actor) {
       paymentTerms: next.paymentTerms,
       leadTime: next.leadTime,
       notes: next.notes,
+      rfqType: next.rfqType,
+      requiresEngineering: next.requiresEngineering,
+      engineeringType: next.engineeringType,
     },
   );
 
@@ -315,6 +325,19 @@ export async function updateQuote(input: UpdateQuoteInput, actor: Actor) {
       .update(quotes)
       .set({ ...next, updatedBy: actor.userId, updatedAt: new Date() })
       .where(eq(quotes.id, input.id));
+    await ensureEngineeringRequestForQuote(
+      tx,
+      {
+        id: current.id,
+        customerId: current.customerId,
+        number: current.number,
+        notes: next.notes,
+        isDemo: current.isDemo,
+        requiresEngineering: next.requiresEngineering,
+        engineeringType: next.engineeringType,
+      },
+      actor,
+    );
     if (Object.keys(changed.newValue).length > 0) {
       await recordActivity(tx, {
         actorUserId: actor.userId,
@@ -558,8 +581,20 @@ export async function convertQuoteToOrder(id: string, actor: Actor) {
     throw new AppError("La cotización no tiene partidas.", "QUOTE_EMPTY", 400);
   }
 
+  const engineering = await getActiveEngineeringByQuoteId(id);
+  if (current.requiresEngineering) {
+    if (!engineering || engineering.status !== "liberado") {
+      throw new AppError(
+        "Esta RFQ requiere ingeniería liberada antes de convertir a pedido.",
+        "ENGINEERING_NOT_RELEASED",
+        409,
+      );
+    }
+  }
+
   const orderId = crypto.randomUUID();
   const year = new Date().getFullYear();
+  const origin = quoteOriginForProduction(current.requiresEngineering);
 
   await db.transaction(async (tx) => {
     const number = await nextDocumentNumber(tx, "orders", `AMD-${year}-`);
@@ -568,6 +603,9 @@ export async function convertQuoteToOrder(id: string, actor: Actor) {
       number,
       customerId: current.customerId,
       quoteId: current.id,
+      origin,
+      engineeringRequestId:
+        engineering?.status === "liberado" ? engineering.id : null,
       currency: current.currency,
       total: current.total,
       status: "nuevo",
@@ -611,7 +649,13 @@ export async function convertQuoteToOrder(id: string, actor: Actor) {
       parentEntityType: "customer",
       parentEntityId: current.customerId,
       previousValue: { status: current.status },
-      newValue: { status: "convertida", orderId, orderNumber: number },
+      newValue: {
+        status: "convertida",
+        orderId,
+        orderNumber: number,
+        origin,
+        engineeringRequestId: engineering?.id ?? null,
+      },
     });
     await recordActivity(tx, {
       actorUserId: actor.userId,
@@ -649,6 +693,10 @@ export async function duplicateQuote(id: string, actor: Actor) {
       paymentTerms: current.paymentTerms,
       leadTime: current.leadTime,
       notes: current.notes,
+      rfqType: current.rfqType,
+      requiresEngineering: current.requiresEngineering,
+      engineeringType: current.engineeringType,
+      engineeringStatus: current.requiresEngineering ? "pendiente" : "no_requerida",
       status: "borrador",
       isDemo: current.isDemo,
       createdBy: actor.userId,
@@ -666,6 +714,19 @@ export async function duplicateQuote(id: string, actor: Actor) {
       );
     }
     await persistTotals(tx, newId);
+    await ensureEngineeringRequestForQuote(
+      tx,
+      {
+        id: newId,
+        customerId: current.customerId,
+        number,
+        notes: current.notes,
+        isDemo: current.isDemo,
+        requiresEngineering: current.requiresEngineering,
+        engineeringType: current.engineeringType,
+      },
+      actor,
+    );
     await recordActivity(tx, {
       actorUserId: actor.userId,
       actorName: actor.name,
@@ -707,6 +768,7 @@ export async function getQuoteById(id: string) {
     .from(documents)
     .where(and(eq(documents.entityType, "quote"), eq(documents.entityId, id)))
     .orderBy(desc(documents.createdAt));
+  const engineering = await getActiveEngineeringByQuoteId(id);
 
   return {
     ...row.quote,
@@ -717,6 +779,7 @@ export async function getQuoteById(id: string) {
     orderNumber: row.orderNumber,
     items,
     documents: files,
+    engineering,
     expiredNow: isQuoteExpired(row.quote.status, row.quote.validUntil),
   };
 }
@@ -724,6 +787,9 @@ export async function getQuoteById(id: string) {
 export type QuoteListQuery = {
   q?: string;
   status?: QuoteStatus;
+  rfqType?: RfqType;
+  engineeringStatus?: QuoteEngineeringStatus;
+  requiresEngineering?: boolean;
   customerId?: string;
   page?: number;
 };
@@ -733,6 +799,13 @@ export async function listQuotes(query: QuoteListQuery) {
   const page = Math.max(1, query.page ?? 1);
   const filters = [isNull(quotes.deletedAt)];
   if (query.status) filters.push(eq(quotes.status, query.status));
+  if (query.rfqType) filters.push(eq(quotes.rfqType, query.rfqType));
+  if (query.engineeringStatus) {
+    filters.push(eq(quotes.engineeringStatus, query.engineeringStatus));
+  }
+  if (query.requiresEngineering !== undefined) {
+    filters.push(eq(quotes.requiresEngineering, query.requiresEngineering));
+  }
   if (query.customerId) filters.push(eq(quotes.customerId, query.customerId));
   if (query.q) {
     const term = `%${query.q}%`;
@@ -766,6 +839,9 @@ export async function listQuotes(query: QuoteListQuery) {
       customerId: quotes.customerId,
       customerName: customers.legalName,
       customerCode: customers.code,
+      rfqType: quotes.rfqType,
+      requiresEngineering: quotes.requiresEngineering,
+      engineeringStatus: quotes.engineeringStatus,
     })
     .from(quotes)
     .innerJoin(customers, eq(quotes.customerId, customers.id))

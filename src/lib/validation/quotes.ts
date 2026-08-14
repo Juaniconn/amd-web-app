@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { QUOTE_STATUSES } from "@/lib/quotes/status";
+import {
+  QUOTE_ENGINEERING_STATUSES,
+  QUOTE_ENGINEERING_TYPES,
+  RFQ_TYPES,
+  resolveQuoteEngineeringFields,
+  rfqTypeForcesEngineering,
+} from "@/lib/quotes/rfq";
 
 export const QUOTE_CURRENCIES = ["mxn", "usd"] as const;
 export type QuoteCurrency = (typeof QUOTE_CURRENCIES)[number];
@@ -11,6 +18,9 @@ export const QUOTE_CURRENCY_LABELS: Record<QuoteCurrency, string> = {
 
 export const quoteStatusSchema = z.enum(QUOTE_STATUSES);
 export const quoteCurrencySchema = z.enum(QUOTE_CURRENCIES);
+export const rfqTypeSchema = z.enum(RFQ_TYPES);
+export const quoteEngineeringTypeSchema = z.enum(QUOTE_ENGINEERING_TYPES);
+export const quoteEngineeringStatusSchema = z.enum(QUOTE_ENGINEERING_STATUSES);
 
 const optionalText = (max: number) =>
   z
@@ -26,27 +36,72 @@ const moneyNumber = (label: string, max = 10_000_000) =>
     .min(0, `${label} no puede ser negativo`)
     .max(max, `${label} excede el máximo permitido`);
 
-export const createQuoteSchema = z.object({
-  customerId: z.string().trim().min(1, "El cliente es obligatorio"),
-  contactId: optionalText(80),
-  issueDate: z.coerce.date().optional(),
-  validUntil: z.coerce.date().optional().nullable(),
-  currency: quoteCurrencySchema.default("mxn"),
-  paymentTerms: optionalText(200),
-  leadTime: optionalText(200),
-  notes: optionalText(4000),
-});
+const engineeringFields = {
+  rfqType: rfqTypeSchema.default("solo_fabricacion"),
+  requiresEngineering: z.boolean().default(false),
+  engineeringType: quoteEngineeringTypeSchema.optional().nullable(),
+};
 
-export const updateQuoteSchema = z.object({
-  id: z.string().trim().min(1, "La cotización es obligatoria"),
-  contactId: optionalText(80),
-  issueDate: z.coerce.date(),
-  validUntil: z.coerce.date().optional().nullable(),
-  currency: quoteCurrencySchema,
-  paymentTerms: optionalText(200),
-  leadTime: optionalText(200),
-  notes: optionalText(4000),
-});
+function refineEngineering(
+  data: {
+    rfqType: (typeof RFQ_TYPES)[number];
+    requiresEngineering: boolean;
+    engineeringType?: (typeof QUOTE_ENGINEERING_TYPES)[number] | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  const resolved = resolveQuoteEngineeringFields(data);
+  if (rfqTypeForcesEngineering(data.rfqType) && !resolved.requiresEngineering) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["requiresEngineering"],
+      message: "Este tipo de RFQ requiere ingeniería.",
+    });
+  }
+  if (resolved.requiresEngineering && !resolved.engineeringType) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["engineeringType"],
+      message: "Selecciona el tipo de ingeniería.",
+    });
+  }
+}
+
+export const createQuoteSchema = z
+  .object({
+    customerId: z.string().trim().min(1, "El cliente es obligatorio"),
+    contactId: optionalText(80),
+    issueDate: z.coerce.date().optional(),
+    validUntil: z.coerce.date().optional().nullable(),
+    currency: quoteCurrencySchema.default("mxn"),
+    paymentTerms: optionalText(200),
+    leadTime: optionalText(200),
+    notes: optionalText(4000),
+    ...engineeringFields,
+  })
+  .superRefine(refineEngineering)
+  .transform((data) => ({
+    ...data,
+    ...resolveQuoteEngineeringFields(data),
+  }));
+
+export const updateQuoteSchema = z
+  .object({
+    id: z.string().trim().min(1, "La cotización es obligatoria"),
+    contactId: optionalText(80),
+    issueDate: z.coerce.date(),
+    validUntil: z.coerce.date().optional().nullable(),
+    currency: quoteCurrencySchema,
+    paymentTerms: optionalText(200),
+    leadTime: optionalText(200),
+    notes: optionalText(4000),
+    ...engineeringFields,
+  })
+  .superRefine(refineEngineering)
+  .transform((data) => ({
+    ...data,
+    ...resolveQuoteEngineeringFields(data),
+  }));
 
 export const quoteIdSchema = z.object({
   id: z.string().trim().min(1, "La cotización es obligatoria"),

@@ -195,9 +195,20 @@ def copy_tree(src: Path, dest: Path) -> None:
 
 def copy_staging() -> None:
     shutil.copy2(STAGING / "roadmap.md", DOCS / "roadmap.md")
-    print(f"copied roadmap.md")
-    for folder in ("changelogs", "modules", "executive-summary", "audits"):
-        copy_tree(STAGING / folder, DOCS / folder)
+    print("copied roadmap.md")
+    for name in (
+        "AMD_OPERATIONS_BUSINESS_SPEC.md",
+        "AMD_OPERATIONS_TECHNICAL_SPEC.md",
+        "ARCHITECTURE_DECISIONS.md",
+    ):
+        src = STAGING / name
+        if src.is_file():
+            shutil.copy2(src, DOCS / name)
+            print(f"copied {name}")
+    for folder in ("changelogs", "modules", "executive-summary", "audits", "Produccion"):
+        src = STAGING / folder
+        if src.is_dir():
+            copy_tree(src, DOCS / folder)
     procesos_src = STAGING / "Procesos"
     procesos_dest = DOCS / "Procesos"
     procesos_dest.mkdir(parents=True, exist_ok=True)

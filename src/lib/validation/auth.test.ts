@@ -20,6 +20,16 @@ describe("auth validation", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts the Ingeniería role", () => {
+    const result = createUserSchema.safeParse({
+      name: "Luis Ingeniería",
+      email: "luis@amd-operations.local",
+      password: "password1",
+      roleId: "ingenieria",
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects unknown roles", () => {
     const result = createUserSchema.safeParse({
       name: "Ana",

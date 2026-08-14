@@ -6,7 +6,7 @@ Registrar entregas de pedidos: guía, transportista, evidencia, estado.
 
 # Alcance
 
-**No implementado.** Fase 8.  
+**No implementado.** Fase **9** vigente (ADR-032). En BUSINESS_SPEC §47 iba junto con calidad.  
 No hay tabla `deliveries`. `/deliveries` deshabilitado.
 
 # Flujo de negocio
@@ -43,4 +43,4 @@ No aplica.
 
 # Dependencias
 
-Pedidos (Fase 4). Cliente ([[crm]]) ya disponible.
+Pedido mínimo (ADR-023) + OP terminada/liberada ([[production]], [[Proceso Calidad]]). Cliente ([[crm]]) ya disponible. UI de pedidos diferida.

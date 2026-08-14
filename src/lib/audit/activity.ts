@@ -7,6 +7,11 @@ export const ACTIVITY_ACTIONS = [
   "sent",
   "converted",
   "expired",
+  "assigned",
+  "approved",
+  "released",
+  "cancelled",
+  "hours_logged",
 ] as const;
 
 export const ACTIVITY_ENTITY_TYPES = [
@@ -16,6 +21,8 @@ export const ACTIVITY_ENTITY_TYPES = [
   "quote_item",
   "document",
   "order",
+  "engineering_request",
+  "engineering_hours",
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
@@ -81,6 +88,26 @@ export function activitySummary({
 
   if (entityType === "order") {
     if (action === "created") return `${who} creó el pedido ${label}.`;
+  }
+
+  if (entityType === "engineering_request") {
+    if (action === "created") return `${who} creó la solicitud de ingeniería ${label}.`;
+    if (action === "updated") return `${who} actualizó la solicitud de ingeniería ${label}.`;
+    if (action === "deleted") return `${who} archivó la solicitud de ingeniería ${label}.`;
+    if (action === "assigned") return `${who} asignó la solicitud de ingeniería ${label}.`;
+    if (action === "status_changed") {
+      return `${who} cambió el estado de la solicitud de ingeniería ${label}.`;
+    }
+    if (action === "approved") return `${who} aprobó la solicitud de ingeniería ${label}.`;
+    if (action === "released") return `${who} liberó la solicitud de ingeniería ${label}.`;
+    if (action === "cancelled") return `${who} canceló la solicitud de ingeniería ${label}.`;
+  }
+
+  if (entityType === "engineering_hours") {
+    if (action === "hours_logged" || action === "created") {
+      return `${who} registró horas de ingeniería en ${label}.`;
+    }
+    if (action === "deleted") return `${who} eliminó horas de ingeniería de ${label}.`;
   }
 
   return `${who} registró ${action} sobre ${label}.`;

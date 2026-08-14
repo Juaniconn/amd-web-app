@@ -6,7 +6,7 @@ Proveedores, solicitudes, órdenes de compra y recepciones que actualicen invent
 
 # Alcance
 
-**No implementado.** Fase 7.  
+**No implementado.** Fase **7** vigente (ADR-032). En BUSINESS_SPEC §47 aparece como Fase 7.  
 No hay `suppliers`, `purchase_requests`, `purchase_orders`, `receipts`.  
 `/purchasing` y `/suppliers` deshabilitados.
 
@@ -44,4 +44,4 @@ No aplica.
 
 # Dependencias
 
-Inventario (Fase 6). El maestro de clientes (Fase 2) no es requisito de compras.
+Inventario (Fase 5 vigente). El maestro de clientes (Fase 2) no es requisito de compras. Las OP en `Esperando Material` serán consumidoras futuras ([[production]]).

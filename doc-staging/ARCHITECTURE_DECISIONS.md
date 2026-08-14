@@ -792,6 +792,961 @@ AMD Operations / AI Engineering Agent
 
 ---
 
+# ADR-025 — Producción basada en Órdenes de Producción
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-13
+
+## Contexto
+
+AMD Operations requiere trazabilidad desde RFQ hasta entrega.
+
+Hoy el sistema cubre CRM, RFQ (`quotes`, ADR-024) y conversión a pedido mínimo `orders` (ADR-023). Convertir una RFQ **no** crea orden de producción, no asigna máquina y no reserva material.
+
+BUSINESS_SPEC §41: una cotización aprobada puede convertirse en pedido (Regla 1); un pedido puede generar una o varias órdenes de producción (Regla 2).
+
+## Decisión
+
+Toda RFQ **aprobada y convertida** genera una o varias Órdenes de Producción.
+
+```
+CRM → RFQ → Pedido mínimo (ya existe) → Orden de Producción → Calidad → Entrega
+```
+
+1. El disparador es `quotes.status = convertida` (acción existente `convertQuoteToOrder`). No se crea OP desde `aprobada` sin conversión.
+2. La OP referencia `orders.id` (y con ello cotización y cliente). No se omite el pedido mínimo.
+3. Un pedido puede generar una o varias OP (Regla 2).
+4. La OP es la entidad de piso: estados, centro, máquina, operador, tiempos, material requerido.
+5. Fase 4 no construye `/orders` completo, inventario, compras, calidad ni entregas.
+
+## Alternativas consideradas
+
+- OP directo desde `quotes` sin `orders`: rechazado (rompe ADR-023 y la Regla 2).
+- Emitir OP en el mismo `convertQuoteToOrder` sin modelo de estados/centros: rechazado (adelanta implementación).
+- Esperar la UI de Pedidos: rechazado por Dirección (ADR-026).
+
+## Razón
+
+Trazabilidad de fabricación reutilizando el documento comercial que Fase 3 ya persiste.
+
+## Impacto
+
+CRM → RFQ → Producción → Calidad → Entrega queda como flujo objetivo. Producción consume `orders` / `order_items`. Inventario y Compras no bloquean el diseño; la OP usará `Esperando Material` cuando esas fases existan.
+
+## Consecuencias
+
+Trazabilidad completa de fabricación cuando Fase 4 esté implementada. Las migraciones crearán `production_orders` (y operaciones/centros/máquinas) con FK a `orders`. Ampliar `convertQuoteToOrder` es trabajo de implementación, no de esta preparación documental.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-026 — Remapeo operativo: Fase 4 es Producción
+
+## Estado
+
+Reemplazada (solo la **numeración de fases**) por ADR-032.
+
+La decisión de diferir la UI de Pedidos y anclar la OP al pedido mínimo **sigue vigente** (ADR-023, ADR-025).
+
+## Fecha
+
+2026-08-13
+
+## Contexto
+
+BUSINESS_SPEC §47 numeraba Fase 4 = Pedidos y Fase 5 = Producción. Fase 3 ya persistió el pedido mínimo (ADR-023). Dirección autorizó iniciar Producción como siguiente módulo de valor, sin construir primero `/orders`.
+
+## Decisión
+
+Numeración que este ADR introdujo (histórica):
+
+1. Fundación ✅ · 2. CRM ✅ · 3. RFQ ✅ · **4. Producción** · 5. Inventario · … · 12. Deploy Cloudflare
+
+## Reemplazo
+
+2026-08-13: se identificó el módulo Ingeniería/Diseño entre RFQ y Producción. Numeración vigente: ADR-032 (Fase 4 = Ingeniería, Fase 5 = Producción).
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-027 — Máquinas configurables por administrador
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-13
+
+## Contexto
+
+El inventario de planta (15 equipos conocidos) no debe quedar hardcodeado. AMD compra, da de baja y mueve equipos. BUSINESS_SPEC §17 ya pedía que el administrador los configure.
+
+## Decisión
+
+Todas las máquinas son administrables en la plataforma. El administrador podrá crear, editar, desactivar y eliminar máquinas.
+
+Atributos (diseño; no persistidos): Nombre, Marca, Modelo, Año, Centro de Trabajo, Responsable, Horas por Turno, Capacidad, Observaciones, Activo / Inactivo, Fecha Alta, Fecha Baja.
+
+El Responsable es un usuario registrado (`users.id`). Desactivar conserva historial. Eliminar: impedir si hay operaciones históricas (recomendación de implementación). El listado de 15 equipos es semilla.
+
+## Alternativas consideradas
+
+- Catálogo fijo en código: rechazado.
+- Solo etiqueta de piso sin ficha: rechazado.
+
+## Razón
+
+La planta cambia; el maestro debe cambiar sin deploy.
+
+## Impacto
+
+Fase 4 incluye CRUD de `machines` ligado a centros. `/machines` deja de ser un ítem muerto. Ver [[Maquinas]].
+
+## Consecuencias
+
+KPIs y programación usan este maestro. Rutas apuntan a centros, no a seriales fijos.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-028 — Rutas de fabricación iniciales y configurables
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-13
+
+## Contexto
+
+Una pieza recorre varios centros (BUSINESS_SPEC §16). Dirección definió tres rutas de arranque y pidió rutas futuras configurables por administrador.
+
+## Decisión
+
+Semilla: **Ruta A** Pieza maquinada (RFQ → Ingeniería → CNC → Calidad → Entrega); **Ruta B** Gabinete metálico (… Láser → Press Brake → Soldadura …); **Ruta C** Pieza Wire EDM (… CNC → Wire EDM …). Press Brake = máquina del centro Doblado. El administrador crea/edita/desactiva/elimina rutas adicionales.
+
+## Alternativas consideradas
+
+- Una ruta genérica única: rechazado.
+- Rutas por número de parte desde el día uno: rechazado.
+
+## Razón
+
+Tres familias reales bastan para el modelo; el resto es configuración.
+
+## Impacto
+
+`production_operations` nace de la ruta. No hardcodear secuencias más allá del seed. Ver [[Rutas de Fabricacion]].
+
+## Consecuencias
+
+Torno, 3D, moldeo, router esperan alta por administrador.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-029 — Permisos operativos de producción vía usuarios y roles
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-13
+
+## Contexto
+
+RBAC de Fase 1 existe. El rol Producción solo tiene `dashboard:read`. No se quieren personas concretas en la spec.
+
+## Decisión
+
+Permisos operativos se asignan a roles, y roles a usuarios registrados. Permisos de negocio: **Autorizar Producción**, **Liberar Material**, **Programar Máquinas**, **Liberar Calidad**, **Cerrar Orden**. El responsable de máquina u OP es `users.id`.
+
+El mapa rol de planta → permiso quedó **aprobado** en ADR-030 y [[Pendiente Validacion Direccion]]. Administrar máquinas (ADR-027) es permiso de catálogo, distinto de los cinco operativos.
+
+## Alternativas consideradas
+
+- UI sin `requirePermission`: rechazado (ADR-008).
+- Un solo `production:write`: rechazado.
+- Nombres de personas: rechazado.
+
+## Razón
+
+Separa autorización, programa, material, calidad y cierre. Reutiliza usuarios de Fase 1.
+
+## Impacto
+
+El catálogo de permisos se extenderá **en la implementación**. Esta entrega no modifica código. Ver [[Operadores y Roles]].
+
+## Consecuencias
+
+Puestos de planta (Gerente, Supervisor, Operador) son guía operativa, no `role_id` obligatorios.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-030 — Modelo operativo de Producción validado por Dirección
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-13
+
+## Contexto
+
+AMD México revisó [[Pendiente Validacion Direccion]] y aprobó el flujo operativo de Producción: programación, priorización, retrasos, captura de tiempos, liberación, compras urgentes y KPI oficiales.
+
+## Decisión
+
+El sistema adoptará esas reglas.
+
+- Programa: Supervisor de Producción.
+- Prioridad OP: 1 Urgente · 2 Compromiso inmediato · 3 Programada · 4 Producción normal.
+- Priorizan: Dirección General, Ventas, Supervisor. Criterios: fecha prometida, cliente estratégico, material, capacidad, urgencias aprobadas.
+- Monitoreo: En tiempo / En riesgo / Retrasada.
+- Horas máquina y horas hombre: inicio/fin por máquina u operador, orden y operación.
+- Compras urgentes: Dirección General (futuro: Gerente de Operaciones).
+- Liberación: Inspector de Calidad; alternativa Supervisor. Flujo Producción → Calidad → Liberación → Entrega.
+- Productividad sin OEE en Fase 4. KPI: [[KPI Produccion]].
+
+## Alternativas consideradas
+
+- Dejar reglas abiertas hasta el código: rechazado.
+- OEE en el primer corte: rechazado.
+
+## Razón
+
+Congela el modelo de piso con autoridad de Dirección.
+
+## Impacto
+
+Producción, Calidad, Compras, Inventario y Dashboard Ejecutivo. La implementación debe persistir prioridad, fecha prometida, monitoreo de atraso y tiempos; cliente estratégico y material crítico dependen de CRM/Inventario.
+
+## Consecuencias
+
+La implementación futura deberá alinearse con estas reglas. No reabrirlas sin un ADR que reemplace a este. [[Pendiente Validacion Direccion]] es registro **aprobado**.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-031 — Ingeniería como etapa obligatoria u opcional
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-13
+
+## Contexto
+
+AMD recibe proyectos donde el cliente no siempre entrega diseño. La arquitectura documentada era CRM → RFQ → Producción. La RFQ no distingue **fabricar** vs **diseñar**.
+
+## Problema
+
+Sin un módulo de Ingeniería, el plano no tiene ciclo de revisión/aprobación, las horas de diseño no se costean aparte y el piso puede trabajar con un archivo no liberado.
+
+## Decisión
+
+Introducir el módulo **Ingeniería / Diseño** **antes** de Producción.
+
+Dos escenarios:
+
+- **A — Cliente requiere diseño:** Ingeniería es **obligatoria**. CAD → revisión → aprobación cliente → cotización final → producción.
+- **B — Cliente entrega plano:** Ingeniería es **opcional** (validación de manufactura / correcciones). Se puede cotizar con el adjunto.
+
+Entidad conceptual: Engineering Request (sin esquema en esta entrega).
+
+Cadena:
+
+```
+CRM → RFQ → Ingeniería (si aplica) → Producción
+```
+
+## Alternativas consideradas
+
+- Seguir solo con adjuntos de cotización: rechazado; no hay estados ni horas ni liberación.
+- Un PDM / visor CAD en esta fase: rechazado (ADR-014).
+- Ingeniería como paso informal dentro de Producción: rechazado; mezcla diseño y piso.
+
+## Razón
+
+Mayor trazabilidad, costeo correcto, control de horas de ingeniería, separación diseño vs manufactura.
+
+## Impacto
+
+RFQ (cuándo exigir liberación), Producción (plano vigente), documentos CAD, roles nuevos de proceso, Fase 4 del roadmap (ADR-032). El modelo de piso ADR-030 no se reabre.
+
+## Consecuencias
+
+Documentación en `docs/Ingenieria/` y [[Proceso Ingenieria]]. Convertir RFQ a pedido hoy **no** consulta ingeniería; el diseño técnico de Fase 4 deberá decidir el gate del escenario A. No implementar código en esta entrega.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-032 — Remapeo: Fase 4 es Ingeniería y Diseño
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-13
+
+## Contexto
+
+ADR-026 puso Producción como Fase 4. Dirección reconoció Ingeniería como módulo formal **anterior** a piso.
+
+## Decisión
+
+Numeración vigente ([[roadmap]]):
+
+1. Fundación ✅ · 2. CRM ✅ · 3. RFQ ✅ · **4. Ingeniería y Diseño 🔄** · **5. Producción** · 6. Inventario · 7. Compras · 8. Calidad · 9. Entregas · 10. Facturación · 11. Dashboard Ejecutivo · 12. Beta Interna · 13. Deploy Cloudflare
+
+ADR-026 queda **Reemplazada** en numeración. Pedidos UI diferida y OP anclada a `orders` siguen.
+
+No se reescribe BUSINESS_SPEC §47 (ADR-021).
+
+## Alternativas consideradas
+
+- Implementar Producción ahora e Ingeniería después: rechazado; el plano liberado es entrada de la OP en escenario A.
+- Insertar Ingeniería sin renumerar: rechazado; genera la misma contradicción que ADR-026 vino a evitar.
+
+## Razón
+
+El siguiente trabajo de documentación/diseño técnico es Ingeniería, no código de piso.
+
+## Impacto
+
+Agentes leen [[roadmap]] y este ADR. Docs de Producción permanecen válidas como Fase 5. Changelog `phase-4` de **implementación** futura = Ingeniería, no Producción.
+
+## Consecuencias
+
+La documentación de piso (ADR-030) no se borra; se aplaza su build. Sidebar `/production` «Fase 5» ahora coincide con el plan; falta ítem Ingeniería.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-033 — Una RFQ, una solicitud de ingeniería
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-14
+
+## Contexto
+
+La spec conceptual permitía `quotes` 0..1—N Engineering Request. La implementación de Fase 4 necesita una cardinalidad operativa clara para Ventas e Ingeniería.
+
+## Decisión
+
+**1 RFQ genera 0 o 1 solicitud de ingeniería activa.**
+
+- `engineering_requests.quote_id` es único entre filas no archivadas (`deleted_at is null`).
+- Al marcar la RFQ con `requires_engineering = true` se crea la solicitud si no existe.
+- Cancelar no libera el cupo. Archivar (`engineering:delete`, solo `pendiente` o `cancelado`) sí, y permite abrir otra.
+- No hay solicitud huérfana: siempre apunta a `quotes` y `customers`.
+
+## Alternativas consideradas
+
+- N solicitudes por RFQ (revisiones como documentos hijos): rechazado en MVP; las revisiones son archivos de la misma solicitud.
+- Ingeniería sin RFQ: rechazado; el origen comercial es la cotización.
+
+## Razón
+
+Trazabilidad Cliente → RFQ → Ingeniería sin duplicar el trabajo de diseño.
+
+## Impacto
+
+`/engineering/new` solo lista RFQ que requieren ingeniería y aún no tienen solicitud activa.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-034 — Gate de conversión: Liberado en escenario A
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-14
+
+## Contexto
+
+ADR-031 dejó pendiente si `convertQuoteToOrder` exige plano liberado. Convertir sin diseño firmado manda a pedido (y luego a piso) un adjunto no vigente.
+
+## Decisión
+
+Si `quotes.requires_engineering = true`, **no se convierte a pedido** hasta que la solicitud activa esté en `liberado`.
+
+- Escenario B (`requires_engineering = false`): conversión igual que Fase 3.
+- Escenario A y B-con-validación: el botón se deshabilita y el servicio lanza `ENGINEERING_NOT_RELEASED`.
+- Enviar / aprobar comercialmente la RFQ **sí** se permite antes de `Liberado` (cotización preliminar). El precio firme y el pedido esperan la liberación.
+
+## Alternativas consideradas
+
+- Bloquear también «marcar enviada» hasta Liberado: rechazado; Ventas necesita mandar avances.
+- Convertir y marcar el pedido como bloqueado: rechazado; el pedido mínimo no tiene máquina de estados.
+
+## Razón
+
+Separa diseñar, cotizar y producir. El pedido que nace ya trae origen y, si aplica, el id de la solicitud liberada.
+
+## Impacto
+
+RFQ aprobadas de diseño no se convierten hasta Ingeniería. Producción (Fase 5) consume `orders.origin`.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-035 — Origen de pedido: RFQ directa vs RFQ + Ingeniería
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-14
+
+## Contexto
+
+Fase 5 creará OP desde el pedido mínimo. Hay que saber si el plano vigente salió de Ingeniería o del adjunto de la RFQ.
+
+## Decisión
+
+`orders.origin`:
+
+- `rfq_directa` — la RFQ no requería ingeniería (escenario B puro).
+- `rfq_ingenieria` — la RFQ requería ingeniería y se convirtió tras `Liberado`.
+
+`orders.engineering_request_id` apunta a la solicitud liberada cuando el origen es `rfq_ingenieria`.
+
+No se implementa OP en esta fase. El campo queda listo para Fase 5.
+
+`diseno_solamente` puede convertirse a pedido comercial (venta de diseño) con origen `rfq_ingenieria`. **No** debe generar OP de piso en Fase 5.
+
+## Alternativas consideradas
+
+- Inferir el origen en Fase 5 leyendo adjuntos: rechazado; no hay liberación.
+- Tabla `production_orders` ahora: rechazado; Fase 5.
+
+## Razón
+
+La OP futura no adivina el plano. Lee origen + solicitud + documentos de `engineering_request` o de `quote`.
+
+## Impacto
+
+Seed de pedidos demo existentes queda en `rfq_directa`. UI `/orders` sigue deshabilitada.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-036 — Software CAD/CAM oficial y puesto de Ingeniería
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-14
+
+## Contexto
+
+[[Flujo Ingenieria]] dejó abierto qué CAD usa la planta y quién diseña. Dirección AMD México lo validó el 2026-08-14.
+
+## Decisión
+
+Herramientas oficiales (fuera de AMD Operations; no hay integración ni visor):
+
+| Uso | Software |
+|---|---|
+| Modelado CAD | SolidWorks |
+| CAM | Mastercam, Fusion 360 |
+| 2D | AutoCAD |
+
+Puesto responsable principal de Ingeniería:
+
+**Ingeniero de Diseño y Manufactura / Programador CNC**
+
+Un mismo puesto cubre CAD, manufacturabilidad y programas CAM. En RBAC MVP sigue el rol `ingenieria`. No se crea un `role_id` distinto para programador CNC.
+
+AMD Operations **no** ejecuta SolidWorks, Mastercam, Fusion 360 ni AutoCAD. Solo registra la solicitud, estados, horas, archivos exportados (PDF/DWG/DXF/STEP/…) y la liberación.
+
+## Alternativas consideradas
+
+- Integrar API de SolidWorks/PDM: rechazado (ADR-014).
+- Separar rol RBAC «Programador CNC» ahora: rechazado; el puesto es uno.
+
+## Razón
+
+Congela el stack de diseño de planta y el dueño del trabajo de ingeniería.
+
+## Impacto
+
+Docs de Ingeniería, onboarding, Fase 5 (programas CAM solo si están **Liberados** / aprobados para manufactura). Sin cambio de schema.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-037 — Aprobaciones de diseño: interno, cliente y canal
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-14
+
+## Contexto
+
+Había que definir quién firma un diseño dentro de AMD y frente al cliente.
+
+## Decisión
+
+**Aprobación interna (Diseño Interno)** — dos puestos, ambos requeridos a nivel de proceso:
+
+1. Líder de Ingeniería
+2. Gerente de Operaciones
+
+En el sistema MVP la transición a `revision_interna` / salida hacia cliente la registra un usuario con `engineering:approve` o `engineering:update`. No hay doble firma persistida. El Líder se cubre con rol `ingenieria`; el Gerente de Operaciones **no** tiene `role_id` propio (hoy: Dirección o un usuario con roles combinados).
+
+**Aprobación de cliente (Diseño Cliente)** — actores externos, no usuarios de AMD Operations:
+
+- Cliente
+- Ingeniería del cliente
+- Calidad del cliente
+
+**Canal:** Ejecutivo de Ventas Técnicas (rol RBAC `ventas`, permiso `engineering:approve`). No hay portal.
+
+Estados: `esperando_cliente` → `aprobado` (OK) o `correcciones` (rechazo / cambios).
+
+## Alternativas consideradas
+
+- Portal del cliente: rechazado en Fase 4.
+- Dos transiciones distintas interno vs cliente en la máquina: la máquina ya separa `revision_interna` y `esperando_cliente`.
+
+## Razón
+
+Separar firma AMD de firma del cliente y dejar un solo canal comercial.
+
+## Impacto
+
+UI actual no exige dos usuarios internos. Deuda: persistir doble aprobación interna y el actor del cliente (contacto) si Dirección lo pide en un incremento.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-038 — Nomenclatura AMD-PART y liberación a manufactura
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-14
+
+## Contexto
+
+Los archivos de ingeniería no tienen número de parte ni revisión en `documents`. Dirección definió nomenclatura y qué puede bajar a piso.
+
+## Decisión
+
+Nomenclatura oficial de archivos / planos AMD:
+
+```
+AMD-PART-XXXX_REV-A
+AMD-PART-XXXX_REV-B
+AMD-PART-XXXX_REV-C
+```
+
+`XXXX` es el consecutivo de parte (operativo; no hay generador en código). La revisión avanza con ECO/ECN (ADR-040).
+
+**Solo archivos en estado Liberado pueden utilizarse en Producción.**
+
+En PostgreSQL el estado de la solicitud es `liberado`. Equivale al sello de negocio **Aprobado para manufactura**.
+
+`aprobado` = el cliente (vía Ventas Técnicas) aceptó el diseño.  
+`liberado` = Ingeniería libera el paquete vigente (planos, modelos, programas CAM) hacia cotización final y piso.
+
+Producción (Fase 5) solamente consume, si origen `rfq_ingenieria`:
+
+- Planos
+- Modelos
+- Programas CAM
+
+ligados a la solicitud `liberado`. Si origen `rfq_directa`, consume adjuntos de la RFQ.
+
+El código **no** valida el patrón `AMD-PART-XXXX_REV-*` en el nombre de archivo. Es regla operativa de nombrado hasta un incremento de control documental.
+
+## Alternativas consideradas
+
+- Estado extra `aprobado_manufactura` distinto de `liberado`: rechazado; duplicaría la máquina.
+- PDM SolidWorks: rechazado en esta fase.
+
+## Razón
+
+Un sello único para piso. Trazabilidad Cliente → RFQ → solicitud → archivo Liberado → pedido.origin → OP.
+
+## Impacto
+
+[[Archivos Ingenieria]], [[Control Documental]], Fase 5. Campos `revision` / `part_number` en `documents` quedan como cambio recomendado, no obligatorio para abrir Fase 5.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-039 — Cobro y costeo de ingeniería
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-14
+
+## Contexto
+
+Las horas se capturan (`engineering_hours`, `hours_logged`) pero la cotización no separa diseño vs fabricación. Dirección definió cobro y campos de costeo.
+
+## Decisión
+
+**Cobro (no confundir con escenarios A/B de flujo ADR-031):**
+
+| Cobro | Cuándo | Cómo se cobra |
+|---|---|---|
+| Escenario cobro A | El cliente entrega diseño completo | Costo de ingeniería **incluido** en fabricación |
+| Escenario cobro B | Diseño desde cero | Cobro **independiente** |
+| Escenario cobro C | Ingeniería inversa | Cobro **independiente** |
+
+Mapeo con RFQ:
+
+- `solo_fabricacion` (sin o con validación de manufactura) → cobro A (incluido), salvo que Ventas pacte otra cosa.
+- `diseno_fabricacion` / `diseno_solamente` / tipo `diseno_nuevo` o `modificacion` → cobro B.
+- `reverse_engineering` → cobro C.
+
+**Campos oficiales de costeo** (diseño; **no persistidos** aún):
+
+| Campo | Uso |
+|---|---|
+| Horas estimadas | Presupuesto de diseño |
+| Horas reales | Suma de `engineering_hours` (este sí existe como `hours_logged`) |
+| Costo hora | Tarifa interna / de venta |
+| Costo total ingeniería | Estimadas o reales × costo hora, o tarifa fija |
+| Tipo de cobro | `incluido` \| `tarifa_fija` \| `por_hora` |
+
+No se implementan en esta entrega (auditoría documental). La cotización sigue usando `estimated_cost` de partida.
+
+## Alternativas consideradas
+
+- Partida automática de ingeniería al crear la RFQ: aplazado; hace falta tarifa y tipo de cobro.
+- Solo notas en la RFQ: insuficiente para KPI horas estimadas vs reales.
+
+## Razón
+
+Costeo visible para Dirección y Ventas sin mezclar hora máquina y hora de diseño.
+
+## Impacto
+
+RFQ, Ingeniería, Business/Technical Spec. Incremento de schema futuro. KPI «Horas estimadas vs reales» no se puede calcular hoy.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-040 — ECO / ECN (cambio de ingeniería)
+
+## Estado
+
+Aceptada (diseño). No implementada en código.
+
+## Fecha
+
+2026-08-14
+
+## Contexto
+
+Tras `Aprobado` / `Liberado`, el cliente o AMD puede pedir un cambio. Hoy eso vuelve la misma solicitud a `correcciones` si aún no está liberada; si ya está `liberado`, la solicitud es inmutable (ADR-033: 1 RFQ → 0..1 activa).
+
+## Decisión
+
+Proceso oficial **ECO / ECN** (Engineering Change Order / Notice):
+
+```
+Solicitud de cambio
+    → Evaluación de impacto
+    → Costo
+    → Tiempo
+    → Aprobación del cliente
+    → Liberación de nueva revisión (AMD-PART-XXXX_REV-n)
+```
+
+Reglas:
+
+1. Un ECO no rompe la cardinalidad 1 RFQ → 1 solicitud activa. El ECO es **hijo** de la solicitud (o de la pieza), no una segunda RFQ obligatoria.
+2. La revisión nueva (`REV-B`, `REV-C`, …) es el único paquete que Producción puede usar después de liberarla.
+3. La revisión anterior queda histórica; no se borra.
+4. Si el cambio altera precio o alcance comercial, Ventas actualiza o duplica la RFQ; el ECO no sustituye a la cotización.
+5. Entidad prevista: `engineering_changes` (no existe). Hasta entonces: no desbloquear `liberado` para editar archivos; abrir ECO en un incremento.
+
+## Alternativas consideradas
+
+- Nueva RFQ por cada cambio: pesado para un ajuste de cota.
+- Reabrir `liberado`: rechazado; pierde el sello de manufactura.
+
+## Razón
+
+Cambios controlados con impacto de costo/tiempo y nueva revisión vigente.
+
+## Impacto
+
+Fase 4.1 / 5. Producción debe colgarse de la revisión liberada, no del primer PDF.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-041 — Revisión DFM obligatoria
+
+## Estado
+
+Aceptada (diseño de proceso). Parcial en código (`revision_interna` + tipo `manufacturabilidad`).
+
+## Fecha
+
+2026-08-14
+
+## Contexto
+
+Dirección exige una revisión de manufacturabilidad (DFM) antes de mandar el plano al cliente o a piso.
+
+## Decisión
+
+Toda solicitud de diseño (nuevo, modificación, reverse engineering) pasa por **revisión DFM obligatoria**. Participan:
+
+| Puesto | Rol de proceso |
+|---|---|
+| Ingeniería (Ingeniero de Diseño y Manufactura / Programador CNC) | Propone el diseño y el enfoque CAM |
+| Programación CAM | Valida que se pueda programar (Mastercam / Fusion 360) |
+| Jefe de Taller | Valida que el piso pueda fabricarlo (centros/máquinas AMD) |
+
+Objetivo: manufacturabilidad, no estética CAD.
+
+En el sistema actual el paso más cercano es `revision_interna` (y el atajo Asignado → Revisión Interna en validación). **No** hay checklist DFM, ni firma del Jefe de Taller (rol `produccion` solo tiene `engineering:read`).
+
+Hasta un incremento: la revisión interna **incluye** DFM de forma operativa; el Jefe de Taller consulta el plano. No se libera a cliente (`esperando_cliente`) ni a manufactura (`liberado`) sin esa revisión.
+
+## Alternativas consideradas
+
+- Estado extra `dfm`: aplazado; se puede modelar como checklist sobre `revision_interna`.
+- Dar `engineering:approve` a Producción ahora: no en esta entrega documental.
+
+## Razón
+
+Evitar que un CAD no fabricable llegue al cliente o al CNC.
+
+## Impacto
+
+[[Flujo Ingenieria]], Fase 5 (Jefe de Taller = Supervisor de Producción / puesto de planta). CAM no se ejecuta dentro de AMD Operations.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-042 — KPI oficiales de Ingeniería
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-14
+
+## Contexto
+
+El listado `/engineering` calcula abiertas, vencidas, aprobados del mes, cancelados, liberados, horas y tiempo promedio. Dirección fijó el set oficial.
+
+## Decisión
+
+KPI principales de Ingeniería:
+
+| KPI oficial | ¿Se calcula hoy? |
+|---|---|
+| Cumplimiento liberación de diseño | ⬜ (haría falta due_date vs released_at) |
+| Horas estimadas vs reales | ⬜ (faltan horas estimadas, ADR-039) |
+| Errores de ingeniería | ⬜ (no hay entidad de error/NCR de diseño) |
+| Retrabajos de ingeniería | Parcial: estado `correcciones` no se cuenta como KPI |
+| Diseños liberados | ✅ `status = liberado` |
+| Diseños aprobados | ✅ `approved_at` en el mes |
+| Diseños rechazados | Parcial: se cuenta `cancelado`, no el rechazo del cliente que vuelve a correcciones |
+
+Dashboard general (`/dashboard`): solo abiertas, vencidas, liberados. El detalle está en `/engineering`.
+
+No pintar ceros fingidos. No mezclar con KPI de piso (ADR-030).
+
+## Razón
+
+Un tablero que Dirección pueda pedir sin ambigüedad.
+
+## Impacto
+
+[[KPI Ingenieria]], dashboard. Incrementos de cálculo; no bloquea Fase 5.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-043 — Catálogos operativos de Producción, Calidad y Compras (2026-08-14)
+
+## Estado
+
+Aceptada (documental). No implementada: no hay módulo de Producción.
+
+## Fecha
+
+2026-08-14
+
+## Contexto
+
+Tras ADR-030, Dirección precisó responsables, catálogos y cierre de OP. No reabre programación, prioridades 1–4 ni la prohibición de OEE.
+
+## Decisión
+
+**Fecha prometida:** la fija el **Gerente de Producción / Planeación**. Sigue siendo el criterio 1 de prioridad (ADR-030). El pedido mínimo **no** tiene el campo; irá en OP (y/o pedido) en Fase 5.
+
+**Cliente estratégico** (flag futuro en CRM; no existe `customers.strategic`):
+
+- Alto volumen
+- Buen historial de pago
+- Sector estratégico
+- Potencial de crecimiento
+
+Criterio 2 de prioridad de OP. La RFQ lo consulta; no lo calcula.
+
+**Tiempos muertos oficiales** (catálogo de pausa de OP):
+
+- Falla mecánica
+- Setup
+- Falta de material
+- Espera de calidad
+- Falta de operador
+- Espera de programa
+- Espera de plano
+
+**Retrabajos** (Calidad / piso). Registrar: OP, parte, cantidad, scrap, causa raíz, horas hombre, horas máquina, liberación de calidad.
+
+**Material crítico** (Compras / Inventario futuros):
+
+- Inconel, Titanio, aceros especiales, PEEK
+- Proveedor único
+- Lead time > 15 días
+
+**Compras urgentes** — condiciones (además del autorizador ADR-030):
+
+- Riesgo de paro de producción
+- Cliente estratégico
+- Penalización contractual
+- Material defectuoso
+
+Autoriza: Dirección General (futuro: Gerente de Operaciones).
+
+**Cierre de OP:**
+
+- Cierre **físico** (producto): Inspector de Calidad (`Liberar Calidad`)
+- Cierre **administrativo** (orden): Supervisor de Producción (`Cerrar Orden`)
+
+Esto precisa ADR-030: el Supervisor ya no es solo «alternativa de liberación»; es dueño del cierre administrativo.
+
+**KPI Dirección** (tablero ejecutivo, Fase 11; no fingir cifras): ventas del día, cotizaciones abiertas, cotizaciones ganadas, órdenes activas, órdenes retrasadas, entregas del día, material crítico, compras pendientes. Hoy solo cotizaciones abiertas (y convertidas del mes) son reales.
+
+## Razón
+
+Cierra las preguntas de piso/compras/calidad que Ingeniería y Fase 5 necesitan por escrito.
+
+## Impacto
+
+[[Proceso Producción]], [[Proceso Calidad]], [[Proceso Compras]], [[Proceso RFQ]], [[dashboard]]. Código ⬜.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
 # PLANTILLA PARA NUEVAS DECISIONES
 
 Cuando sea necesario registrar una nueva decisión, utilizar:

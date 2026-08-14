@@ -16,6 +16,7 @@ import {
   calculateQuoteTotals,
   formatMoney,
 } from "../lib/quotes/money";
+import type { QuoteEngineeringStatus, QuoteEngineeringType, RfqType } from "../lib/quotes/rfq";
 import type { QuoteStatus } from "../lib/quotes/status";
 import type { QuoteCurrency } from "../lib/validation/quotes";
 import { documentObjectKey, getStorage } from "../lib/storage";
@@ -41,6 +42,10 @@ type DemoQuote = {
   notes: string;
   daysAgo: number;
   validDays: number | null;
+  rfqType?: RfqType;
+  requiresEngineering?: boolean;
+  engineeringType?: QuoteEngineeringType | null;
+  engineeringStatus?: QuoteEngineeringStatus;
   lines: DemoLine[];
   convert?: boolean;
 };
@@ -84,19 +89,19 @@ const LINES_TURN: DemoLine[] = [
 ];
 
 const DEMO_QUOTES: DemoQuote[] = [
-  { id: "demo-quote-001", number: "DEMO_COT_001", customerCode: "DEMO_CLIENTE_001", contactSuffix: "1", status: "borrador", currency: "mxn", paymentTerms: "30 días", leadTime: "10 días hábiles", notes: "RFQ demo: placas CNC. No es una cotización real.", daysAgo: 2, validDays: 15, lines: LINES_CNC },
-  { id: "demo-quote-002", number: "DEMO_COT_002", customerCode: "DEMO_CLIENTE_001", contactSuffix: "2", status: "en_revision", currency: "usd", paymentTerms: "Net 30", leadTime: "3 weeks", notes: "Revisión interna de margen.", daysAgo: 5, validDays: 20, lines: LINES_TURN },
-  { id: "demo-quote-003", number: "DEMO_COT_003", customerCode: "DEMO_CLIENTE_002", contactSuffix: "1", status: "enviada", currency: "mxn", paymentTerms: "Contado", leadTime: "7 días", notes: "Enviada al cliente demo.", daysAgo: 4, validDays: 12, lines: LINES_LASER },
-  { id: "demo-quote-004", number: "DEMO_COT_004", customerCode: "DEMO_CLIENTE_003", contactSuffix: "1", status: "aprobada", currency: "mxn", paymentTerms: "15 días", leadTime: "14 días", notes: "Aprobada. Lista para convertir.", daysAgo: 8, validDays: 30, lines: LINES_CNC },
+  { id: "demo-quote-001", number: "DEMO_COT_001", customerCode: "DEMO_CLIENTE_001", contactSuffix: "1", status: "borrador", currency: "mxn", paymentTerms: "30 días", leadTime: "10 días hábiles", notes: "RFQ demo: placas CNC. Requiere diseño AMD. No es una cotización real.", daysAgo: 2, validDays: 15, rfqType: "diseno_fabricacion", requiresEngineering: true, engineeringType: "diseno_nuevo", engineeringStatus: "pendiente", lines: LINES_CNC },
+  { id: "demo-quote-002", number: "DEMO_COT_002", customerCode: "DEMO_CLIENTE_001", contactSuffix: "2", status: "en_revision", currency: "usd", paymentTerms: "Net 30", leadTime: "3 weeks", notes: "Reverse engineering demo.", daysAgo: 5, validDays: 20, rfqType: "reverse_engineering", requiresEngineering: true, engineeringType: "reverse_engineering", engineeringStatus: "en_proceso", lines: LINES_TURN },
+  { id: "demo-quote-003", number: "DEMO_COT_003", customerCode: "DEMO_CLIENTE_002", contactSuffix: "1", status: "enviada", currency: "mxn", paymentTerms: "Contado", leadTime: "7 días", notes: "Enviada al cliente demo. Plano del cliente.", daysAgo: 4, validDays: 12, lines: LINES_LASER },
+  { id: "demo-quote-004", number: "DEMO_COT_004", customerCode: "DEMO_CLIENTE_003", contactSuffix: "1", status: "aprobada", currency: "mxn", paymentTerms: "15 días", leadTime: "14 días", notes: "Aprobada. Lista para convertir. Escenario B.", daysAgo: 8, validDays: 30, lines: LINES_CNC },
   { id: "demo-quote-005", number: "DEMO_COT_005", customerCode: "DEMO_CLIENTE_003", contactSuffix: "1", status: "convertida", currency: "mxn", paymentTerms: "30 días", leadTime: "12 días", notes: "Convertida a pedido mínimo demo.", daysAgo: 20, validDays: 30, lines: LINES_TURN, convert: true },
   { id: "demo-quote-006", number: "DEMO_COT_006", customerCode: "DEMO_CLIENTE_004", contactSuffix: "1", status: "rechazada", currency: "usd", paymentTerms: "Net 45", leadTime: "4 weeks", notes: "Cliente eligió otro proveedor (demo).", daysAgo: 18, validDays: 10, lines: LINES_LASER },
   { id: "demo-quote-007", number: "DEMO_COT_007", customerCode: "DEMO_CLIENTE_005", contactSuffix: "1", status: "expirada", currency: "mxn", paymentTerms: "30 días", leadTime: "8 días", notes: "Venció sin respuesta.", daysAgo: 40, validDays: -5, lines: LINES_CNC },
   { id: "demo-quote-008", number: "DEMO_COT_008", customerCode: "DEMO_CLIENTE_006", contactSuffix: "1", status: "enviada", currency: "mxn", paymentTerms: "Contado", leadTime: "5 días", notes: "Corte y doblez.", daysAgo: 1, validDays: 5, lines: LINES_LASER },
-  { id: "demo-quote-009", number: "DEMO_COT_009", customerCode: "DEMO_CLIENTE_007", contactSuffix: "1", status: "borrador", currency: "mxn", paymentTerms: "30 días", leadTime: "15 días", notes: "RFQ incompleta: faltan planos.", daysAgo: 0, validDays: 21, lines: LINES_CNC },
-  { id: "demo-quote-010", number: "DEMO_COT_010", customerCode: "DEMO_CLIENTE_008", contactSuffix: "1", status: "en_revision", currency: "usd", paymentTerms: "Net 30", leadTime: "2 weeks", notes: "Revisar costo de material.", daysAgo: 3, validDays: 14, lines: LINES_TURN },
+  { id: "demo-quote-009", number: "DEMO_COT_009", customerCode: "DEMO_CLIENTE_007", contactSuffix: "1", status: "borrador", currency: "mxn", paymentTerms: "30 días", leadTime: "15 días", notes: "RFQ incompleta: faltan planos. Diseño solamente.", daysAgo: 0, validDays: 21, rfqType: "diseno_solamente", requiresEngineering: true, engineeringType: "diseno_nuevo", engineeringStatus: "en_proceso", lines: LINES_CNC },
+  { id: "demo-quote-010", number: "DEMO_COT_010", customerCode: "DEMO_CLIENTE_008", contactSuffix: "1", status: "en_revision", currency: "usd", paymentTerms: "Net 30", leadTime: "2 weeks", notes: "Validación de manufactura del plano del cliente.", daysAgo: 3, validDays: 14, rfqType: "solo_fabricacion", requiresEngineering: true, engineeringType: "manufacturabilidad", engineeringStatus: "en_proceso", lines: LINES_TURN },
   { id: "demo-quote-011", number: "DEMO_COT_011", customerCode: "DEMO_CLIENTE_002", contactSuffix: "1", status: "aprobada", currency: "mxn", paymentTerms: "30 días", leadTime: "9 días", notes: "Aprobada por compras demo.", daysAgo: 6, validDays: 20, lines: LINES_LASER },
   { id: "demo-quote-012", number: "DEMO_COT_012", customerCode: "DEMO_CLIENTE_004", contactSuffix: "1", status: "enviada", currency: "mxn", paymentTerms: "15 días", leadTime: "11 días", notes: "Seguimiento semanal.", daysAgo: 9, validDays: 8, lines: LINES_CNC },
-  { id: "demo-quote-013", number: "DEMO_COT_013", customerCode: "DEMO_CLIENTE_005", contactSuffix: "1", status: "borrador", currency: "usd", paymentTerms: "Net 30", leadTime: "6 weeks", notes: "Proyecto mayor. Cotización demo.", daysAgo: 1, validDays: 45, lines: [...LINES_CNC, ...LINES_TURN] },
+  { id: "demo-quote-013", number: "DEMO_COT_013", customerCode: "DEMO_CLIENTE_005", contactSuffix: "1", status: "borrador", currency: "usd", paymentTerms: "Net 30", leadTime: "6 weeks", notes: "Proyecto mayor. Diseño + fabricación demo.", daysAgo: 1, validDays: 45, rfqType: "diseno_fabricacion", requiresEngineering: true, engineeringType: "modificacion", engineeringStatus: "esperando_cliente", lines: [...LINES_CNC, ...LINES_TURN] },
   { id: "demo-quote-014", number: "DEMO_COT_014", customerCode: "DEMO_CLIENTE_006", contactSuffix: "1", status: "enviada", currency: "mxn", paymentTerms: "Contado", leadTime: "3 días", notes: "Urgente.", daysAgo: 0, validDays: 7, lines: LINES_LASER },
   { id: "demo-quote-015", number: "DEMO_COT_015", customerCode: "DEMO_CLIENTE_007", contactSuffix: "1", status: "convertida", currency: "mxn", paymentTerms: "30 días", leadTime: "20 días", notes: "Segunda conversión demo.", daysAgo: 25, validDays: 30, lines: LINES_TURN, convert: true },
 ];
@@ -201,6 +206,10 @@ export async function seedQuotesDemo(
         paymentTerms: demo.paymentTerms,
         leadTime: demo.leadTime,
         notes: demo.notes,
+        rfqType: demo.rfqType ?? "solo_fabricacion",
+        requiresEngineering: demo.requiresEngineering ?? false,
+        engineeringType: demo.engineeringType ?? null,
+        engineeringStatus: demo.engineeringStatus ?? "no_requerida",
         status: demo.convert ? "convertida" : demo.status,
         subtotal: formatMoney(header.subtotal),
         taxTotal: formatMoney(header.taxTotal),
@@ -227,6 +236,10 @@ export async function seedQuotesDemo(
           paymentTerms: demo.paymentTerms,
           leadTime: demo.leadTime,
           notes: demo.notes,
+          rfqType: demo.rfqType ?? "solo_fabricacion",
+          requiresEngineering: demo.requiresEngineering ?? false,
+          engineeringType: demo.engineeringType ?? null,
+          engineeringStatus: demo.engineeringStatus ?? "no_requerida",
           issueDate,
           validUntil,
           subtotal: formatMoney(header.subtotal),
@@ -255,6 +268,7 @@ export async function seedQuotesDemo(
           number: orderNumber,
           customerId,
           quoteId: demo.id,
+          origin: "rfq_directa",
           currency: demo.currency,
           total: formatMoney(header.total),
           status: "nuevo",

@@ -6,15 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth/auth";
 import { PERMISSION_IDS, ROLES, type RoleId } from "@/lib/permissions/catalog";
 import { getDashboardSnapshot } from "@/server/services/dashboard";
+import { getEngineeringDashboardStats } from "@/server/services/engineering";
 import { getQuoteDashboardStats } from "@/server/services/quotes";
 
 const UPCOMING = [
-  { label: "Ventas hoy", phase: "Fase 4" },
-  { label: "Pedidos activos", phase: "Fase 4" },
+  { label: "Ventas hoy", phase: "Fase 5+" },
+  { label: "Pedidos activos", phase: "Fase 5+" },
   { label: "Órdenes de producción", phase: "Fase 5" },
   { label: "Material por comprar", phase: "Fase 6" },
   { label: "Máquinas ocupadas", phase: "Fase 5" },
-  { label: "Entregas próximas", phase: "Fase 8" },
+  { label: "Entregas próximas", phase: "Fase 9" },
 ];
 
 export default async function DashboardPage() {
@@ -28,7 +29,13 @@ export default async function DashboardPage() {
 
   const snapshot = await getDashboardSnapshot(session.user.id);
   const canReadQuotes = snapshot.user.permissions.includes(PERMISSION_IDS.quotesRead);
+  const canReadEngineering = snapshot.user.permissions.includes(
+    PERMISSION_IDS.engineeringRead,
+  );
   const quoteStats = canReadQuotes ? await getQuoteDashboardStats() : null;
+  const engineeringStats = canReadEngineering
+    ? await getEngineeringDashboardStats()
+    : null;
   const roleNames = snapshot.user.roles.map(
     (roleId) => ROLES[roleId as RoleId]?.name ?? roleId,
   );
@@ -84,6 +91,25 @@ export default async function DashboardPage() {
               label="Convertidas del mes"
               value={String(quoteStats.convertedThisMonth)}
               hint="Cotizaciones convertidas a pedido"
+            />
+          </>
+        ) : null}
+        {engineeringStats ? (
+          <>
+            <KpiCard
+              label="Ingeniería abierta"
+              value={String(engineeringStats.open)}
+              hint="Solicitudes no cerradas"
+            />
+            <KpiCard
+              label="Ingeniería vencida"
+              value={String(engineeringStats.overdue)}
+              hint="Fecha compromiso superada"
+            />
+            <KpiCard
+              label="Diseños liberados"
+              value={String(engineeringStats.released)}
+              hint="Listos para cotización final / OP"
             />
           </>
         ) : null}

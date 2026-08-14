@@ -26,9 +26,13 @@ const ACTIONS: { status: QuoteStatus; label: string }[] = [
 export function QuoteStatusActions({
   quoteId,
   status,
+  requiresEngineering,
+  engineeringStatus,
 }: {
   quoteId: string;
   status: QuoteStatus;
+  requiresEngineering: boolean;
+  engineeringStatus: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -72,11 +76,18 @@ export function QuoteStatusActions({
       {canTransitionQuote(status, "convertida") ? (
         <Button
           type="button"
-          disabled={pending}
+          disabled={pending || (requiresEngineering && engineeringStatus !== "liberada")}
           onClick={() => run(convertQuoteToOrderAction)}
         >
           Convertir en pedido
         </Button>
+      ) : null}
+      {canTransitionQuote(status, "convertida") &&
+      requiresEngineering &&
+      engineeringStatus !== "liberada" ? (
+        <p className="w-full text-sm text-muted-foreground">
+          Esta RFQ requiere ingeniería liberada antes de convertir a pedido.
+        </p>
       ) : null}
       <Button
         type="button"

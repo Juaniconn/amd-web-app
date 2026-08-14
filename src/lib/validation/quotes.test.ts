@@ -12,6 +12,20 @@ describe("quote validation", () => {
     expect(result.success).toBe(true);
   });
 
+  it("requires engineering type when the RFQ needs design", () => {
+    const result = createQuoteSchema.safeParse({
+      customerId: "demo-customer-001",
+      currency: "mxn",
+      rfqType: "diseno_fabricacion",
+      requiresEngineering: true,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.engineeringType).toBe("diseno_nuevo");
+      expect(result.data.requiresEngineering).toBe(true);
+    }
+  });
+
   it("requires a customer", () => {
     const result = createQuoteSchema.safeParse({
       currency: "mxn",

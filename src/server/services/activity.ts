@@ -93,3 +93,29 @@ export async function listQuoteActivity(quoteId: string) {
     )
     .orderBy(desc(activityLogs.createdAt));
 }
+
+export async function listEngineeringActivity(engineeringRequestId: string) {
+  return db
+    .select({
+      id: activityLogs.id,
+      action: activityLogs.action,
+      entityType: activityLogs.entityType,
+      entityId: activityLogs.entityId,
+      summary: activityLogs.summary,
+      createdAt: activityLogs.createdAt,
+    })
+    .from(activityLogs)
+    .where(
+      or(
+        and(
+          eq(activityLogs.entityType, "engineering_request"),
+          eq(activityLogs.entityId, engineeringRequestId),
+        ),
+        and(
+          eq(activityLogs.parentEntityType, "engineering_request"),
+          eq(activityLogs.parentEntityId, engineeringRequestId),
+        ),
+      ),
+    )
+    .orderBy(desc(activityLogs.createdAt));
+}

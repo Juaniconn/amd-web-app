@@ -1,12 +1,14 @@
 # Proceso RFQ
 
-Última actualización: 2026-08-13 (Fase 3 Cotizaciones).  
-Fuente: código en `src/features/quotes`, `src/server/services/quotes.ts`, `src/lib/quotes/status.ts`.  
+Última actualización: 2026-08-14 (Fase 4: RFQ distingue diseño vs fabricación).  
+Fuente: código en `src/features/quotes`, `src/server/services/quotes.ts`, `src/lib/quotes/status.ts`, `src/lib/quotes/rfq.ts`.  
 No duplicar este proceso fuera de `docs/Procesos/`.
 
 # Objetivo
 
-Recibir una solicitud de cotización (RFQ), asociarla a un cliente del CRM, cotizar partidas con costo y margen, adjuntar planos y producir una cotización formal. Una cotización **aprobada** puede convertirse en **pedido mínimo**. No crea orden de producción.
+Recibir una solicitud de cotización (RFQ), asociarla a un cliente del CRM, indicar si AMD diseña o solo fabrica, cotizar partidas con costo y margen, adjuntar planos y producir una cotización formal. Una cotización **aprobada** puede convertirse en **pedido mínimo** si, cuando aplica, Ingeniería está **Liberada**. No crea orden de producción (Fase 5, ADR-025).
+
+Hoy el flujo de `/quotes` cubre **escenario B** y **escenario A** (tipo RFQ + solicitud de ingeniería).
 
 La RFQ no es un documento aparte: es la cotización en estado `borrador` (ADR-024).
 
@@ -20,7 +22,8 @@ Cliente maestro CRM ✅
     → Marcar enviada ✅  ← solo cambio de estado; no hay correo ni PDF
     → Aprobada | Rechazada | Expirada ✅
     → Convertir en pedido mínimo ✅
-    → Orden de producción ⬜  (Fase 5; este proceso no la genera)
+    → Ingeniería ✅  (obligatoria si requires_engineering; 1 RFQ → 0..1 solicitud)
+    → Orden de producción ⬜  (Fase 5 Producción, ADR-025; este proceso no la genera)
 ```
 
 Transiciones permitidas en el sistema:
@@ -41,10 +44,9 @@ Edición de cabecera, partidas y archivos: solo `borrador` y `en_revision`.
 
 | Rol | En el sistema |
 |---|---|
-| Ventas | `quotes:read` + `quotes:write`: captura, partidas, archivos, estados, duplicar, archivar, convertir |
-| Dirección | `quotes:read`: consulta listado, ficha, costos y márgenes. No escribe |
-| Administrador | Ambos permisos |
-| Compras, Producción, Calidad, Almacén | Sin `quotes:*`. No ven el módulo |
+| Ventas | `quotes:*` + `engineering:read/create/approve` |
+| Dirección | `quotes:read` + `engineering:read` |
+| Ingeniería | `engineering:*` (no escribe cotizaciones salvo que el usuario tenga también Ventas) |
 
 # Entradas
 
@@ -81,12 +83,14 @@ Edición de cabecera, partidas y archivos: solo `borrador` y `en_revision`.
 1. La cotización apunta a un `customers.id` activo y no archivado.
 2. El contacto, si existe, pertenece a ese cliente.
 3. Marcar `enviada` exige al menos una partida y precio unitario en todas.
-4. Convertir exige estado `aprobada` y al menos una partida.
+4. Convertir exige estado `aprobada`, al menos una partida y, si `requires_engineering`, solicitud de ingeniería `liberado` (ADR-034).
 5. No se puede archivar una cotización `convertida`.
-6. Duplicar crea un nuevo `borrador` con nuevo número y copia de partidas.
+6. Duplicar crea un nuevo `borrador` con nuevo número, copia de partidas y, si aplica, una solicitud nueva.
 7. Cálculo de dinero solo en servidor (IVA default 16 %, redondeo a 2 decimales).
 8. Los registros `is_demo = true` no son ventas reales de AMD.
-9. Compras/Producción/Calidad/Almacén no operan este proceso en el sistema.
+9. Tipo RFQ `diseno_fabricacion` / `diseno_solamente` / `reverse_engineering` fuerza `requires_engineering`.
+10. `solo_fabricacion` puede pedir ingeniería opcional (manufacturabilidad / DFM).
+11. Cliente estratégico: definición ADR-043; campo CRM ⬜.
 
 # Conversión a Producción
 
@@ -95,12 +99,22 @@ Edición de cabecera, partidas y archivos: solo `borrador` y `en_revision`.
 La acción **Convertir en pedido** (solo desde `aprobada`):
 
 1. Crea `orders` + `order_items` (descripción, cantidad, precios, IVA; **sin** costo estimado).
-2. Estado del pedido: `nuevo`.
-3. Liga `quotes.converted_order_id` ↔ `orders.quote_id`.
-4. `/orders` permanece deshabilitado (Fase 4).
-5. Fase 5 (Producción) partirá de ese pedido, no de la cotización.
+2. Estado del pedido: `nuevo`. Origen: `rfq_directa` o `rfq_ingenieria` (ADR-035).
+3. Liga `quotes.converted_order_id` ↔ `orders.quote_id`. Si hubo liberación, `orders.engineering_request_id`.
+4. `/orders` permanece deshabilitado (UI de pedidos diferida, ADR-026).
+5. Fase 5 (Producción) partirá de ese pedido ([[Origen Orden Produccion]]).
 
-Ver [[Proceso Producción]] (aún no ejecutable) y ADR-023.
+Ver [[Proceso Ingenieria]], [[Proceso Producción]] (aún no ejecutable), [[Flujo Orden Produccion]], ADR-023, ADR-025, ADR-031.
+
+# Integración con Ingeniería
+
+Implementada. ADR-031, ADR-033, ADR-034, ADR-039, [[Proceso Ingenieria]], [[Costeo Ingenieria]].
+
+- **Flujo A:** AMD diseña; la conversión a pedido espera `Liberado`.
+- **Flujo B:** el plano vive en adjuntos de la cotización; Ingeniería solo si Ventas marca Requiere Ingeniería (validación / DFM).
+- Guardar una RFQ que requiere ingeniería **crea** la solicitud si no existe.
+- **Cobro:** A incluido (cliente trae diseño completo), B independiente (diseño desde cero), C independiente (inversa). Tipo `incluido` / `tarifa_fija` / `por_hora` aún no persistido.
+- **Cliente estratégico** (ADR-043): alto volumen, buen historial de pago, sector estratégico, potencial de crecimiento. No hay flag en `customers`; Ventas lo aplica al priorizar. Criterio 2 de OP en Fase 5.
 
 # Integración con CRM
 
@@ -121,7 +135,7 @@ En `/dashboard`, si el usuario tiene `quotes:read`:
 | Por vencer (7 días) | `enviada` con `valid_until` entre ahora y ahora+7 días |
 | Convertidas del mes | `convertida` con `updated_at` ≥ inicio de mes |
 
-No hay KPI de «ventas hoy» (Fase 4). El Centro de Operaciones (§51) no existe.
+No hay KPI de «ventas hoy» (la UI de pedidos está diferida). El Centro de Operaciones (§51) no existe.
 
 Filtros del listado `/quotes`: búsqueda (número/cliente/notas) y estado. Paginación 20.
 

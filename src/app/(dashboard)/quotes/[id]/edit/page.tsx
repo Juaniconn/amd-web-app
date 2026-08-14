@@ -60,6 +60,9 @@ export default async function EditQuotePage({
           paymentTerms: quote.paymentTerms ?? "",
           leadTime: quote.leadTime ?? "",
           notes: quote.notes ?? "",
+          rfqType: quote.rfqType,
+          requiresEngineering: quote.requiresEngineering,
+          engineeringType: quote.engineeringType ?? "",
         }}
       />
     </div>

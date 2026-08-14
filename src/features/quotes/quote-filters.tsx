@@ -1,5 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  QUOTE_ENGINEERING_STATUS_LABELS,
+  RFQ_TYPE_LABELS,
+  type QuoteEngineeringStatus,
+  type RfqType,
+} from "@/lib/quotes/rfq";
 import { QUOTE_STATUS_LABELS, type QuoteStatus } from "@/lib/quotes/status";
 
 const selectClassName =
@@ -8,9 +14,16 @@ const selectClassName =
 type QuoteFiltersProps = {
   q?: string;
   status?: string;
+  rfqType?: string;
+  engineeringStatus?: string;
 };
 
-export function QuoteFilters({ q, status }: QuoteFiltersProps) {
+export function QuoteFilters({
+  q,
+  status,
+  rfqType,
+  engineeringStatus,
+}: QuoteFiltersProps) {
   return (
     <form method="get" className="flex flex-wrap items-end gap-3">
       <div className="min-w-56 flex-1 space-y-1">
@@ -45,6 +58,55 @@ export function QuoteFilters({ q, status }: QuoteFiltersProps) {
               </option>
             ),
           )}
+        </select>
+      </div>
+      <div className="space-y-1">
+        <label
+          htmlFor="rfqType"
+          className="text-xs font-medium text-muted-foreground"
+        >
+          Tipo RFQ
+        </label>
+        <select
+          id="rfqType"
+          name="rfqType"
+          defaultValue={rfqType ?? ""}
+          className={selectClassName}
+        >
+          <option value="">Todos</option>
+          {(Object.entries(RFQ_TYPE_LABELS) as [RfqType, string][]).map(
+            ([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ),
+          )}
+        </select>
+      </div>
+      <div className="space-y-1">
+        <label
+          htmlFor="engineeringStatus"
+          className="text-xs font-medium text-muted-foreground"
+        >
+          Estado ingeniería
+        </label>
+        <select
+          id="engineeringStatus"
+          name="engineeringStatus"
+          defaultValue={engineeringStatus ?? ""}
+          className={selectClassName}
+        >
+          <option value="">Todos</option>
+          {(
+            Object.entries(QUOTE_ENGINEERING_STATUS_LABELS) as [
+              QuoteEngineeringStatus,
+              string,
+            ][]
+          ).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
         </select>
       </div>
       <Button type="submit" variant="outline">

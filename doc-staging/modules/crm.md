@@ -16,6 +16,7 @@ Mantener el maestro de clientes y contactos de AMD Operations, con historial de 
 **No implementado (placeholders en la ficha):**
 
 - Pedidos (hay filas mínimas si se convirtió una cotización; no hay UI)
+- Ingeniería / Diseño (Fase 4; no hay entidad)
 - Producción, facturación, pagos, documentos del cliente
 
 **Actualizado en Fase 3:** la tarjeta Cotizaciones de la ficha es real (listado + «Nueva cotización» si `quotes:write` y el cliente no está archivado).

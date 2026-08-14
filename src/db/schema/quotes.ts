@@ -37,6 +37,34 @@ export const quoteCurrencyEnum = pgEnum("quote_currency", ["mxn", "usd"]);
 
 export const orderStatusEnum = pgEnum("order_status", ["nuevo"]);
 
+export const quoteRfqTypeEnum = pgEnum("quote_rfq_type", [
+  "solo_fabricacion",
+  "diseno_fabricacion",
+  "diseno_solamente",
+  "reverse_engineering",
+]);
+
+export const quoteEngineeringTypeEnum = pgEnum("quote_engineering_type", [
+  "diseno_nuevo",
+  "modificacion",
+  "reverse_engineering",
+  "manufacturabilidad",
+]);
+
+export const quoteEngineeringStatusEnum = pgEnum("quote_engineering_status", [
+  "no_requerida",
+  "pendiente",
+  "en_proceso",
+  "esperando_cliente",
+  "aprobada",
+  "liberada",
+]);
+
+export const orderOriginEnum = pgEnum("order_origin", [
+  "rfq_directa",
+  "rfq_ingenieria",
+]);
+
 export const quotes = pgTable(
   "quotes",
   {
@@ -57,6 +85,12 @@ export const quotes = pgTable(
     paymentTerms: text("payment_terms"),
     leadTime: text("lead_time"),
     notes: text("notes"),
+    rfqType: quoteRfqTypeEnum("rfq_type").notNull().default("solo_fabricacion"),
+    requiresEngineering: boolean("requires_engineering").notNull().default(false),
+    engineeringType: quoteEngineeringTypeEnum("engineering_type"),
+    engineeringStatus: quoteEngineeringStatusEnum("engineering_status")
+      .notNull()
+      .default("no_requerida"),
     status: quoteStatusEnum("status").notNull().default("borrador"),
     subtotal: numeric("subtotal", { precision: 14, scale: 2 })
       .notNull()
@@ -90,6 +124,8 @@ export const quotes = pgTable(
     uniqueIndex("quotes_number_uidx").on(table.number),
     index("quotes_customer_id_idx").on(table.customerId),
     index("quotes_status_idx").on(table.status),
+    index("quotes_rfq_type_idx").on(table.rfqType),
+    index("quotes_engineering_status_idx").on(table.engineeringStatus),
     index("quotes_deleted_at_idx").on(table.deletedAt),
     index("quotes_valid_until_idx").on(table.validUntil),
     uniqueIndex("quotes_converted_order_uidx")
@@ -171,6 +207,8 @@ export const orders = pgTable(
     quoteId: text("quote_id")
       .notNull()
       .references(() => quotes.id, { onDelete: "restrict" }),
+    origin: orderOriginEnum("origin").notNull().default("rfq_directa"),
+    engineeringRequestId: text("engineering_request_id"),
     currency: quoteCurrencyEnum("currency").notNull().default("mxn"),
     total: numeric("total", { precision: 14, scale: 2 }).notNull().default("0"),
     status: orderStatusEnum("status").notNull().default("nuevo"),
@@ -187,6 +225,8 @@ export const orders = pgTable(
     uniqueIndex("orders_number_uidx").on(table.number),
     uniqueIndex("orders_quote_id_uidx").on(table.quoteId),
     index("orders_customer_id_idx").on(table.customerId),
+    index("orders_origin_idx").on(table.origin),
+    index("orders_engineering_request_id_idx").on(table.engineeringRequestId),
   ],
 );
 

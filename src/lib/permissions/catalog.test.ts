@@ -35,6 +35,12 @@ describe("RBAC catalog", () => {
     expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.quotesWrite)).toBe(
       false,
     );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.engineeringRead)).toBe(
+      true,
+    );
+    expect(
+      roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.engineeringRelease),
+    ).toBe(false);
   });
 
   it("lets Ventas read and write customers and quotes", () => {
@@ -53,18 +59,49 @@ describe("RBAC catalog", () => {
     expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.usersWrite)).toBe(
       false,
     );
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.engineeringCreate)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.engineeringAssign)).toBe(
+      false,
+    );
+  });
+
+  it("gives Ingeniería the engineering module permissions", () => {
+    expect(roleHasPermission(ROLE_IDS.ingenieria, PERMISSION_IDS.engineeringRead)).toBe(
+      true,
+    );
+    expect(
+      roleHasPermission(ROLE_IDS.ingenieria, PERMISSION_IDS.engineeringRelease),
+    ).toBe(true);
+    expect(roleHasPermission(ROLE_IDS.ingenieria, PERMISSION_IDS.quotesWrite)).toBe(
+      false,
+    );
   });
 
   it("limits remaining operational roles to dashboard access", () => {
-    const operational = [
+    expect(roleHasPermission(ROLE_IDS.compras, PERMISSION_IDS.dashboardRead)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.compras, PERMISSION_IDS.engineeringRead)).toBe(
+      false,
+    );
+    expect(roleHasPermission(ROLE_IDS.produccion, PERMISSION_IDS.engineeringRead)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.calidad, PERMISSION_IDS.engineeringRead)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.almacen, PERMISSION_IDS.engineeringRead)).toBe(
+      false,
+    );
+
+    for (const role of [
       ROLE_IDS.compras,
       ROLE_IDS.produccion,
       ROLE_IDS.calidad,
       ROLE_IDS.almacen,
-    ];
-
-    for (const role of operational) {
-      expect(roleHasPermission(role, PERMISSION_IDS.dashboardRead)).toBe(true);
+    ]) {
       expect(roleHasPermission(role, PERMISSION_IDS.customersRead)).toBe(false);
       expect(roleHasPermission(role, PERMISSION_IDS.quotesRead)).toBe(false);
       expect(roleHasPermission(role, PERMISSION_IDS.usersWrite)).toBe(false);

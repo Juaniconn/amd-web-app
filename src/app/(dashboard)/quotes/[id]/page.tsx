@@ -9,6 +9,12 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
+import { ENGINEERING_STATUS_LABELS, type EngineeringStatus } from "@/lib/engineering/status";
+import {
+  QUOTE_ENGINEERING_STATUS_LABELS,
+  QUOTE_ENGINEERING_TYPE_LABELS,
+  RFQ_TYPE_LABELS,
+} from "@/lib/quotes/rfq";
 import { QUOTE_STATUS_LABELS, canEditQuote } from "@/lib/quotes/status";
 import { listQuoteActivity } from "@/server/services/activity";
 import { getQuoteById } from "@/server/services/quotes";
@@ -43,6 +49,9 @@ export default async function QuoteDetailPage({
 
   const activity = await listQuoteActivity(quote.id);
   const canWrite = access.permissions.includes(PERMISSION_IDS.quotesWrite);
+  const canReadEngineering = access.permissions.includes(
+    PERMISSION_IDS.engineeringRead,
+  );
   const editable = canWrite && canEditQuote(quote.status) && !quote.deletedAt;
 
   return (
@@ -81,13 +90,19 @@ export default async function QuoteDetailPage({
       </div>
 
       {canWrite && !quote.deletedAt ? (
-        <QuoteStatusActions quoteId={quote.id} status={quote.status} />
+        <QuoteStatusActions
+          quoteId={quote.id}
+          status={quote.status}
+          requiresEngineering={quote.requiresEngineering}
+          engineeringStatus={quote.engineeringStatus}
+        />
       ) : null}
 
       {quote.orderNumber ? (
         <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
           Pedido creado: <span className="font-medium">{quote.orderNumber}</span>
-          . La vista completa del pedido se construye en Fase 4.
+          . La vista completa del pedido se construye después de Ingeniería. El origen
+          queda registrado para Producción (Fase 5).
         </p>
       ) : null}
 
@@ -106,6 +121,23 @@ export default async function QuoteDetailPage({
           />
           <Field label="Condiciones de pago" value={quote.paymentTerms} />
           <Field label="Tiempo de entrega" value={quote.leadTime} />
+          <Field label="Tipo de RFQ" value={RFQ_TYPE_LABELS[quote.rfqType]} />
+          <Field
+            label="Requiere ingeniería"
+            value={quote.requiresEngineering ? "Sí" : "No"}
+          />
+          <Field
+            label="Tipo ingeniería"
+            value={
+              quote.engineeringType
+                ? QUOTE_ENGINEERING_TYPE_LABELS[quote.engineeringType]
+                : null
+            }
+          />
+          <Field
+            label="Estado ingeniería"
+            value={QUOTE_ENGINEERING_STATUS_LABELS[quote.engineeringStatus]}
+          />
           <Field label="Subtotal" value={money(quote.subtotal, quote.currency)} />
           <Field label="IVA" value={money(quote.taxTotal, quote.currency)} />
           <Field label="Total" value={money(quote.total, quote.currency)} />
@@ -131,6 +163,49 @@ export default async function QuoteDetailPage({
           </CardContent>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ingeniería</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {quote.engineering ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p>
+                Solicitud{" "}
+                {canReadEngineering ? (
+                  <Link
+                    href={`/engineering/${quote.engineering.id}`}
+                    className="font-medium hover:underline"
+                  >
+                    {quote.engineering.number}
+                  </Link>
+                ) : (
+                  <span className="font-medium">{quote.engineering.number}</span>
+                )}{" "}
+                · {ENGINEERING_STATUS_LABELS[quote.engineering.status as EngineeringStatus]}
+              </p>
+              {canReadEngineering ? (
+                <Link
+                  href={`/engineering/${quote.engineering.id}`}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  Abrir ingeniería
+                </Link>
+              ) : null}
+            </div>
+          ) : quote.requiresEngineering ? (
+            <p className="text-muted-foreground">
+              Esta RFQ requiere ingeniería. La solicitud se crea al guardar la
+              cotización o desde el módulo Ingeniería.
+            </p>
+          ) : (
+            <p className="text-muted-foreground">
+              Escenario B: el cliente entrega plano. Ingeniería es opcional.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

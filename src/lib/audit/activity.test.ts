@@ -24,6 +24,17 @@ describe("activitySummary", () => {
     ).toBe("Sistema archivó el cliente Maquiladora A.");
   });
 
+  it("describes an engineering release", () => {
+    expect(
+      activitySummary({
+        actorName: "Luis Ingeniería",
+        action: "released",
+        entityType: "engineering_request",
+        entityLabel: "ING-2026-00001",
+      }),
+    ).toBe("Luis Ingeniería liberó la solicitud de ingeniería ING-2026-00001.");
+  });
+
   it("describes a quote conversion", () => {
     expect(
       activitySummary({

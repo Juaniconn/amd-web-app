@@ -9,8 +9,8 @@
 
 # 0. ESTADO TÉCNICO ACTUAL
 
-**Fecha:** 2026-08-13  
-Este bloque documenta el sistema **tal como está compilado y migrado** tras Fase 3. Las secciones 1–40 de este archivo siguen siendo la especificación objetivo; no se borran.
+**Fecha:** 2026-08-14  
+Este bloque documenta el sistema **tal como está compilado y migrado** tras Fase 4. Las secciones 1–40 siguen siendo la especificación objetivo; no se borran. Numeración operativa vigente: **Fase 4 = Ingeniería y Diseño ✅** (ADR-032). ADR-026 queda reemplazada en numeración. No hay código de producción.
 
 ## Arquitectura actual
 
@@ -65,6 +65,7 @@ src/
 │   │   ├── dashboard/
 │   │   ├── customers/          ✅  new/ [id]/ [id]/edit
 │   │   ├── quotes/             ✅  new/ [id]/ [id]/edit
+│   │   ├── engineering/        ✅  new/ [id]/ [id]/edit
 │   │   └── settings/users|roles/
 │   └── api/
 │       ├── auth/[...all]/      Better Auth
@@ -72,12 +73,13 @@ src/
 ├── components/                 layout, auth, dashboard, ui (shadcn)
 ├── features/customers/         ✅
 ├── features/quotes/            ✅
-├── server/actions/             auth.ts, customers.ts, quotes.ts
+├── features/engineering/       ✅
+├── server/actions/             auth.ts, customers.ts, quotes.ts, engineering.ts
 ├── server/services/            auth, access, dashboard, customers, contacts,
-│                               activity, quotes, documents
-├── db/schema/                  auth, rbac, crm, activity, quotes, documents
-├── db/migrations/              0000_*, 0001_crm.sql, 0002_quotes.sql
-├── lib/auth, permissions, quotes, storage, validation, audit, navigation
+│                               activity, quotes, documents, engineering, numbering
+├── db/schema/                  auth, rbac, crm, activity, quotes, documents, engineering
+├── db/migrations/              0000_*, 0001_crm.sql, 0002_quotes.sql, 0003_engineering.sql
+├── lib/auth, permissions, quotes, engineering, storage, validation, audit, navigation
 └── proxy.ts                    gate de sesión (Next 16; no hay middleware.ts)
 ```
 
@@ -91,9 +93,13 @@ No existen: `src/server/repositories/`, rutas de páginas `orders|production|inv
 
 **Fase 3:** `quotes`, `quote_items`, `documents`, `orders`, `order_items`.
 
-**Enums:** `customer_type`, `customer_status`, `quote_status`, `quote_currency`, `order_status` (`nuevo` únicamente), `document_entity_type`, `document_storage_backend`, `activity_action`, `activity_entity_type`.
+**Fase 4 Ingeniería:** `engineering_requests`, `engineering_hours`. Columnas RFQ/origen en `quotes` y `orders`. ADR-033, ADR-034, ADR-035.
 
-Migraciones Drizzle: `0000_faithful_mattie_franklin`, `0001_crm`, `0002_quotes`. Snapshots `meta/0000`–`0002` presentes. El journal debe ser UTF-8 **sin BOM**.
+**Fase 5 Producción (docs only):** no hay `production_orders`, `production_operations`, `work_centers`, `machines`. Ver [[production]] y ADR-025.
+
+**Enums:** `customer_type`, `customer_status`, `quote_status`, `quote_currency`, `quote_rfq_type`, `quote_engineering_type`, `quote_engineering_status`, `order_status` (`nuevo`), `order_origin`, `engineering_request_status`, `engineering_priority`, `document_entity_type`, `document_storage_backend`, `activity_action`, `activity_entity_type`.
+
+Migraciones Drizzle: `0000_faithful_mattie_franklin`, `0001_crm`, `0002_quotes`, `0003_engineering`. Snapshots `meta/0000`–`0002` presentes (`0003` SQL + journal). El journal debe ser UTF-8 **sin BOM**.
 
 ## Relaciones entre entidades (Fase 3)
 
@@ -112,6 +118,24 @@ users ← created_by / updated_by / owner_user_id / uploaded_by  (SET NULL)
 
 Soft delete: `customers`, `contacts`, `quotes` (`deleted_at`). Un contacto principal activo por cliente. RFC único entre no archivados. Número de cotización y de pedido únicos.
 
+## Entidad — Engineering Request
+
+Tabla `engineering_requests`. 1 RFQ → 0..1 solicitud activa (ADR-033).
+
+```text
+customers              1—N  engineering_requests
+quotes                 1—0..1  engineering_requests     (único si deleted_at is null)
+engineering_requests   1—N  engineering_hours
+engineering_requests   0..N  documents                 (entity_type = engineering_request)
+engineering_requests   →  orders.engineering_request_id  (al convertir tras Liberado)
+```
+
+`convertQuoteToOrder` **exige** `liberado` si `requires_engineering` (ADR-034). `GET /api/documents/[id]` autoriza `quote` (`quotes:read`) y `engineering_request` (`engineering:read`).
+
+Permisos `engineering:*`. Rol `ingenieria`. Estados: [[Estados Ingenieria]].
+
+---
+
 ## APIs reales
 
 | Superficie | Existe |
@@ -119,7 +143,8 @@ Soft delete: `customers`, `contacts`, `quotes` (`deleted_at`). Un contacto princ
 | `GET/POST /api/auth/[...all]` | ✅ Better Auth |
 | `GET /api/documents/[id]` | ✅ sesión + `quotes:read` si `entity_type = quote`; otros tipos 403 |
 | Server Actions CRM (`customers.ts`) | ✅ 7 actions |
-| Server Actions quotes (`quotes.ts`) | ✅ create/update/archive, status, convert, duplicate, items, upload/delete document |
+| Server Actions quotes (`quotes.ts`) | ✅ create/update/archive, status, convert (gate Liberado), duplicate, items, upload/delete document |
+| Server Actions engineering (`engineering.ts`) | ✅ create/update/assign/status/hours/archive, upload/delete document |
 | Server Actions auth/usuarios | ✅ Fase 1 |
 | REST `/api/customers` o `/api/quotes` | ❌ No |
 | Workers / D1 bindings | ❌ No |
@@ -136,9 +161,11 @@ Soft delete: `customers`, `contacts`, `quotes` (`deleted_at`). Un contacto princ
 
 **Cotizaciones:** `quote-form`, `quote-filters`, `quote-items-panel`, `quote-documents`, `quote-status-actions`, `archive-quote-button`.
 
+**Ingeniería:** `engineering-form`, `engineering-filters`, `engineering-documents`, `engineering-status-actions`, `engineering-hours-panel`, `archive-engineering-button`.
+
 **shadcn/ui presentes:** button, input, label, textarea, select, table, card, badge, dialog, dropdown-menu, avatar, separator, sonner.
 
-Sidebar: Dashboard, Clientes, Cotizaciones habilitados. Pedidos y el resto de operación deshabilitados con etiqueta de fase. Sistema: Usuarios y Roles.
+Sidebar: Dashboard, Clientes, Cotizaciones, Ingeniería habilitados. Pedidos y el resto de operación deshabilitados con etiqueta de fase. Sistema: Usuarios y Roles.
 
 ## Roles y permisos reales
 
@@ -154,6 +181,9 @@ Catálogo: `src/lib/permissions/catalog.ts`. Pages y Server Actions llaman `requ
 | `customers:write` | sí | no | sí | no |
 | `quotes:read` | sí | sí | sí | no |
 | `quotes:write` | sí | no | sí | no |
+| `engineering:read` | sí | sí | sí | Producción y Calidad: sí. Compras/Almacén: no |
+
+Rol adicional **Ingeniería**: `dashboard:read` + todos los `engineering:*`. Ventas también `engineering:create` y `engineering:approve`.
 
 No existen permisos `orders:*`, `production:*`, `inventory:*`, `purchasing:*`, `quality:*`, `billing:*`. Dirección **no** escribe cotizaciones; las consulta (importes y márgenes).
 
@@ -177,10 +207,12 @@ ADR-002 sigue vigente como destino de infraestructura. **En este repositorio no 
 
 - Numeración transaccional con lock de tabla: `COT-YYYY-NNNNN`, `AMD-YYYY-NNNNN`. El seed demo usa `DEMO_COT_00N` / `DEMO_PEDIDO_00N`.
 - Máquina de estados: `borrador` → `en_revision` \| `enviada`; `en_revision` → `borrador` \| `enviada`; `enviada` → `aprobada` \| `rechazada` \| `expirada`; `aprobada` → `convertida`. Editables solo `borrador` y `en_revision`.
-- Enviar exige ≥1 partida con precio unitario. Convertir exige `aprobada` y ≥1 partida.
+- Enviar exige ≥1 partida con precio unitario. Convertir exige `aprobada`, ≥1 partida y, si `requires_engineering`, solicitud `liberado` (ADR-034). El pedido guarda `origin` (`rfq_directa` \| `rfq_ingenieria`).
+- Tipo RFQ: `solo_fabricacion` \| `diseno_fabricacion` \| `diseno_solamente` \| `reverse_engineering`.
 - «Enviada» no dispara correo ni PDF.
 - Lazy expire: `enviada` con `valid_until < now` pasa a `expirada` al listar/abrir/KPIs.
-- Archivos: máximo 20 MB; extensiones pdf/xlsx/xls/doc/docx/dxf/dwg/step/stp/stl/png/jpg/jpeg/gif/webp/txt.
+- Archivos RFQ: máximo 20 MB; extensiones pdf/xlsx/xls/doc/docx/dxf/dwg/step/stp/stl/png/jpg/jpeg/gif/webp/txt.
+- Archivos Ingeniería: máximo 50 MB; pdf/dwg/dxf/step/stp/iges/igs/png/jpg/jpeg/zip. Numeración `ING-YYYY-NNNNN`.
 
 ## Calidad verificada al cierre de Fase 3
 
@@ -518,6 +550,7 @@ Entidades base esperadas:
 - quote_items
 - orders
 - order_items
+- engineering_requests   ← conceptual Fase 4; **sin DDL** (ADR-031)
 - production_orders
 - production_operations
 - work_centers
@@ -541,6 +574,8 @@ Entidades base esperadas:
 - activity_logs
 
 Estas entidades deben adaptarse a la especificación funcional real antes de implementarse.
+
+`engineering_requests` figura en la lista para que el diseño técnico de Fase 4 no se olvide del módulo. **No es autorización para crear tabla.**
 
 ---
 
@@ -1097,6 +1132,8 @@ La solución más simple que mantenga calidad empresarial es preferible.
 # 40. PROCESO DE DESARROLLO POR FASES
 
 Trabajar exactamente según las fases del Business Spec.
+
+> **Numeración vigente 2026-08-13:** Fase 4 operativa = **Ingeniería y Diseño** (ADR-032, [[roadmap]]). Fase 5 = Producción. El listado siguiente es el plan histórico alineado a BUSINESS_SPEC §47 y **no se reescribe**. Pedidos UI está diferida; el pedido mínimo ya existe (ADR-023). Ingeniería no aparece en §47; ver bloque `# 0` y la sección Ingeniería y Diseño del Business Spec.
 
 FASE 1 — FUNDACIÓN ✅ Completado
 
