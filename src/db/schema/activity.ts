@@ -6,11 +6,19 @@ export const activityActionEnum = pgEnum("activity_action", [
   "updated",
   "deleted",
   "primary_contact_changed",
+  "status_changed",
+  "sent",
+  "converted",
+  "expired",
 ]);
 
 export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "customer",
   "contact",
+  "quote",
+  "quote_item",
+  "document",
+  "order",
 ]);
 
 export const activityLogs = pgTable(

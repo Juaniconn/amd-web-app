@@ -13,9 +13,12 @@ Mantener el maestro de clientes y contactos de AMD Operations, con historial de 
 - Ficha de cliente
 - Historial (`activity_logs`)
 
-**No implementado (se ve como placeholder en la ficha):**
+**No implementado (placeholders en la ficha):**
 
-- Cotizaciones, pedidos, producción, facturación, pagos, documentos
+- Pedidos (hay filas mínimas si se convirtió una cotización; no hay UI)
+- Producción, facturación, pagos, documentos del cliente
+
+**Actualizado en Fase 3:** la tarjeta Cotizaciones de la ficha es real (listado + «Nueva cotización» si `quotes:write` y el cliente no está archivado).
 
 # Flujo de negocio
 
@@ -39,7 +42,7 @@ Un solo `is_primary = true` por cliente entre contactos no archivados.
 
 ## `activity_logs`
 
-`actor_user_id`, `action` (`created` \| `updated` \| `deleted` \| `primary_contact_changed`), `entity_type` (`customer` \| `contact`), `entity_id`, `parent_entity_*`, `previous_value`, `new_value` (jsonb), `summary`, `created_at`. Append-only.
+`actor_user_id`, `action` (`created` \| `updated` \| `deleted` \| `primary_contact_changed` \| `status_changed` \| `sent` \| `converted` \| `expired`), `entity_type` (`customer` \| `contact` \| `quote` \| `quote_item` \| `document` \| `order`), `entity_id`, `parent_entity_*`, `previous_value`, `new_value` (jsonb), `summary`, `created_at`. Append-only.
 
 # Permisos
 
@@ -91,5 +94,5 @@ contact.activity → parent customer
 # Dependencias
 
 - Requiere Fase 1 (auth, RBAC, layout, PostgreSQL).
-- Es dependencia de Fase 3 Cotizaciones.
+- Es dependencia de Fase 3 Cotizaciones (✅). Ver [[rfq]] y [[Proceso RFQ]].
 - ADR-020, ADR-010, ADR-011.

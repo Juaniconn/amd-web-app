@@ -32,6 +32,18 @@ async function main() {
     const activityCount = await sql<{ n: number }[]>`
       SELECT count(*)::int AS n FROM activity_logs
     `;
+    const quoteCount = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM quotes WHERE deleted_at IS NULL
+    `;
+    const quoteItemCount = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM quote_items
+    `;
+    const documentCount = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM documents
+    `;
+    const orderCount = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM orders
+    `;
     const accounts = await sql<{ password: string }[]>`
       SELECT password FROM accounts WHERE provider_id = 'credential'
     `;
@@ -42,6 +54,10 @@ async function main() {
     console.log("customers:", customerCounts[0]?.n, "active:", customerCounts[0]?.active);
     console.log("contacts:", contactCount[0]?.n);
     console.log("activity_logs:", activityCount[0]?.n);
+    console.log("quotes:", quoteCount[0]?.n);
+    console.log("quote_items:", quoteItemCount[0]?.n);
+    console.log("documents:", documentCount[0]?.n);
+    console.log("orders:", orderCount[0]?.n);
     console.log("credential accounts:", accounts.length);
 
     const password = process.env.SEED_ADMIN_PASSWORD;

@@ -70,3 +70,26 @@ export async function listCustomerActivity(customerId: string) {
     )
     .orderBy(desc(activityLogs.createdAt));
 }
+
+export async function listQuoteActivity(quoteId: string) {
+  return db
+    .select({
+      id: activityLogs.id,
+      action: activityLogs.action,
+      entityType: activityLogs.entityType,
+      entityId: activityLogs.entityId,
+      summary: activityLogs.summary,
+      createdAt: activityLogs.createdAt,
+    })
+    .from(activityLogs)
+    .where(
+      or(
+        and(eq(activityLogs.entityType, "quote"), eq(activityLogs.entityId, quoteId)),
+        and(
+          eq(activityLogs.parentEntityType, "quote"),
+          eq(activityLogs.parentEntityId, quoteId),
+        ),
+      ),
+    )
+    .orderBy(desc(activityLogs.createdAt));
+}

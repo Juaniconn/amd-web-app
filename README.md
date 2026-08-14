@@ -1,6 +1,6 @@
 # AMD Operations
 
-Plataforma operativa interna de AMD México. Fase 2 — CRM.
+Plataforma operativa interna de AMD México. Fase 3 — Cotizaciones / RFQ (completada). Siguiente: Fase 4 — Pedidos.
 
 ## Requisitos
 

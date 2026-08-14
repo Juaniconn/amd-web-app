@@ -24,15 +24,17 @@ describe("activitySummary", () => {
     ).toBe("Sistema archivó el cliente Maquiladora A.");
   });
 
-  it("describes a primary contact change", () => {
+  it("describes a quote conversion", () => {
     expect(
       activitySummary({
-        actorName: "Juan",
-        action: "primary_contact_changed",
-        entityType: "contact",
-        entityLabel: "Ana Compras",
+        actorName: "Ana Ventas",
+        action: "converted",
+        entityType: "quote",
+        entityLabel: "COT-2026-00004 → AMD-2026-00001",
       }),
-    ).toBe("Juan marcó a Ana Compras como contacto principal.");
+    ).toBe(
+      "Ana Ventas convirtió la cotización COT-2026-00004 → AMD-2026-00001 en pedido.",
+    );
   });
 });
 

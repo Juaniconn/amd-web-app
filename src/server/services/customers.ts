@@ -381,3 +381,29 @@ export async function countActiveCustomers() {
     );
   return Number(row.value);
 }
+
+export async function listActiveCustomersForSelect() {
+  return db
+    .select({
+      id: customers.id,
+      code: customers.code,
+      legalName: customers.legalName,
+      isDemo: customers.isDemo,
+    })
+    .from(customers)
+    .where(and(isNull(customers.deletedAt), eq(customers.status, "activo")))
+    .orderBy(asc(customers.legalName));
+}
+
+export async function listContactsForCustomer(customerId: string) {
+  return db
+    .select({
+      id: contacts.id,
+      name: contacts.name,
+      isPrimary: contacts.isPrimary,
+      title: contacts.title,
+    })
+    .from(contacts)
+    .where(and(eq(contacts.customerId, customerId), isNull(contacts.deletedAt)))
+    .orderBy(desc(contacts.isPrimary), asc(contacts.name));
+}

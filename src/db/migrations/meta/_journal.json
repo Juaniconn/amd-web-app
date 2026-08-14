@@ -15,6 +15,13 @@
       "when": 1786657200000,
       "tag": "0001_crm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786668842691,
+      "tag": "0002_quotes",
+      "breakpoints": true
     }
   ]
 }

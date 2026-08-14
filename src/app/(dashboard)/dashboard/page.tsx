@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth/auth";
 import { PERMISSION_IDS, ROLES, type RoleId } from "@/lib/permissions/catalog";
 import { getDashboardSnapshot } from "@/server/services/dashboard";
+import { getQuoteDashboardStats } from "@/server/services/quotes";
 
 const UPCOMING = [
   { label: "Ventas hoy", phase: "Fase 4" },
@@ -26,6 +27,8 @@ export default async function DashboardPage() {
   }
 
   const snapshot = await getDashboardSnapshot(session.user.id);
+  const canReadQuotes = snapshot.user.permissions.includes(PERMISSION_IDS.quotesRead);
+  const quoteStats = canReadQuotes ? await getQuoteDashboardStats() : null;
   const roleNames = snapshot.user.roles.map(
     (roleId) => ROLES[roleId as RoleId]?.name ?? roleId,
   );
@@ -64,6 +67,25 @@ export default async function DashboardPage() {
             value={String(snapshot.foundation.activeCustomers)}
             hint="Clientes con estado activo, no archivados"
           />
+        ) : null}
+        {quoteStats ? (
+          <>
+            <KpiCard
+              label="Cotizaciones abiertas"
+              value={String(quoteStats.open)}
+              hint="Borrador, en revisión o enviadas"
+            />
+            <KpiCard
+              label="Por vencer (7 días)"
+              value={String(quoteStats.expiringSoon)}
+              hint="Enviadas con vigencia próxima"
+            />
+            <KpiCard
+              label="Convertidas del mes"
+              value={String(quoteStats.convertedThisMonth)}
+              hint="Cotizaciones convertidas a pedido"
+            />
+          </>
         ) : null}
       </div>
 

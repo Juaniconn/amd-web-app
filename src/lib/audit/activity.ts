@@ -3,9 +3,20 @@ export const ACTIVITY_ACTIONS = [
   "updated",
   "deleted",
   "primary_contact_changed",
+  "status_changed",
+  "sent",
+  "converted",
+  "expired",
 ] as const;
 
-export const ACTIVITY_ENTITY_TYPES = ["customer", "contact"] as const;
+export const ACTIVITY_ENTITY_TYPES = [
+  "customer",
+  "contact",
+  "quote",
+  "quote_item",
+  "document",
+  "order",
+] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
@@ -39,6 +50,37 @@ export function activitySummary({
     if (action === "primary_contact_changed") {
       return `${who} marcó a ${label} como contacto principal.`;
     }
+  }
+
+  if (entityType === "quote") {
+    if (action === "created") return `${who} creó la cotización ${label}.`;
+    if (action === "updated") return `${who} actualizó la cotización ${label}.`;
+    if (action === "deleted") return `${who} archivó la cotización ${label}.`;
+    if (action === "status_changed") {
+      return `${who} cambió el estado de la cotización ${label}.`;
+    }
+    if (action === "sent") return `${who} marcó la cotización ${label} como enviada.`;
+    if (action === "converted") {
+      return `${who} convirtió la cotización ${label} en pedido.`;
+    }
+    if (action === "expired") {
+      return `${who} marcó la cotización ${label} como expirada.`;
+    }
+  }
+
+  if (entityType === "quote_item") {
+    if (action === "created") return `${who} agregó la partida ${label}.`;
+    if (action === "updated") return `${who} actualizó la partida ${label}.`;
+    if (action === "deleted") return `${who} eliminó la partida ${label}.`;
+  }
+
+  if (entityType === "document") {
+    if (action === "created") return `${who} adjuntó el archivo ${label}.`;
+    if (action === "deleted") return `${who} eliminó el archivo ${label}.`;
+  }
+
+  if (entityType === "order") {
+    if (action === "created") return `${who} creó el pedido ${label}.`;
   }
 
   return `${who} registró ${action} sobre ${label}.`;

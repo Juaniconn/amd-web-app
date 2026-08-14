@@ -24,14 +24,15 @@ import {
 } from "@/lib/validation/customers";
 import { listCustomerActivity } from "@/server/services/activity";
 import { getCustomerById } from "@/server/services/customers";
+import { listQuotesByCustomer } from "@/server/services/quotes";
+import { QUOTE_STATUS_LABELS } from "@/lib/quotes/status";
 
 const UPCOMING = [
-  { label: "Cotizaciones", phase: "Fase 3" },
   { label: "Pedidos", phase: "Fase 4" },
   { label: "Órdenes de producción", phase: "Fase 5" },
   { label: "Facturación / ventas", phase: "Posterior" },
   { label: "Pagos", phase: "Posterior" },
-  { label: "Documentos", phase: "Fase 3" },
+  { label: "Documentos", phase: "Fase 3+" },
 ];
 
 function Field({ label, value }: { label: string; value?: string | null }) {
@@ -60,6 +61,9 @@ export default async function CustomerDetailPage({
 
   const activity = await listCustomerActivity(customer.id);
   const canWrite = access.permissions.includes(PERMISSION_IDS.customersWrite);
+  const canWriteQuotes = access.permissions.includes(PERMISSION_IDS.quotesWrite);
+  const canReadQuotes = access.permissions.includes(PERMISSION_IDS.quotesRead);
+  const quotes = canReadQuotes ? await listQuotesByCustomer(customer.id) : [];
   const archived = Boolean(customer.deletedAt);
 
   return (
@@ -192,6 +196,59 @@ export default async function CustomerDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {canReadQuotes ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <CardTitle>Cotizaciones</CardTitle>
+            {canWriteQuotes && !archived ? (
+              <Link
+                href={`/quotes/new?customerId=${customer.id}`}
+                className={buttonVariants({ size: "sm" })}
+              >
+                Nueva cotización
+              </Link>
+            ) : null}
+          </CardHeader>
+          <CardContent>
+            {quotes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Este cliente aún no tiene cotizaciones.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Número</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {quotes.map((quote) => (
+                    <TableRow key={quote.id}>
+                      <TableCell>
+                        <Link href={`/quotes/${quote.id}`} className="font-medium hover:underline">
+                          {quote.number}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{QUOTE_STATUS_LABELS[quote.status]}</TableCell>
+                      <TableCell>{quote.issueDate.toLocaleDateString("es-MX")}</TableCell>
+                      <TableCell className="text-right">
+                        {new Intl.NumberFormat("es-MX", {
+                          style: "currency",
+                          currency: quote.currency.toUpperCase(),
+                        }).format(Number(quote.total))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

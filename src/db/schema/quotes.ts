@@ -1,0 +1,271 @@
+import { relations, sql } from "drizzle-orm";
+import {
+  type AnyPgColumn,
+  index,
+  integer,
+  numeric,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  boolean,
+} from "drizzle-orm/pg-core";
+import { users } from "./auth";
+import { contacts, customers } from "./crm";
+
+const timestamps = {
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+};
+
+export const quoteStatusEnum = pgEnum("quote_status", [
+  "borrador",
+  "en_revision",
+  "enviada",
+  "aprobada",
+  "rechazada",
+  "expirada",
+  "convertida",
+]);
+
+export const quoteCurrencyEnum = pgEnum("quote_currency", ["mxn", "usd"]);
+
+export const orderStatusEnum = pgEnum("order_status", ["nuevo"]);
+
+export const quotes = pgTable(
+  "quotes",
+  {
+    id: text("id").primaryKey(),
+    number: text("number").notNull(),
+    customerId: text("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "restrict" }),
+    contactId: text("contact_id").references(() => contacts.id, {
+      onDelete: "set null",
+    }),
+    ownerUserId: text("owner_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    issueDate: timestamp("issue_date", { withTimezone: true }).notNull(),
+    validUntil: timestamp("valid_until", { withTimezone: true }),
+    currency: quoteCurrencyEnum("currency").notNull().default("mxn"),
+    paymentTerms: text("payment_terms"),
+    leadTime: text("lead_time"),
+    notes: text("notes"),
+    status: quoteStatusEnum("status").notNull().default("borrador"),
+    subtotal: numeric("subtotal", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    taxTotal: numeric("tax_total", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    total: numeric("total", { precision: 14, scale: 2 }).notNull().default("0"),
+    estimatedCost: numeric("estimated_cost", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    estimatedProfit: numeric("estimated_profit", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    marginPercent: numeric("margin_percent", { precision: 7, scale: 2 }),
+    convertedOrderId: text("converted_order_id").references(
+      (): AnyPgColumn => orders.id,
+      { onDelete: "set null" },
+    ),
+    isDemo: boolean("is_demo").default(false).notNull(),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("quotes_number_uidx").on(table.number),
+    index("quotes_customer_id_idx").on(table.customerId),
+    index("quotes_status_idx").on(table.status),
+    index("quotes_deleted_at_idx").on(table.deletedAt),
+    index("quotes_valid_until_idx").on(table.validUntil),
+    uniqueIndex("quotes_converted_order_uidx")
+      .on(table.convertedOrderId)
+      .where(sql`${table.convertedOrderId} is not null`),
+  ],
+);
+
+export const quoteItems = pgTable(
+  "quote_items",
+  {
+    id: text("id").primaryKey(),
+    quoteId: text("quote_id")
+      .notNull()
+      .references(() => quotes.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    description: text("description").notNull(),
+    partNumber: text("part_number"),
+    quantity: numeric("quantity", { precision: 12, scale: 4 }).notNull(),
+    unit: text("unit").notNull().default("pza"),
+    unitPrice: numeric("unit_price", { precision: 14, scale: 4 })
+      .notNull()
+      .default("0"),
+    discountPercent: numeric("discount_percent", { precision: 5, scale: 2 })
+      .notNull()
+      .default("0"),
+    taxPercent: numeric("tax_percent", { precision: 5, scale: 2 })
+      .notNull()
+      .default("16"),
+    estimatedCost: numeric("estimated_cost", { precision: 14, scale: 4 })
+      .notNull()
+      .default("0"),
+    lineSubtotal: numeric("line_subtotal", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    lineTax: numeric("line_tax", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    lineTotal: numeric("line_total", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    lineEstimatedCost: numeric("line_estimated_cost", {
+      precision: 14,
+      scale: 2,
+    })
+      .notNull()
+      .default("0"),
+    lineProfit: numeric("line_profit", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    lineMarginPercent: numeric("line_margin_percent", {
+      precision: 7,
+      scale: 2,
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("quote_items_quote_id_idx").on(table.quoteId),
+    uniqueIndex("quote_items_quote_position_uidx").on(
+      table.quoteId,
+      table.position,
+    ),
+  ],
+);
+
+export const orders = pgTable(
+  "orders",
+  {
+    id: text("id").primaryKey(),
+    number: text("number").notNull(),
+    customerId: text("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "restrict" }),
+    quoteId: text("quote_id")
+      .notNull()
+      .references(() => quotes.id, { onDelete: "restrict" }),
+    currency: quoteCurrencyEnum("currency").notNull().default("mxn"),
+    total: numeric("total", { precision: 14, scale: 2 }).notNull().default("0"),
+    status: orderStatusEnum("status").notNull().default("nuevo"),
+    isDemo: boolean("is_demo").default(false).notNull(),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedBy: text("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("orders_number_uidx").on(table.number),
+    uniqueIndex("orders_quote_id_uidx").on(table.quoteId),
+    index("orders_customer_id_idx").on(table.customerId),
+  ],
+);
+
+export const orderItems = pgTable(
+  "order_items",
+  {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    description: text("description").notNull(),
+    partNumber: text("part_number"),
+    quantity: numeric("quantity", { precision: 12, scale: 4 }).notNull(),
+    unit: text("unit").notNull().default("pza"),
+    unitPrice: numeric("unit_price", { precision: 14, scale: 4 })
+      .notNull()
+      .default("0"),
+    discountPercent: numeric("discount_percent", { precision: 5, scale: 2 })
+      .notNull()
+      .default("0"),
+    taxPercent: numeric("tax_percent", { precision: 5, scale: 2 })
+      .notNull()
+      .default("16"),
+    lineSubtotal: numeric("line_subtotal", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    lineTax: numeric("line_tax", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    lineTotal: numeric("line_total", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+  },
+  (table) => [index("order_items_order_id_idx").on(table.orderId)],
+);
+
+export const quotesRelations = relations(quotes, ({ one, many }) => ({
+  customer: one(customers, {
+    fields: [quotes.customerId],
+    references: [customers.id],
+  }),
+  contact: one(contacts, {
+    fields: [quotes.contactId],
+    references: [contacts.id],
+  }),
+  owner: one(users, {
+    fields: [quotes.ownerUserId],
+    references: [users.id],
+  }),
+  items: many(quoteItems),
+  convertedOrder: one(orders, {
+    fields: [quotes.convertedOrderId],
+    references: [orders.id],
+  }),
+}));
+
+export const quoteItemsRelations = relations(quoteItems, ({ one }) => ({
+  quote: one(quotes, {
+    fields: [quoteItems.quoteId],
+    references: [quotes.id],
+  }),
+}));
+
+export const ordersRelations = relations(orders, ({ one, many }) => ({
+  customer: one(customers, {
+    fields: [orders.customerId],
+    references: [customers.id],
+  }),
+  quote: one(quotes, {
+    fields: [orders.quoteId],
+    references: [quotes.id],
+  }),
+  items: many(orderItems),
+}));
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderItems.orderId],
+    references: [orders.id],
+  }),
+}));

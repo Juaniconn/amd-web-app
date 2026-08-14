@@ -29,13 +29,25 @@ describe("RBAC catalog", () => {
     expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.customersWrite)).toBe(
       false,
     );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.quotesRead)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.quotesWrite)).toBe(
+      false,
+    );
   });
 
-  it("lets Ventas read and write customers", () => {
+  it("lets Ventas read and write customers and quotes", () => {
     expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.customersRead)).toBe(
       true,
     );
     expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.customersWrite)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.quotesRead)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.quotesWrite)).toBe(
       true,
     );
     expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.usersWrite)).toBe(
@@ -54,6 +66,7 @@ describe("RBAC catalog", () => {
     for (const role of operational) {
       expect(roleHasPermission(role, PERMISSION_IDS.dashboardRead)).toBe(true);
       expect(roleHasPermission(role, PERMISSION_IDS.customersRead)).toBe(false);
+      expect(roleHasPermission(role, PERMISSION_IDS.quotesRead)).toBe(false);
       expect(roleHasPermission(role, PERMISSION_IDS.usersWrite)).toBe(false);
       expect(roleHasPermission(role, PERMISSION_IDS.rolesRead)).toBe(false);
     }

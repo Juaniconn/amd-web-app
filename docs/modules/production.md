@@ -12,7 +12,7 @@ No hay tablas `production_orders`, `production_operations`, `work_centers`, `mac
 
 # Flujo de negocio
 
-Diseñado. No ejecutable. Requiere pedido (Fase 4).
+Diseñado. No ejecutable. Requiere el módulo Pedidos (Fase 4). La conversión RFQ ya puede persistir un pedido mínimo; este módulo no lo consume.
 
 # Entidades
 
@@ -44,4 +44,4 @@ No aplica hasta Fase 5.
 
 # Dependencias
 
-[[crm]] (cliente), pedidos (Fase 4), inventario (Fase 6) para reservas.
+[[crm]] (cliente), pedido mínimo de Fase 3 / vista de pedidos Fase 4, inventario (Fase 6) para reservas.

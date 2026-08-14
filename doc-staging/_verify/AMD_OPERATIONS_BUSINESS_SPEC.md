@@ -51,55 +51,79 @@ Esta plataforma será el centro operativo de AMD.
 # 0. ESTADO DE IMPLEMENTACIÓN
 
 **Fecha de este estado:** 2026-08-13  
-**Fase actual:** ninguna en desarrollo. Fase 2 CRM está **✅ Completada**. Siguiente fase autorizada: **Fase 3 — Cotizaciones**.
+**Fase actual:** ninguna en desarrollo. **Fase 3 — Cotizaciones / RFQ está ✅ Completada.**  
+**Siguiente fase autorizada:** **Fase 4 — Pedidos** (vista operativa; las tablas mínimas `orders` / `order_items` ya existen por la conversión de Fase 3).
 
-Este bloque describe lo que **existe en el código**. El resto del documento (el prompt maestro) sigue siendo la visión del producto; no se reescribe.
+Este bloque describe lo que **existe en el código y en PostgreSQL**. El resto del documento (el prompt maestro) sigue siendo la visión del producto; no se borra.
 
 Leyenda: ✅ Completado · 🔄 En progreso · ⬜ Pendiente
 
-## Alcance real hoy
+## Estado general del proyecto
+
+AMD Operations es un monolito Next.js 16.3 con PostgreSQL, Better Auth y RBAC. Corre en desarrollo local (`next dev --hostname 0.0.0.0`, PostgreSQL embebido o Docker). No hay deploy a Cloudflare.
+
+Lo que Dirección / Ventas puede hacer hoy, de punta a punta:
+
+1. Iniciar sesión.
+2. Mantener clientes y contactos (CRM).
+3. Capturar una RFQ como cotización en `borrador`.
+4. Cargar partidas, calcular IVA/total/costo/margen, adjuntar archivos.
+5. Recorrer estados hasta `aprobada`.
+6. Convertir a un **pedido mínimo** (`nuevo`, número `AMD-YYYY-NNNNN`). `/orders` sigue deshabilitado.
+
+No existe aún: producción, inventario, compras, calidad, entregas, facturación, notificaciones, búsqueda global, Centro de Operaciones, ni hosting Cloudflare.
+
+## Objetivos del sistema (visión vs hoy)
+
+La visión (§2) sigue siendo controlar el ciclo operativo completo de AMD. **Hoy el sistema cubre ventas comerciales hasta el pedido mínimo.** El resto de las preguntas de Dirección («qué estamos produciendo», «qué material falta», «qué máquinas están ocupadas») permanece ⬜.
+
+## Alcance funcional actual
 
 | Área | Estado | Evidencia en código |
 |---|---|---|
-| Fundación (app, auth, RBAC, layout, usuarios, roles, dashboard inicial) | ✅ Completado | Fase 1, commit `33187cb` |
-| CRM: clientes, contactos, ficha, historial | ✅ Completado | `src/features/customers`, `src/db/schema/crm.ts`, `activity.ts` |
-| Cotizaciones / RFQ | ⬜ Pendiente | Sin tablas, rutas ni acciones |
-| Pedidos | ⬜ Pendiente | Sidebar deshabilitado |
+| Fundación (app, auth, RBAC, layout, usuarios, roles, dashboard inicial) | ✅ Completado | Fase 1 |
+| CRM: clientes, contactos, ficha, historial | ✅ Completado | `src/features/customers`, `src/db/schema/crm.ts` |
+| Cotizaciones / RFQ | ✅ Completado | `src/features/quotes`, `src/db/schema/quotes.ts` |
+| Pedidos (UI y ciclo de vida) | ⬜ Pendiente | Sidebar `/orders` deshabilitado. Tablas mínimas sí existen (ADR-023) |
+| Documentos de cotización (storage local) | ✅ Parcial | `documents` + `.data/uploads`; solo entidad `quote` en UI/API |
+| Documentos centrales / R2 / Workers / D1 / KV | ⬜ Pendiente | No hay `wrangler` ni SDK R2 |
 | Producción y máquinas | ⬜ Pendiente | — |
 | Inventario | ⬜ Pendiente | — |
 | Compras y proveedores | ⬜ Pendiente | — |
 | Calidad y entregas | ⬜ Pendiente | — |
-| Reportes / Centro de Operaciones | ⬜ Pendiente | Dashboard solo KPIs de fundación + clientes activos |
-| Documentos / R2 / Workers / D1 / KV | ⬜ Pendiente | No hay `wrangler`, ni credenciales R2 en código |
+| Reportes / Centro de Operaciones | ⬜ Pendiente | Dashboard: fundación + clientes activos + KPIs de cotizaciones |
+| Beta interna / deploy Cloudflare | ⬜ Pendiente | Fuera del plan numerado §47; no hay pipeline |
 
 ## Módulos de negocio
 
 | Módulo | Spec | Estado |
 |---|---|---|
-| §7 Clientes | Este documento | ✅ Completado (Fase 2) |
+| §7 Clientes | Este documento | ✅ Completado (Fase 2). La ficha muestra cotizaciones reales |
 | §8 Contactos | Este documento | ✅ Completado (Fase 2) |
-| §9–12 Cotizaciones | Este documento | ⬜ Pendiente |
-| §13–14 Pedidos | Este documento | ⬜ Pendiente |
+| §9–12 Cotizaciones | Este documento | ✅ Completado (Fase 3; RFQ = `quotes` en `borrador`, ADR-024) |
+| §13–14 Pedidos | Este documento | ⬜ Pendiente (UI). Persistencia mínima al convertir |
 | §15–18 Producción | Este documento | ⬜ Pendiente |
 | §19–22 Inventario | Este documento | ⬜ Pendiente |
 | §23–26 Compras | Este documento | ⬜ Pendiente |
 | §27 Calidad | Este documento | ⬜ Pendiente |
 | §28 Entregas | Este documento | ⬜ Pendiente |
-| §29–30 Costos / finanzas | Este documento | ⬜ Pendiente |
-| §32 Documentos | Este documento | ⬜ Pendiente |
+| §29–30 Costos / finanzas | Este documento | ✅ Parcial: costo estimado, utilidad y margen en cotización. Costo real / CxC ⬜ |
+| §32 Documentos | Este documento | ✅ Parcial: adjuntos de cotización. Repositorio central y R2 ⬜ |
 | §33 Usuarios | Este documento | ✅ Completado (Fase 1) |
-| §34 Auditoría | Este documento | ✅ Parcial: `activity_logs` en CRM; no hay log global de todo el sistema |
+| §34 Auditoría | Este documento | ✅ Parcial: `activity_logs` en CRM y cotizaciones; no hay log global de todo el sistema |
 | §35 Notificaciones | Este documento | ⬜ Pendiente |
 | §36 Búsqueda global | Este documento | ⬜ Pendiente |
 | §51 Centro de Operaciones | Este documento | ⬜ Pendiente |
+
+Ningún módulo de negocio está 🔄 En progreso.
 
 ## Dependencias entre módulos
 
 ```
 Fase 1 Fundación ✅
     └── Fase 2 CRM ✅
-            └── Fase 3 Cotizaciones ⬜
-                    └── Fase 4 Pedidos ⬜
+            └── Fase 3 Cotizaciones ✅
+                    └── Fase 4 Pedidos ⬜   ← siguiente autorizada
                             ├── Fase 5 Producción ⬜
                             ├── Fase 6 Inventario ⬜
                             └── Fase 7 Compras ⬜
@@ -107,17 +131,50 @@ Fase 1 Fundación ✅
                                             └── Fase 9 Reportes ⬜
 ```
 
+## Flujos de negocio ejecutables hoy
+
+```
+Cliente ✅ → Contactos ✅ → RFQ/borrador ✅ → Partidas + archivos ✅
+    → En revisión / Enviada ✅ → Aprobada o Rechazada o Expirada ✅
+    → Pedido mínimo ✅
+    → Orden de producción ⬜ → Inventario ⬜ → Compras ⬜
+    → Calidad ⬜ → Entrega ⬜ → Pedido cerrado ⬜
+```
+
+- «Marcar enviada» es **solo cambio de estado**. No hay correo ni PDF generado.
+- La vigencia vencida de una cotización `enviada` se persiste a `expirada` al listar/abrir (lazy expire).
+- Convertir **no** crea orden de producción. Crea `orders` + `order_items` en `nuevo`.
+
+## Roadmap funcional (plan §47)
+
+| Fase | Nombre | Estado |
+|---|---|---|
+| 1 | Fundación | ✅ Completado |
+| 2 | CRM | ✅ Completado |
+| 3 | Cotizaciones | ✅ Completado |
+| 4 | Pedidos | ⬜ Pendiente |
+| 5 | Producción | ⬜ Pendiente |
+| 6 | Inventario | ⬜ Pendiente |
+| 7 | Compras | ⬜ Pendiente |
+| 8 | Calidad y entregas | ⬜ Pendiente |
+| 9 | Reportes | ⬜ Pendiente |
+
+Fuera del plan numerado: Centro de Operaciones / dashboard ejecutivo ⬜ · beta interna ⬜ · deploy Cloudflare ⬜.
+
 ## Criterio de éxito del MVP (§54)
 
-Solo el paso 1 («Crear cliente») está implementado. Los pasos 2–22 permanecen ⬜.
+Pasos **1–6** ✅ (cliente → cotización → partidas → precio → aprobación → pedido mínimo). Pasos **7–22** ⬜. El MVP aún no está cerrado.
 
 ## Dónde leer el detalle
 
 - Roadmap: [[roadmap]]
 - Módulo CRM: [[crm]]
-- Changelog: [[phase-2]]
-- Auditoría: [[phase-2-audit]]
-- Resumen Dirección: [[phase-2-summary]]
+- Módulo RFQ: [[rfq]]
+- Proceso: [[Proceso RFQ]]
+- Changelog: [[phase-3]]
+- Auditoría: [[phase-3-audit]]
+- Resumen Dirección: [[phase-3-summary]]
+- ADRs de Fase 3: ADR-022, ADR-023, ADR-024
 
 ---
 
@@ -259,6 +316,8 @@ No quiero módulos aislados.
 
 # 5. DASHBOARD PRINCIPAL
 
+> **Estado 2026-08-13:** ✅ Parcial (Fases 1–3). KPIs reales desde PostgreSQL: usuarios, roles, sesiones activas, clientes activos (`customers:read`), cotizaciones abiertas / por vencer 7 días / convertidas del mes (`quotes:read`). Ventas, pedidos activos, producción, material, máquinas y entregas son placeholders sin cifras. No existe «Ventas hoy». Centro de Operaciones (§51) ⬜. Ver [[dashboard]].
+
 El Dashboard será la pantalla principal de AMD Operations.
 
 Debe mostrar información en tiempo real desde la base de datos.
@@ -361,7 +420,7 @@ Ejemplos:
 
 # 7. MÓDULO CLIENTES
 
-> **Estado 2026-08-13:** ✅ Implementado (Fase 2). Cotizaciones, pedidos, producción, facturación, pagos y documentos en la ficha son placeholders. Ver [[crm]].
+> **Estado 2026-08-13:** ✅ Implementado (Fase 2). En la ficha, **Cotizaciones es real** (listado + alta si `quotes:write`). Pedidos, producción, facturación, pagos y documentos del cliente siguen siendo placeholders. Ver [[crm]] y [[rfq]].
 
 Crear módulo:
 
@@ -429,6 +488,8 @@ Campos:
 
 # 9. MÓDULO COTIZACIONES
 
+> **Estado 2026-08-13:** ✅ Implementado (Fase 3). La RFQ no es una tabla aparte: es la cotización en `borrador` (ADR-024). Rutas `/quotes`, `/quotes/new`, `/quotes/[id]`, `/quotes/[id]/edit`. Permisos `quotes:read` / `quotes:write`. Ver [[rfq]] y [[Proceso RFQ]].
+
 Crear:
 
 # Cotizaciones
@@ -461,6 +522,8 @@ Estados:
 ---
 
 # 10. PARTIDAS DE COTIZACIÓN
+
+> **Estado 2026-08-13:** ✅ Implementado. Cálculo en servidor (`src/lib/quotes/money.ts`): IVA por partida (default 16 %), descuento, subtotal, impuesto, total, costo estimado, utilidad y margen. Totales de cabecera redondeados a 2 decimales.
 
 Cada cotización puede tener múltiples partidas.
 
@@ -496,6 +559,8 @@ Margen %
 
 # 11. ARCHIVOS DE COTIZACIÓN
 
+> **Estado 2026-08-13:** ✅ Parcial. Adjuntos solo en cotización (`documents` + storage local, ADR-022). Descarga autenticada `GET /api/documents/[id]`. No hay R2, ni archivos en cliente/pedido/OP, ni generación de PDF.
+
 Las cotizaciones pueden tener:
 
 - PDF
@@ -514,6 +579,8 @@ El sistema debe permitir asociar archivos al cliente, cotización, pedido u orde
 ---
 
 # 12. CONVERSIÓN DE COTIZACIÓN A PEDIDO
+
+> **Estado 2026-08-13:** ✅ Implementado como pedido mínimo (ADR-023). Solo desde `aprobada`. Crea `orders` + `order_items` en `nuevo`, número `AMD-YYYY-NNNNN`. No copia costos estimados. No crea orden de producción. `/orders` deshabilitado.
 
 Cuando una cotización sea aprobada debe existir un botón:
 
@@ -534,6 +601,8 @@ Pedido #XXX
 ---
 
 # 13. MÓDULO PEDIDOS
+
+> **Estado 2026-08-13:** ⬜ Pendiente (Fase 4). Existen filas mínimas creadas al convertir una cotización. No hay pantallas, ni PO del cliente, ni prioridad, ni ciclo de estados más allá de `nuevo`.
 
 Crear:
 
@@ -1127,6 +1196,8 @@ Un proyecto puede contener:
 
 # 32. DOCUMENTOS
 
+> **Estado 2026-08-13:** ✅ Parcial. Tabla `documents` polimórfica (`quote` \| `customer` \| `order`) y enum de backend `local` \| `r2`. En runtime solo se usa `local` y la UI/API operan documentos de cotización. R2 y el repositorio central ⬜ (ADR-006, ADR-022).
+
 Crear un sistema central de documentos.
 
 Los archivos pueden estar relacionados con:
@@ -1203,6 +1274,8 @@ Cada usuario debe tener permisos adecuados.
 ---
 
 # 34. AUDITORÍA
+
+> **Estado 2026-08-13:** ✅ Parcial. `activity_logs` append-only para clientes, contactos, cotizaciones, partidas, documentos de quote y creación de pedido mínimo. Acciones: `created`, `updated`, `deleted`, `primary_contact_changed`, `status_changed`, `sent`, `converted`, `expired`. No hay log de login ni de todos los módulos futuros.
 
 Toda operación importante debe registrar:
 
@@ -1607,7 +1680,7 @@ Crear:
 
 ---
 
-## FASE 3 — COTIZACIONES ⬜ Pendiente
+## FASE 3 — COTIZACIONES ✅ Completado
 
 Crear:
 
@@ -1838,7 +1911,7 @@ Deja la arquitectura preparada.
 
 Consideraré que el MVP funciona cuando pueda realizar este flujo completamente:
 
-> **Progreso 2026-08-13:** solo el paso 1 (crear cliente) está ✅. Pasos 2–22 permanecen ⬜. El MVP aún no está cerrado.
+> **Progreso 2026-08-13:** pasos 1–6 ✅ (cliente → cotización → partidas → precio → aprobación → pedido mínimo). Pasos 7–22 ⬜. El MVP aún no está cerrado.
 
 1. Crear cliente.
 2. Crear cotización.

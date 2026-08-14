@@ -19,6 +19,8 @@ export const PERMISSION_IDS = {
   rolesWrite: "roles:write",
   customersRead: "customers:read",
   customersWrite: "customers:write",
+  quotesRead: "quotes:read",
+  quotesWrite: "quotes:write",
 } as const;
 
 export type PermissionId = (typeof PERMISSION_IDS)[keyof typeof PERMISSION_IDS];
@@ -41,6 +43,7 @@ export const ROLES: Record<
       PERMISSION_IDS.usersRead,
       PERMISSION_IDS.rolesRead,
       PERMISSION_IDS.customersRead,
+      PERMISSION_IDS.quotesRead,
     ],
   },
   ventas: {
@@ -50,6 +53,8 @@ export const ROLES: Record<
       PERMISSION_IDS.dashboardRead,
       PERMISSION_IDS.customersRead,
       PERMISSION_IDS.customersWrite,
+      PERMISSION_IDS.quotesRead,
+      PERMISSION_IDS.quotesWrite,
     ],
   },
   compras: {
@@ -109,6 +114,15 @@ export const PERMISSIONS: Record<
   "customers:write": {
     name: "Gestionar clientes",
     description: "Crear, editar y archivar clientes y contactos.",
+  },
+  "quotes:read": {
+    name: "Ver cotizaciones",
+    description: "Listar cotizaciones, partidas, costos y márgenes.",
+  },
+  "quotes:write": {
+    name: "Gestionar cotizaciones",
+    description:
+      "Crear y editar cotizaciones, partidas, archivos, estados y conversión a pedido.",
   },
 };
 

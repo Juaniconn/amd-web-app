@@ -18,6 +18,8 @@ const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/customers": "Clientes",
   "/customers/new": "Nuevo cliente",
+  "/quotes": "Cotizaciones",
+  "/quotes/new": "Nueva cotización",
   "/settings/users": "Usuarios",
   "/settings/roles": "Roles",
 };
@@ -34,9 +36,11 @@ export function AppShell({
     TITLES[pathname] ??
     (pathname.startsWith("/customers")
       ? "Cliente"
-      : pathname.startsWith("/settings")
-        ? "Configuración"
-        : "AMD Operations");
+      : pathname.startsWith("/quotes")
+        ? "Cotización"
+        : pathname.startsWith("/settings")
+          ? "Configuración"
+          : "AMD Operations");
 
   return (
     <div className="flex min-h-full bg-background">

@@ -629,6 +629,169 @@ AMD Operations / AI Engineering Agent
 
 ---
 
+# ADR-022 — Almacenamiento de archivos local en desarrollo
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-13
+
+## Contexto
+
+La Fase 3 requiere adjuntar archivos a cotizaciones (ADR-006: metadatos en PostgreSQL, blobs fuera de la BD). Cloudflare R2 no está configurado en el repositorio.
+
+## Problema
+
+Sin un backend de archivos, el flujo RFQ no puede asociar planos/PDF a la cotización. Bloquear la fase hasta tener cuenta Cloudflare retrasa ventas. Guardar blobs en PostgreSQL contradice ADR-006.
+
+## Decisión
+
+- Tabla `documents` con metadatos (object key, MIME, tamaño, checksum, entidad, uploader).
+- Adapter `src/lib/storage/`: implementación local en `.data/uploads` (o `STORAGE_DIR`).
+- Descarga autenticada por `GET /api/documents/[id]` (no URL pública permanente).
+- R2 permanece el destino de producción; se activará cuando existan credenciales, sin cambiar el modelo de metadatos.
+- `getStorage()` hoy siempre devuelve el adapter local. El enum incluye `r2` pero no hay implementación.
+
+## Alternativas evaluadas
+
+- Bloquear Fase 3 hasta tener R2: rechazado; retrasa el flujo RFQ.
+- Guardar blobs en PostgreSQL: rechazado (ADR-006).
+- URLs públicas sin auth: rechazado; los planos son información de cliente.
+
+## Impacto
+
+- Las cotizaciones pueden adjuntar y descargar archivos en desarrollo.
+- Los archivos no se replican entre PCs de la LAN; viven en el disco del proceso Node.
+- ADR-006 no se reemplaza: R2 sigue siendo la decisión de producción.
+
+## Consecuencias futuras
+
+- Activar R2 implica implementar el adapter y credenciales; el esquema `documents` no debería cambiar.
+- Un deploy a Cloudflare Pages/Workers deberá dejar de usar `.data/uploads`.
+- La UI/API solo sirve documentos de `entity_type = quote`; customer/order están en el enum pero 403.
+
+## Razón
+
+Análogo a ADR-018 (PostgreSQL local vs administrado). Permite completar archivos en desarrollo sin Cloudflare.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-023 — Conversión a pedido mínimo en Fase 3
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-13
+
+## Contexto
+
+BUSINESS_SPEC Fase 3 incluye «Conversión a pedido». El módulo Pedidos es Fase 4. Hace falta cumplir la conversión sin construir la vista operativa de pedidos.
+
+## Problema
+
+Si Fase 3 no crea el pedido, se rompe la regla de negocio «cotización aprobada → pedido» y Fase 4 tendría que inventar el vínculo. Si Fase 3 construye `/orders` completo, se adelanta el alcance (ADR-015).
+
+## Decisión
+
+- Al convertir una cotización `aprobada` se crean `orders` + `order_items` (cabecera y partidas comerciales, estado `nuevo`, número `AMD-YYYY-NNNNN`).
+- `quotes.converted_order_id` y `orders.quote_id` (único) relacionan ambos registros.
+- `/orders` permanece deshabilitado. La cotización muestra el número de pedido.
+- No se copian costos estimados al pedido. Fase 4 construye la vista completa.
+- `order_status` en esta fase solo admite `nuevo`.
+
+## Alternativas evaluadas
+
+- Diferir la conversión a Fase 4: rechazado; el botón es entregable de Fase 3.
+- Construir el módulo Pedidos ahora: rechazado (ADR-015).
+- Guardar solo un flag `converted` sin fila de pedido: rechazado; perdería numeración AMD y partidas comerciales.
+
+## Impacto
+
+- El flujo MVP pasos 1–6 queda persistido.
+- Fase 4 debe extender `orders` (PO, fechas, prioridad, estados) sin romper las filas ya creadas.
+- No hay orden de producción al convertir.
+
+## Consecuencias futuras
+
+- Migraciones de Fase 4 serán `ALTER` sobre `orders` / `order_items`, no una tabla paralela.
+- El seed demo crea dos pedidos (`DEMO_PEDIDO_005`, `DEMO_PEDIDO_015`).
+- Producción (Fase 5) dependerá de estos pedidos, no de la cotización.
+
+## Razón
+
+Cumple la regla de negocio «cotización aprobada → pedido» con el menor adelanto de Fase 4.
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-024 — RFQ como entidad única `quotes`
+
+## Estado
+
+Aceptada
+
+## Fecha
+
+2026-08-13
+
+## Contexto
+
+El negocio habla de «RFQ» (solicitud) y «cotización» (oferta formal). El plan de Fase 3 debía decidir si eso son dos tablas o una.
+
+## Problema
+
+Una tabla `rfqs` más otra `quotes` duplicaría cliente, contacto, archivos y estados, y obligaría a un paso de «convertir RFQ en cotización» que el sistema no necesita hoy. Ventas captura la solicitud y cotiza sobre el mismo registro.
+
+## Decisión
+
+- No existe tabla `rfqs`.
+- La RFQ **es** la cotización en estado `borrador` (notas = solicitud).
+- Una sola entidad `quotes` recorre: borrador → en revisión → enviada → aprobada \| rechazada \| expirada → convertida.
+- El alta `/quotes/new` es la captura de RFQ; el número `COT-YYYY-NNNNN` se asigna al crear.
+
+## Alternativas evaluadas
+
+- Tablas `rfqs` + `quotes` con conversión: rechazado; duplica datos y UI.
+- RFQ como documento suelto sin cabecera: rechazado; no hay cliente/estado/totales.
+
+## Impacto
+
+- Un agente o desarrollador no debe crear `/rfqs` ni migración `rfqs`.
+- El proceso de negocio [[Proceso RFQ]] se ejecuta sobre `/quotes`.
+- «Enviada» no implica correo; es el mismo registro en otro estado.
+
+## Consecuencias futuras
+
+- Si más adelante se necesita un buzón de RFQ sin precios, se puede filtrar `status = borrador`, no crear otra entidad, salvo un ADR nuevo.
+- Pedidos siguen siendo `orders`, no un estado más de `quotes`.
+
+## Alternativas consideradas
+
+Ver «Alternativas evaluadas».
+
+## Razón
+
+Un registro, una máquina de estados, un número de cotización. Evita sobreingeniería (ADR-014).
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
 # PLANTILLA PARA NUEVAS DECISIONES
 
 Cuando sea necesario registrar una nueva decisión, utilizar:

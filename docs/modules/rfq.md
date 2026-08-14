@@ -2,50 +2,52 @@
 
 # Objetivo
 
-Gestionar cotizaciones, partidas, costos, margen y conversión a pedido.
+Gestionar solicitudes de cotización (RFQ), partidas, costos, margen, estados, archivos y conversión a pedido mínimo.
 
 # Alcance
 
-**No implementado.** Fase 3.  
-No existen tablas `quotes` / `quote_items`, ni rutas `/quotes`, ni acciones.
+**Implementado (Fase 3) ✅:**
 
-La ficha de cliente muestra un recuadro «Cotizaciones · Pendiente · Fase 3» sin datos.
+- Cotizaciones (`quotes`) — la RFQ es la cotización en `borrador` (ADR-024)
+- Partidas (`quote_items`) con subtotal, IVA (default 16 %), total, costo, utilidad y margen
+- Estados: Borrador, En revisión, Enviada, Aprobada, Rechazada, Expirada, Convertida
+- Archivos (`documents` + storage local, ADR-022)
+- Conversión a pedido mínimo (`orders` / `order_items`, ADR-023)
+- Historial en `activity_logs`
+- KPIs de cotizaciones en dashboard
+- Listado de cotizaciones en la ficha de cliente
+
+**No implementado:**
+
+- Correo al marcar enviada
+- PDF generado
+- R2 en runtime
+- Vista `/orders`
+- Orden de producción al convertir
 
 # Flujo de negocio
 
-Diseñado (Business Spec §§9–12), no ejecutable en el sistema:
-
-Cliente (✅ existe) → Cotización ⬜ → Aprobación ⬜ → Pedido ⬜
+Definido en [[Proceso RFQ]]. No duplicar el proceso aquí.
 
 # Entidades
 
-Ninguna en PostgreSQL.
+`quotes`, `quote_items`, `documents`, `orders`, `order_items`
 
 # Permisos
 
-No hay `quotes:*`. Ventas tiene `customers:write` como preparación.
+| Permiso | Quién |
+|---|---|
+| `quotes:read` | Administrador, Dirección, Ventas |
+| `quotes:write` | Administrador, Ventas |
 
 # APIs
 
-Ninguna.
+Server Actions en `src/server/actions/quotes.ts`. Descarga: `GET /api/documents/[id]`.
 
 # Pantallas
 
-`/quotes` está en el sidebar deshabilitado.
-
-# Estados
-
-Diseñados, no persistidos: Borrador, Enviada, En revisión, Aprobada, Rechazada, Expirada, Convertida en pedido.
-
-# Relaciones
-
-Cuando se implemente: `quotes.customer_id` → `customers.id` (Fase 2).  
-Contacto de cotización debería apuntar a `contacts`.
-
-# Riesgos
-
-Empezar Fase 3 sin el snapshot Drizzle 0001 puede generar una migración conflictiva.
+`/quotes`, `/quotes/new`, `/quotes/[id]`, `/quotes/[id]/edit`
 
 # Dependencias
 
-Requiere [[crm]]. Bloquea [[production]] y pedidos. Archivos (R2) son parte del alcance de Fase 3 según el plan técnico; **R2 no está configurado**.
+Requiere [[crm]]. ADR-022, ADR-023, ADR-024. La vista completa de pedidos es Fase 4.

@@ -6,6 +6,7 @@ import { hashPassword } from "better-auth/crypto";
 import { accounts, permissions, rolePermissions, roles, userRoles, users } from "./schema";
 import { PERMISSIONS, ROLES } from "../lib/permissions/catalog";
 import { seedCrmDemo } from "./seed-crm";
+import { seedQuotesDemo } from "./seed-quotes";
 
 config({ path: ".env.local" });
 config();
@@ -125,8 +126,9 @@ async function seed() {
       .limit(1);
 
     await seedCrmDemo(db, admin ?? null);
+    await seedQuotesDemo(db, admin ?? null);
 
-    console.log("Foundation and CRM seed completed.");
+    console.log("Foundation, CRM and quotes seed completed.");
   } finally {
     await client.end({ timeout: 5 });
   }

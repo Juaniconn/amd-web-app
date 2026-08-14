@@ -564,6 +564,78 @@ AMD Operations / AI Engineering Agent
 
 ---
 
+# ADR-022 — Almacenamiento de archivos local en desarrollo
+
+## Estado
+
+Aceptada
+
+## Contexto
+
+La Fase 3 requiere adjuntar archivos a cotizaciones (ADR-006: metadatos en PostgreSQL, blobs fuera de la BD). Cloudflare R2 no está configurado en el repositorio.
+
+## Decisión
+
+- Tabla `documents` con metadatos (object key, MIME, tamaño, checksum, entidad, uploader).
+- Adapter `src/lib/storage/`: implementación local en `.data/uploads` (o `STORAGE_DIR`).
+- Descarga autenticada por `GET /api/documents/[id]` (no URL pública permanente).
+- R2 permanece el destino de producción; se activará cuando existan credenciales, sin cambiar el modelo de metadatos.
+
+## Alternativas consideradas
+
+- Bloquear Fase 3 hasta tener R2: rechazado; retrasa el flujo RFQ.
+- Guardar blobs en PostgreSQL: rechazado (ADR-006).
+
+## Razón
+
+Análogo a ADR-018 (PostgreSQL local vs administrado). Permite completar archivos en desarrollo sin Cloudflare.
+
+## Fecha
+
+2026-08-13
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
+# ADR-023 — Conversión a pedido mínimo en Fase 3
+
+## Estado
+
+Aceptada
+
+## Contexto
+
+BUSINESS_SPEC Fase 3 incluye «Conversión a pedido». El módulo Pedidos es Fase 4. Hace falta cumplir la conversión sin construir la vista operativa de pedidos.
+
+## Decisión
+
+- Al convertir una cotización `aprobada` se crean `orders` + `order_items` (cabecera y partidas comerciales, estado `nuevo`, número `AMD-YYYY-NNNNN`).
+- `quotes.converted_order_id` y `orders.quote_id` (único) relacionan ambos registros.
+- `/orders` permanece deshabilitado. La cotización muestra el número de pedido.
+- No se copian costos estimados al pedido. Fase 4 construye la vista completa.
+
+## Alternativas consideradas
+
+- Diferir la conversión a Fase 4: rechazado; el botón es entregable de Fase 3.
+- Construir el módulo Pedidos ahora: rechazado (ADR-015).
+
+## Razón
+
+Cumple la regla de negocio «cotización aprobada → pedido» con el menor adelanto de Fase 4.
+
+## Fecha
+
+2026-08-13
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
 # PLANTILLA PARA NUEVAS DECISIONES
 
 Cuando sea necesario registrar una nueva decisión, utilizar:

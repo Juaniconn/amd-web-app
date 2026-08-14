@@ -12,7 +12,7 @@ Convertir un pedido confirmado en órdenes de producción, asignar máquina y re
 Pedido ⬜ → Orden de producción ⬜ → Operaciones ⬜ → Calidad ⬜ → Terminado ⬜
 ```
 
-**Hoy:** el proceso no corre en AMD Operations. El cliente que recibirá la pieza ya puede existir en el CRM.
+**Hoy:** el proceso no corre en AMD Operations. Una cotización convertida ya puede haber creado un pedido mínimo (`orders.status = nuevo`, ADR-023), pero no hay UI de pedidos ni órdenes de producción.
 
 # Responsables
 
