@@ -12,6 +12,10 @@ export const ACTIVITY_ACTIONS = [
   "released",
   "cancelled",
   "hours_logged",
+  "scheduled",
+  "closed",
+  "downtime_logged",
+  "rework_logged",
 ] as const;
 
 export const ACTIVITY_ENTITY_TYPES = [
@@ -23,6 +27,14 @@ export const ACTIVITY_ENTITY_TYPES = [
   "order",
   "engineering_request",
   "engineering_hours",
+  "production_order",
+  "machine",
+  "work_center",
+  "production_route",
+  "machine_hours",
+  "labor_hours",
+  "production_downtime",
+  "production_rework",
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
@@ -108,6 +120,59 @@ export function activitySummary({
       return `${who} registró horas de ingeniería en ${label}.`;
     }
     if (action === "deleted") return `${who} eliminó horas de ingeniería de ${label}.`;
+  }
+
+  if (entityType === "production_order") {
+    if (action === "created") return `${who} creó la orden de trabajo ${label}.`;
+    if (action === "updated") return `${who} actualizó la orden de trabajo ${label}.`;
+    if (action === "status_changed") {
+      return `${who} cambió el estado de la orden de trabajo ${label}.`;
+    }
+    if (action === "assigned") return `${who} asignó recursos a la orden de trabajo ${label}.`;
+    if (action === "scheduled") return `${who} programó la orden de trabajo ${label}.`;
+    if (action === "cancelled") return `${who} canceló la orden de trabajo ${label}.`;
+    if (action === "released") return `${who} liberó la orden de trabajo ${label}.`;
+    if (action === "closed") return `${who} cerró la orden de trabajo ${label}.`;
+  }
+
+  if (entityType === "machine") {
+    if (action === "created") return `${who} registró la máquina ${label}.`;
+    if (action === "updated") return `${who} actualizó la máquina ${label}.`;
+  }
+
+  if (entityType === "work_center") {
+    if (action === "created") return `${who} registró el centro de trabajo ${label}.`;
+    if (action === "updated") return `${who} actualizó el centro de trabajo ${label}.`;
+  }
+
+  if (entityType === "production_route") {
+    if (action === "created") return `${who} registró la ruta ${label}.`;
+    if (action === "updated") return `${who} actualizó la ruta ${label}.`;
+  }
+
+  if (entityType === "machine_hours") {
+    if (action === "hours_logged" || action === "created") {
+      return `${who} registró horas máquina en ${label}.`;
+    }
+  }
+
+  if (entityType === "labor_hours") {
+    if (action === "hours_logged" || action === "created") {
+      return `${who} registró horas hombre en ${label}.`;
+    }
+  }
+
+  if (entityType === "production_downtime") {
+    if (action === "downtime_logged" || action === "created") {
+      return `${who} registró tiempo muerto en ${label}.`;
+    }
+  }
+
+  if (entityType === "production_rework") {
+    if (action === "rework_logged" || action === "created") {
+      return `${who} registró un retrabajo en ${label}.`;
+    }
+    if (action === "released") return `${who} liberó el retrabajo ${label}.`;
   }
 
   return `${who} registró ${action} sobre ${label}.`;

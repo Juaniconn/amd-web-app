@@ -29,6 +29,15 @@ export const PERMISSION_IDS = {
   engineeringApprove: "engineering:approve",
   engineeringRelease: "engineering:release",
   engineeringDelete: "engineering:delete",
+  productionView: "production:view",
+  productionCreate: "production:create",
+  productionUpdate: "production:update",
+  productionCancel: "production:cancel",
+  productionClose: "production:close",
+  productionSchedule: "production:schedule",
+  productionAssignMachine: "production:assign_machine",
+  productionAssignOperator: "production:assign_operator",
+  qualityRelease: "quality:release",
 } as const;
 
 export type PermissionId = (typeof PERMISSION_IDS)[keyof typeof PERMISSION_IDS];
@@ -41,6 +50,17 @@ const ENGINEERING_ALL: PermissionId[] = [
   PERMISSION_IDS.engineeringApprove,
   PERMISSION_IDS.engineeringRelease,
   PERMISSION_IDS.engineeringDelete,
+];
+
+const PRODUCTION_ALL: PermissionId[] = [
+  PERMISSION_IDS.productionView,
+  PERMISSION_IDS.productionCreate,
+  PERMISSION_IDS.productionUpdate,
+  PERMISSION_IDS.productionCancel,
+  PERMISSION_IDS.productionClose,
+  PERMISSION_IDS.productionSchedule,
+  PERMISSION_IDS.productionAssignMachine,
+  PERMISSION_IDS.productionAssignOperator,
 ];
 
 export const ROLES: Record<
@@ -63,6 +83,7 @@ export const ROLES: Record<
       PERMISSION_IDS.customersRead,
       PERMISSION_IDS.quotesRead,
       PERMISSION_IDS.engineeringRead,
+      PERMISSION_IDS.productionView,
     ],
   },
   ventas: {
@@ -77,12 +98,17 @@ export const ROLES: Record<
       PERMISSION_IDS.engineeringRead,
       PERMISSION_IDS.engineeringCreate,
       PERMISSION_IDS.engineeringApprove,
+      PERMISSION_IDS.productionView,
     ],
   },
   ingenieria: {
     name: "Ingeniería",
     description: "Solicitudes de diseño, CAD, revisión, aprobación y liberación.",
-    permissions: [PERMISSION_IDS.dashboardRead, ...ENGINEERING_ALL],
+    permissions: [
+      PERMISSION_IDS.dashboardRead,
+      ...ENGINEERING_ALL,
+      PERMISSION_IDS.productionView,
+    ],
   },
   compras: {
     name: "Compras",
@@ -91,13 +117,22 @@ export const ROLES: Record<
   },
   produccion: {
     name: "Producción",
-    description: "Órdenes de producción y validación de manufacturabilidad.",
-    permissions: [PERMISSION_IDS.dashboardRead, PERMISSION_IDS.engineeringRead],
+    description: "Órdenes de trabajo (OT), máquinas, programación y cierre administrativo.",
+    permissions: [
+      PERMISSION_IDS.dashboardRead,
+      PERMISSION_IDS.engineeringRead,
+      ...PRODUCTION_ALL,
+    ],
   },
   calidad: {
     name: "Calidad",
-    description: "Inspecciones y consulta de planos vigentes.",
-    permissions: [PERMISSION_IDS.dashboardRead, PERMISSION_IDS.engineeringRead],
+    description: "Cierre físico de OT, retrabajos y consulta de planos vigentes.",
+    permissions: [
+      PERMISSION_IDS.dashboardRead,
+      PERMISSION_IDS.engineeringRead,
+      PERMISSION_IDS.productionView,
+      PERMISSION_IDS.qualityRelease,
+    ],
   },
   almacen: {
     name: "Almacén",
@@ -178,6 +213,42 @@ export const PERMISSIONS: Record<
   "engineering:delete": {
     name: "Eliminar ingeniería",
     description: "Archivar una solicitud pendiente o cancelada.",
+  },
+  "production:view": {
+    name: "Ver producción",
+    description: "Consultar órdenes de trabajo, máquinas, tiempos y KPIs de piso.",
+  },
+  "production:create": {
+    name: "Crear OT",
+    description: "Crear órdenes de trabajo ancladas a un pedido.",
+  },
+  "production:update": {
+    name: "Editar OT",
+    description: "Editar cabecera de OT, centros, rutas y catálogos de piso.",
+  },
+  "production:cancel": {
+    name: "Cancelar OT",
+    description: "Cancelar una orden de trabajo. No borra el pedido ni la RFQ.",
+  },
+  "production:close": {
+    name: "Cerrar OT",
+    description: "Cierre administrativo de la orden tras el sello físico de Calidad.",
+  },
+  "production:schedule": {
+    name: "Programar OT",
+    description: "Programar centro, máquina y ventana de piso.",
+  },
+  "production:assign_machine": {
+    name: "Asignar máquina",
+    description: "Asignar una máquina de un centro de trabajo a la OT.",
+  },
+  "production:assign_operator": {
+    name: "Asignar operador",
+    description: "Asignar un operador registrado a la OT.",
+  },
+  "quality:release": {
+    name: "Liberar calidad",
+    description: "Cierre físico del producto. Pasa la OT de Calidad a Terminada.",
   },
 };
 

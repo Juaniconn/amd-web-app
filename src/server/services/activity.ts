@@ -94,6 +94,32 @@ export async function listQuoteActivity(quoteId: string) {
     .orderBy(desc(activityLogs.createdAt));
 }
 
+export async function listProductionActivity(productionOrderId: string) {
+  return db
+    .select({
+      id: activityLogs.id,
+      action: activityLogs.action,
+      entityType: activityLogs.entityType,
+      entityId: activityLogs.entityId,
+      summary: activityLogs.summary,
+      createdAt: activityLogs.createdAt,
+    })
+    .from(activityLogs)
+    .where(
+      or(
+        and(
+          eq(activityLogs.entityType, "production_order"),
+          eq(activityLogs.entityId, productionOrderId),
+        ),
+        and(
+          eq(activityLogs.parentEntityType, "production_order"),
+          eq(activityLogs.parentEntityId, productionOrderId),
+        ),
+      ),
+    )
+    .orderBy(desc(activityLogs.createdAt));
+}
+
 export async function listEngineeringActivity(engineeringRequestId: string) {
   return db
     .select({

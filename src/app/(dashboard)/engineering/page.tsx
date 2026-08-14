@@ -94,7 +94,7 @@ export default async function EngineeringPage({
         <KpiCard label="Solicitudes vencidas" value={String(stats.overdue)} hint="Abiertas con fecha compromiso vencida" />
         <KpiCard label="Diseños aprobados" value={String(stats.approvedThisMonth)} hint="Aprobados este mes" />
         <KpiCard label="Diseños rechazados" value={String(stats.rejected)} hint="Solicitudes canceladas" />
-        <KpiCard label="Diseños liberados" value={String(stats.released)} hint="Listos para cotización final / OP" />
+        <KpiCard label="Diseños liberados" value={String(stats.released)} hint="Listos para cotización final / OT" />
         <KpiCard label="Horas ingeniería" value={String(stats.hoursLogged)} hint="Suma capturada en solicitudes activas" />
         <KpiCard
           label="Tiempo promedio diseño"

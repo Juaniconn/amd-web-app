@@ -89,8 +89,26 @@ describe("RBAC catalog", () => {
     expect(roleHasPermission(ROLE_IDS.produccion, PERMISSION_IDS.engineeringRead)).toBe(
       true,
     );
+    expect(roleHasPermission(ROLE_IDS.produccion, PERMISSION_IDS.productionCreate)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.produccion, PERMISSION_IDS.productionClose)).toBe(
+      true,
+    );
     expect(roleHasPermission(ROLE_IDS.calidad, PERMISSION_IDS.engineeringRead)).toBe(
       true,
+    );
+    expect(roleHasPermission(ROLE_IDS.calidad, PERMISSION_IDS.qualityRelease)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.calidad, PERMISSION_IDS.productionClose)).toBe(
+      false,
+    );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.productionView)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.productionCreate)).toBe(
+      false,
     );
     expect(roleHasPermission(ROLE_IDS.almacen, PERMISSION_IDS.engineeringRead)).toBe(
       false,

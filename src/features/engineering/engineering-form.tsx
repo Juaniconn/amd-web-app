@@ -39,13 +39,6 @@ type FormValues = {
   assigneeUserId: string;
 };
 
-function toDateInput(value?: Date | string | null) {
-  if (!value) return "";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
-}
-
 export function EngineeringForm({
   mode,
   requestId,
@@ -199,8 +192,4 @@ export function EngineeringForm({
       </Button>
     </form>
   );
-}
-
-export function toEngineeringDateInput(value?: Date | string | null) {
-  return toDateInput(value);
 }

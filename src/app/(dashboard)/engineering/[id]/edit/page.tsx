@@ -1,9 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  EngineeringForm,
-  toEngineeringDateInput,
-} from "@/features/engineering/engineering-form";
+import { EngineeringForm } from "@/features/engineering/engineering-form";
 import { buttonVariants } from "@/components/ui/button";
 import { requirePermission } from "@/lib/auth/session";
 import { canEditEngineering, type EngineeringStatus } from "@/lib/engineering/status";
@@ -59,7 +56,7 @@ export default async function EditEngineeringPage({
           notes: request.notes ?? "",
           projectType: request.projectType as QuoteEngineeringType,
           priority: request.priority,
-          dueDate: toEngineeringDateInput(request.dueDate),
+          dueDate: request.dueDate ? request.dueDate.toISOString().slice(0, 10) : "",
         }}
       />
     </div>

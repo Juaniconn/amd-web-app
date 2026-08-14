@@ -203,6 +203,14 @@ export async function getDocumentForDownload(id: string) {
   return doc;
 }
 
+export async function listQuoteDocuments(quoteId: string) {
+  return db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.entityType, "quote"), eq(documents.entityId, quoteId)))
+    .orderBy(desc(documents.createdAt));
+}
+
 function assertAllowedEngineeringDocument(originalName: string, sizeBytes: number) {
   if (sizeBytes <= 0) {
     throw new AppError("El archivo está vacío.", "EMPTY_FILE", 400);

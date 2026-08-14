@@ -29,6 +29,13 @@
       "when": 1786680000000,
       "tag": "0003_engineering",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786692000000,
+      "tag": "0004_production",
+      "breakpoints": true
     }
   ]
 }

@@ -101,8 +101,8 @@ export default async function QuoteDetailPage({
       {quote.orderNumber ? (
         <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
           Pedido creado: <span className="font-medium">{quote.orderNumber}</span>
-          . La vista completa del pedido se construye después de Ingeniería. El origen
-          queda registrado para Producción (Fase 5).
+          . Producción puede emitir OT desde ese pedido. La vista completa de
+          pedidos sigue diferida.
         </p>
       ) : null}
 

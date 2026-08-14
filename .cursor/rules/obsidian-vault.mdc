@@ -1,0 +1,35 @@
+---
+description: Fuente de verdad de documentación = vault Obsidian amd-docs, no una copia en WSL
+alwaysApply: true
+---
+
+# Vault Obsidian (única fuente de docs)
+
+La documentación de AMD Operations **no vive duplicada**.
+
+| Qué | Dónde |
+|---|---|
+| Vault real (leer, escribir, auditar) | `C:\Users\ElJua\Documents\amd-docs` |
+| Ruta en el repo | `docs/` → **debe ser symlink** a ese vault |
+| En WSL | `/mnt/c/Users/ElJua/Documents/amd-docs` |
+
+## Obligatorio
+
+- Crear, editar y consultar `.md` / `.canvas` **solo** en ese vault.
+- Si `amd-app/docs` no apunta al vault, **no** escribas una segunda copia: repara el enlace y escribe en `amd-docs`.
+- Tras documentar, confirma que el archivo existe en `C:\Users\ElJua\Documents\amd-docs` (es lo que Obsidian tiene abierto).
+- No borrar el vault. No tratar `docs/` de WSL como carpeta independiente.
+
+## Prohibido
+
+```
+# MAL — segunda copia que Obsidian no ve
+Write → amd-app/docs/*.md   (si docs/ NO es el symlink)
+```
+
+```
+# BIEN
+Write → C:\Users\ElJua\Documents\amd-docs\...
+# o, si docs/ ya es el enlace:
+Write → amd-app/docs\...   (cae en amd-docs)
+```

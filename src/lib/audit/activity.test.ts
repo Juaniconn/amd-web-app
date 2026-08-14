@@ -35,6 +35,17 @@ describe("activitySummary", () => {
     ).toBe("Luis Ingeniería liberó la solicitud de ingeniería ING-2026-00001.");
   });
 
+  it("describes a production order creation", () => {
+    expect(
+      activitySummary({
+        actorName: "Supervisor Piso",
+        action: "created",
+        entityType: "production_order",
+        entityLabel: "OP-2026-00001",
+      }),
+    ).toBe("Supervisor Piso creó la orden de trabajo OP-2026-00001.");
+  });
+
   it("describes a quote conversion", () => {
     expect(
       activitySummary({

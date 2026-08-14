@@ -1,0 +1,755 @@
+import "server-only";
+
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  lt,
+  or,
+} from "drizzle-orm";
+import { db } from "@/db";
+import {
+  customers,
+  downtimeReasons,
+  engineeringRequests,
+  machines,
+  orderItems,
+  orders,
+  productionDowntime,
+  productionOperations,
+  productionOrders,
+  productionRouteSteps,
+  quotes,
+  users,
+  workCenters,
+} from "@/db/schema";
+import { pickChangedFields } from "@/lib/audit/activity";
+import { AppError } from "@/lib/errors";
+import type { EngineeringStatus } from "@/lib/engineering/status";
+import {
+  productionMonitoring,
+  type ProductionPriority,
+} from "@/lib/production/catalog";
+import { canCreateProductionOrder, type OrderOrigin } from "@/lib/production/gates";
+import type { RfqType } from "@/lib/quotes/rfq";
+import {
+  assertProductionTransition,
+  canAssignProduction,
+  canEditProduction,
+  permissionForProductionTransition,
+  PRODUCTION_STATUS_LABELS,
+  requiresDowntimeReason,
+  type ProductionStatus,
+} from "@/lib/production/status";
+import type {
+  AssignProductionInput,
+  CreateProductionOrderInput,
+  UpdateProductionOrderInput,
+} from "@/lib/validation/production";
+import { recordActivity } from "@/server/services/activity";
+import type { Actor } from "@/server/services/customers";
+import { nextDocumentNumber } from "@/server/services/numbering";
+import { assertMachineBelongsToCenter } from "@/server/services/production-catalogs";
+
+export const PRODUCTION_PAGE_SIZE = 20;
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function loadOrderRow(id: string) {
+  const [row] = await db
+    .select()
+    .from(productionOrders)
+    .where(eq(productionOrders.id, id))
+    .limit(1);
+  if (!row) {
+    throw new AppError("La orden de trabajo no existe.", "OP_NOT_FOUND", 404);
+  }
+  return row;
+}
+
+async function loadCommercialOrder(orderId: string) {
+  const [row] = await db
+    .select({
+      id: orders.id,
+      number: orders.number,
+      customerId: orders.customerId,
+      customerName: customers.legalName,
+      quoteId: orders.quoteId,
+      quoteNumber: quotes.number,
+      rfqType: quotes.rfqType,
+      origin: orders.origin,
+      engineeringRequestId: orders.engineeringRequestId,
+      engineeringStatus: engineeringRequests.status,
+      engineeringNumber: engineeringRequests.number,
+      isDemo: orders.isDemo,
+    })
+    .from(orders)
+    .innerJoin(customers, eq(orders.customerId, customers.id))
+    .innerJoin(quotes, eq(orders.quoteId, quotes.id))
+    .leftJoin(
+      engineeringRequests,
+      eq(orders.engineeringRequestId, engineeringRequests.id),
+    )
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!row) {
+    throw new AppError("El pedido no existe.", "ORDER_NOT_FOUND", 404);
+  }
+  return row;
+}
+
+async function instantiateRoute(
+  tx: Tx,
+  productionOrderId: string,
+  routeId: string,
+) {
+  const steps = await tx
+    .select()
+    .from(productionRouteSteps)
+    .where(eq(productionRouteSteps.routeId, routeId))
+    .orderBy(asc(productionRouteSteps.position));
+
+  if (steps.length === 0) return;
+
+  await tx.insert(productionOperations).values(
+    steps.map((step) => ({
+      id: crypto.randomUUID(),
+      productionOrderId,
+      routeStepId: step.id,
+      position: step.position,
+      kind: step.kind,
+      workCenterId: step.workCenterId,
+      name: step.name,
+      status:
+        step.kind === "ingenieria"
+          ? ("omitida" as const)
+          : step.kind === "entrega"
+            ? ("pendiente" as const)
+            : ("pendiente" as const),
+    })),
+  );
+}
+
+export async function listOrdersEligibleForProduction() {
+  const rows = await db
+    .select({
+      id: orders.id,
+      number: orders.number,
+      customerId: orders.customerId,
+      customerName: customers.legalName,
+      quoteId: orders.quoteId,
+      quoteNumber: quotes.number,
+      rfqType: quotes.rfqType,
+      origin: orders.origin,
+      engineeringRequestId: orders.engineeringRequestId,
+      engineeringStatus: engineeringRequests.status,
+      engineeringNumber: engineeringRequests.number,
+    })
+    .from(orders)
+    .innerJoin(customers, eq(orders.customerId, customers.id))
+    .innerJoin(quotes, eq(orders.quoteId, quotes.id))
+    .leftJoin(
+      engineeringRequests,
+      eq(orders.engineeringRequestId, engineeringRequests.id),
+    )
+    .orderBy(desc(orders.createdAt));
+
+  return rows.filter((row) =>
+    canCreateProductionOrder({
+      origin: row.origin as OrderOrigin,
+      rfqType: row.rfqType as RfqType,
+      engineeringStatus: (row.engineeringStatus as EngineeringStatus | null) ?? null,
+    }).ok,
+  );
+}
+
+export async function listOrderItems(orderId: string) {
+  return db
+    .select({
+      id: orderItems.id,
+      position: orderItems.position,
+      description: orderItems.description,
+      partNumber: orderItems.partNumber,
+      quantity: orderItems.quantity,
+      unit: orderItems.unit,
+    })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId))
+    .orderBy(asc(orderItems.position));
+}
+
+export async function createProductionOrder(
+  input: CreateProductionOrderInput,
+  actor: Actor,
+) {
+  const commercial = await loadCommercialOrder(input.orderId);
+  const gate = canCreateProductionOrder({
+    origin: commercial.origin as OrderOrigin,
+    rfqType: commercial.rfqType as RfqType,
+    engineeringStatus:
+      (commercial.engineeringStatus as EngineeringStatus | null) ?? null,
+  });
+  if (!gate.ok) {
+    throw new AppError(gate.message, gate.code, 409);
+  }
+
+  if (input.machineId) {
+    if (!input.workCenterId) {
+      throw new AppError(
+        "Asigna un centro de trabajo antes de la máquina.",
+        "WORK_CENTER_REQUIRED",
+        409,
+      );
+    }
+    await assertMachineBelongsToCenter(input.machineId, input.workCenterId);
+  }
+
+  const created = await db.transaction(async (tx) => {
+    const year = new Date().getFullYear();
+    const number = await nextDocumentNumber(tx, "production_orders", `OP-${year}-`);
+    const id = crypto.randomUUID();
+    await tx.insert(productionOrders).values({
+      id,
+      number,
+      orderId: commercial.id,
+      orderItemId: input.orderItemId ?? null,
+      customerId: commercial.customerId,
+      quoteId: commercial.quoteId,
+      engineeringRequestId: commercial.engineeringRequestId,
+      origin: commercial.origin,
+      routeId: input.routeId ?? null,
+      description: input.description,
+      partNumber: input.partNumber ?? null,
+      quantity: String(input.quantity),
+      unit: input.unit,
+      promisedDate: input.promisedDate,
+      priority: input.priority,
+      notes: input.notes ?? null,
+      workCenterId: input.workCenterId ?? null,
+      machineId: input.machineId ?? null,
+      operatorUserId: input.operatorUserId ?? null,
+      isDemo: commercial.isDemo,
+      createdBy: actor.userId,
+      updatedBy: actor.userId,
+    });
+    if (input.routeId) {
+      await instantiateRoute(tx, id, input.routeId);
+    }
+    await recordActivity(tx, {
+      actorUserId: actor.userId,
+      actorName: actor.name,
+      action: "created",
+      entityType: "production_order",
+      entityId: id,
+      entityLabel: number,
+      parentEntityType: "order",
+      parentEntityId: commercial.id,
+      newValue: {
+        number,
+        orderNumber: commercial.number,
+        origin: commercial.origin,
+        promisedDate: input.promisedDate.toISOString(),
+      },
+    });
+    return { id, number };
+  });
+
+  return created;
+}
+
+export async function updateProductionOrder(
+  input: UpdateProductionOrderInput,
+  actor: Actor,
+) {
+  const row = await loadOrderRow(input.id);
+  if (!canEditProduction(row.status as ProductionStatus)) {
+    throw new AppError(
+      "No se puede editar una OT entregada o cancelada.",
+      "OP_LOCKED",
+      409,
+    );
+  }
+
+  const previous = {
+    description: row.description,
+    partNumber: row.partNumber,
+    quantity: row.quantity,
+    unit: row.unit,
+    promisedDate: row.promisedDate.toISOString(),
+    priority: row.priority,
+    notes: row.notes,
+  };
+  const next = {
+    description: input.description,
+    partNumber: input.partNumber ?? null,
+    quantity: String(input.quantity),
+    unit: input.unit,
+    promisedDate: input.promisedDate.toISOString(),
+    priority: input.priority,
+    notes: input.notes ?? null,
+  };
+
+  await db
+    .update(productionOrders)
+    .set({
+      description: input.description,
+      partNumber: input.partNumber ?? null,
+      quantity: String(input.quantity),
+      unit: input.unit,
+      promisedDate: input.promisedDate,
+      priority: input.priority,
+      notes: input.notes ?? null,
+      updatedBy: actor.userId,
+      updatedAt: new Date(),
+    })
+    .where(eq(productionOrders.id, row.id));
+
+  await recordActivity(db, {
+    actorUserId: actor.userId,
+    actorName: actor.name,
+    action: "updated",
+    entityType: "production_order",
+    entityId: row.id,
+    entityLabel: row.number,
+    ...pickChangedFields(previous, next),
+  });
+}
+
+export async function assignProduction(
+  input: AssignProductionInput,
+  actor: Actor,
+) {
+  const row = await loadOrderRow(input.id);
+  if (!canAssignProduction(row.status as ProductionStatus)) {
+    throw new AppError(
+      "La OT aún no está liberada o ya está cerrada.",
+      "OP_NOT_ASSIGNABLE",
+      409,
+    );
+  }
+
+  if (input.machineId) {
+    const centerId = input.workCenterId ?? row.workCenterId;
+    if (!centerId) {
+      throw new AppError(
+        "Asigna un centro de trabajo antes de la máquina.",
+        "WORK_CENTER_REQUIRED",
+        409,
+      );
+    }
+    await assertMachineBelongsToCenter(input.machineId, centerId);
+  }
+
+  const now = new Date();
+  await db
+    .update(productionOrders)
+    .set({
+      workCenterId: input.workCenterId ?? row.workCenterId,
+      machineId: input.machineId ?? row.machineId,
+      operatorUserId: input.operatorUserId ?? row.operatorUserId,
+      updatedBy: actor.userId,
+      updatedAt: now,
+    })
+    .where(eq(productionOrders.id, row.id));
+
+  await recordActivity(db, {
+    actorUserId: actor.userId,
+    actorName: actor.name,
+    action: "assigned",
+    entityType: "production_order",
+    entityId: row.id,
+    entityLabel: row.number,
+    previousValue: {
+      workCenterId: row.workCenterId,
+      machineId: row.machineId,
+      operatorUserId: row.operatorUserId,
+    },
+    newValue: {
+      workCenterId: input.workCenterId ?? row.workCenterId,
+      machineId: input.machineId ?? row.machineId,
+      operatorUserId: input.operatorUserId ?? row.operatorUserId,
+    },
+  });
+}
+
+export async function changeProductionStatus(
+  id: string,
+  status: ProductionStatus,
+  actor: Actor,
+  pauseReasonId?: string,
+) {
+  const row = await loadOrderRow(id);
+  const from = row.status as ProductionStatus;
+  try {
+    assertProductionTransition(from, status);
+  } catch (error) {
+    throw new AppError(
+      error instanceof Error ? error.message : "Transición no permitida.",
+      "INVALID_TRANSITION",
+      409,
+    );
+  }
+
+  if (requiresDowntimeReason(status) && !pauseReasonId) {
+    throw new AppError(
+      "Pausar una OT requiere un motivo de tiempo muerto del catálogo oficial.",
+      "DOWNTIME_REASON_REQUIRED",
+      409,
+    );
+  }
+
+  if (status === "programada" && !row.workCenterId && !row.machineId) {
+    throw new AppError(
+      "Programa un centro de trabajo o una máquina antes de marcar la OT como Programada.",
+      "SCHEDULE_INCOMPLETE",
+      409,
+    );
+  }
+
+  if (pauseReasonId) {
+    const [reason] = await db
+      .select({ id: downtimeReasons.id, active: downtimeReasons.active })
+      .from(downtimeReasons)
+      .where(eq(downtimeReasons.id, pauseReasonId))
+      .limit(1);
+    if (!reason || !reason.active) {
+      throw new AppError(
+        "El motivo de tiempo muerto no es válido.",
+        "DOWNTIME_REASON_INVALID",
+        409,
+      );
+    }
+  }
+
+  const now = new Date();
+  const patch: Partial<typeof productionOrders.$inferInsert> = {
+    status,
+    updatedBy: actor.userId,
+    updatedAt: now,
+  };
+
+  if (status === "liberada") patch.releasedAt = now;
+  if (status === "programada") patch.scheduledAt = now;
+  if (status === "en_produccion") {
+    patch.startedAt = row.startedAt ?? now;
+    patch.pausedAt = null;
+    patch.pauseReasonId = null;
+  }
+  if (status === "pausada") {
+    patch.pausedAt = now;
+    patch.pauseReasonId = pauseReasonId ?? null;
+  }
+  if (status === "calidad") patch.qualityAt = now;
+  if (status === "terminada") {
+    patch.physicallyClosedAt = now;
+    patch.physicallyClosedBy = actor.userId;
+  }
+  if (status === "entregada") {
+    if (!row.physicallyClosedAt) {
+      throw new AppError(
+        "El cierre administrativo requiere el cierre físico de Calidad.",
+        "PHYSICAL_CLOSE_REQUIRED",
+        409,
+      );
+    }
+    patch.administrativelyClosedAt = now;
+    patch.administrativelyClosedBy = actor.userId;
+    patch.deliveredAt = now;
+  }
+  if (status === "cancelada") patch.cancelledAt = now;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(productionOrders)
+      .set(patch)
+      .where(eq(productionOrders.id, row.id));
+
+    if (row.machineId && (status === "en_produccion" || status === "pausada")) {
+      await tx
+        .update(machines)
+        .set({
+          status: status === "en_produccion" ? "en_produccion" : "disponible",
+          updatedAt: now,
+        })
+        .where(eq(machines.id, row.machineId));
+    }
+    if (
+      row.machineId &&
+      (status === "calidad" ||
+        status === "terminada" ||
+        status === "entregada" ||
+        status === "cancelada" ||
+        status === "esperando_material")
+    ) {
+      await tx
+        .update(machines)
+        .set({ status: "disponible", updatedAt: now })
+        .where(eq(machines.id, row.machineId));
+    }
+
+    if (status === "pausada" && pauseReasonId) {
+      await tx.insert(productionDowntime).values({
+        id: crypto.randomUUID(),
+        productionOrderId: row.id,
+        machineId: row.machineId,
+        reasonId: pauseReasonId,
+        startedAt: now,
+        createdBy: actor.userId,
+      });
+    }
+
+    await recordActivity(tx, {
+      actorUserId: actor.userId,
+      actorName: actor.name,
+      action:
+        status === "cancelada"
+          ? "cancelled"
+          : status === "programada"
+            ? "scheduled"
+            : status === "liberada"
+              ? "released"
+              : status === "entregada" || status === "terminada"
+                ? "closed"
+                : "status_changed",
+      entityType: "production_order",
+      entityId: row.id,
+      entityLabel: `${row.number} (${PRODUCTION_STATUS_LABELS[from]} → ${PRODUCTION_STATUS_LABELS[status]})`,
+      previousValue: { status: from },
+      newValue: { status, pauseReasonId: pauseReasonId ?? null },
+    });
+  });
+}
+
+export function requiredPermissionForStatus(to: ProductionStatus) {
+  return permissionForProductionTransition(to);
+}
+
+export async function listProductionOrders(input: {
+  q?: string;
+  status?: ProductionStatus;
+  delayed?: boolean;
+  page?: number;
+}) {
+  const page = Math.max(1, input.page ?? 1);
+  const filters = [];
+  if (input.status) filters.push(eq(productionOrders.status, input.status));
+  if (input.q) {
+    const term = `%${input.q}%`;
+    filters.push(
+      or(
+        ilike(productionOrders.number, term),
+        ilike(productionOrders.description, term),
+        ilike(customers.legalName, term),
+        ilike(orders.number, term),
+        ilike(quotes.number, term),
+      ),
+    );
+  }
+  if (input.delayed) {
+    filters.push(
+      lt(productionOrders.promisedDate, new Date()),
+      inArray(productionOrders.status, [
+        "pendiente",
+        "liberada",
+        "programada",
+        "en_produccion",
+        "pausada",
+        "esperando_material",
+        "calidad",
+      ]),
+    );
+  }
+
+  const where = filters.length ? and(...filters) : undefined;
+  const [totalRow] = await db
+    .select({ value: count() })
+    .from(productionOrders)
+    .innerJoin(customers, eq(productionOrders.customerId, customers.id))
+    .innerJoin(orders, eq(productionOrders.orderId, orders.id))
+    .innerJoin(quotes, eq(productionOrders.quoteId, quotes.id))
+    .where(where);
+
+  const total = Number(totalRow.value);
+  const pageCount = Math.max(1, Math.ceil(total / PRODUCTION_PAGE_SIZE));
+  const rows = await db
+    .select({
+      id: productionOrders.id,
+      number: productionOrders.number,
+      orderId: productionOrders.orderId,
+      orderNumber: orders.number,
+      customerId: productionOrders.customerId,
+      customerName: customers.legalName,
+      quoteId: productionOrders.quoteId,
+      quoteNumber: quotes.number,
+      origin: productionOrders.origin,
+      description: productionOrders.description,
+      quantity: productionOrders.quantity,
+      promisedDate: productionOrders.promisedDate,
+      priority: productionOrders.priority,
+      status: productionOrders.status,
+      workCenterName: workCenters.name,
+      machineName: machines.name,
+      operatorName: users.name,
+      isDemo: productionOrders.isDemo,
+    })
+    .from(productionOrders)
+    .innerJoin(customers, eq(productionOrders.customerId, customers.id))
+    .innerJoin(orders, eq(productionOrders.orderId, orders.id))
+    .innerJoin(quotes, eq(productionOrders.quoteId, quotes.id))
+    .leftJoin(workCenters, eq(productionOrders.workCenterId, workCenters.id))
+    .leftJoin(machines, eq(productionOrders.machineId, machines.id))
+    .leftJoin(users, eq(productionOrders.operatorUserId, users.id))
+    .where(where)
+    .orderBy(asc(productionOrders.priority), asc(productionOrders.promisedDate))
+    .limit(PRODUCTION_PAGE_SIZE)
+    .offset((page - 1) * PRODUCTION_PAGE_SIZE);
+
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      monitoring: productionMonitoring(row.promisedDate, row.status),
+    })),
+    total,
+    page,
+    pageCount,
+  };
+}
+
+export async function getProductionOrderById(id: string) {
+  const [row] = await db
+    .select({
+      id: productionOrders.id,
+      number: productionOrders.number,
+      orderId: productionOrders.orderId,
+      orderNumber: orders.number,
+      orderItemId: productionOrders.orderItemId,
+      customerId: productionOrders.customerId,
+      customerName: customers.legalName,
+      quoteId: productionOrders.quoteId,
+      quoteNumber: quotes.number,
+      rfqType: quotes.rfqType,
+      engineeringRequestId: productionOrders.engineeringRequestId,
+      engineeringNumber: engineeringRequests.number,
+      engineeringStatus: engineeringRequests.status,
+      origin: productionOrders.origin,
+      routeId: productionOrders.routeId,
+      description: productionOrders.description,
+      partNumber: productionOrders.partNumber,
+      quantity: productionOrders.quantity,
+      unit: productionOrders.unit,
+      promisedDate: productionOrders.promisedDate,
+      priority: productionOrders.priority,
+      status: productionOrders.status,
+      notes: productionOrders.notes,
+      workCenterId: productionOrders.workCenterId,
+      workCenterName: workCenters.name,
+      machineId: productionOrders.machineId,
+      machineName: machines.name,
+      operatorUserId: productionOrders.operatorUserId,
+      operatorName: users.name,
+      pauseReasonId: productionOrders.pauseReasonId,
+      releasedAt: productionOrders.releasedAt,
+      scheduledAt: productionOrders.scheduledAt,
+      startedAt: productionOrders.startedAt,
+      pausedAt: productionOrders.pausedAt,
+      qualityAt: productionOrders.qualityAt,
+      physicallyClosedAt: productionOrders.physicallyClosedAt,
+      administrativelyClosedAt: productionOrders.administrativelyClosedAt,
+      cancelledAt: productionOrders.cancelledAt,
+      deliveredAt: productionOrders.deliveredAt,
+      isDemo: productionOrders.isDemo,
+      createdAt: productionOrders.createdAt,
+      updatedAt: productionOrders.updatedAt,
+    })
+    .from(productionOrders)
+    .innerJoin(customers, eq(productionOrders.customerId, customers.id))
+    .innerJoin(orders, eq(productionOrders.orderId, orders.id))
+    .innerJoin(quotes, eq(productionOrders.quoteId, quotes.id))
+    .leftJoin(
+      engineeringRequests,
+      eq(productionOrders.engineeringRequestId, engineeringRequests.id),
+    )
+    .leftJoin(workCenters, eq(productionOrders.workCenterId, workCenters.id))
+    .leftJoin(machines, eq(productionOrders.machineId, machines.id))
+    .leftJoin(users, eq(productionOrders.operatorUserId, users.id))
+    .where(eq(productionOrders.id, id))
+    .limit(1);
+
+  if (!row) return null;
+
+  const operations = await db
+    .select({
+      id: productionOperations.id,
+      position: productionOperations.position,
+      kind: productionOperations.kind,
+      name: productionOperations.name,
+      status: productionOperations.status,
+      workCenterId: productionOperations.workCenterId,
+      workCenterName: workCenters.name,
+      machineId: productionOperations.machineId,
+      operatorUserId: productionOperations.operatorUserId,
+      startedAt: productionOperations.startedAt,
+      finishedAt: productionOperations.finishedAt,
+    })
+    .from(productionOperations)
+    .leftJoin(workCenters, eq(productionOperations.workCenterId, workCenters.id))
+    .where(eq(productionOperations.productionOrderId, id))
+    .orderBy(asc(productionOperations.position));
+
+  return {
+    ...row,
+    priority: row.priority as ProductionPriority,
+    status: row.status as ProductionStatus,
+    origin: row.origin as OrderOrigin,
+    monitoring: productionMonitoring(row.promisedDate, row.status),
+    operations,
+  };
+}
+
+export async function listProductionByCustomer(customerId: string) {
+  const rows = await db
+    .select({
+      id: productionOrders.id,
+      number: productionOrders.number,
+      status: productionOrders.status,
+      promisedDate: productionOrders.promisedDate,
+      priority: productionOrders.priority,
+      orderNumber: orders.number,
+    })
+    .from(productionOrders)
+    .innerJoin(orders, eq(productionOrders.orderId, orders.id))
+    .where(eq(productionOrders.customerId, customerId))
+    .orderBy(desc(productionOrders.createdAt));
+  return rows.map((row) => ({
+    ...row,
+    monitoring: productionMonitoring(row.promisedDate, row.status),
+  }));
+}
+
+export async function quoteHasProductionOrder(quoteId: string) {
+  const [row] = await db
+    .select({ id: productionOrders.id })
+    .from(productionOrders)
+    .where(eq(productionOrders.quoteId, quoteId))
+    .limit(1);
+  return Boolean(row);
+}
+
+export async function listUsersForProduction() {
+  return db
+    .select({ id: users.id, name: users.name, email: users.email })
+    .from(users)
+    .orderBy(asc(users.name));
+}
+
+export async function listDowntimeReasons(activeOnly = true) {
+  return db
+    .select()
+    .from(downtimeReasons)
+    .where(activeOnly ? eq(downtimeReasons.active, true) : undefined)
+    .orderBy(asc(downtimeReasons.sortOrder));
+}

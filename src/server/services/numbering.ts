@@ -2,7 +2,7 @@ import "server-only";
 
 import { desc, like, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { engineeringRequests, orders, quotes } from "@/db/schema";
+import { engineeringRequests, orders, productionOrders, quotes } from "@/db/schema";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -12,6 +12,10 @@ const TABLES = {
   engineering_requests: {
     table: engineeringRequests,
     column: engineeringRequests.number,
+  },
+  production_orders: {
+    table: productionOrders,
+    column: productionOrders.number,
   },
 } as const;
 

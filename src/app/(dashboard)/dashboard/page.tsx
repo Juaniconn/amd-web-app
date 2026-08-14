@@ -7,14 +7,13 @@ import { auth } from "@/lib/auth/auth";
 import { PERMISSION_IDS, ROLES, type RoleId } from "@/lib/permissions/catalog";
 import { getDashboardSnapshot } from "@/server/services/dashboard";
 import { getEngineeringDashboardStats } from "@/server/services/engineering";
+import { getProductionDashboardStats } from "@/server/services/production-kpis";
 import { getQuoteDashboardStats } from "@/server/services/quotes";
 
 const UPCOMING = [
-  { label: "Ventas hoy", phase: "Fase 5+" },
-  { label: "Pedidos activos", phase: "Fase 5+" },
-  { label: "Órdenes de producción", phase: "Fase 5" },
+  { label: "Ventas hoy", phase: "Fase 10+" },
+  { label: "Pedidos activos", phase: "Fase 6+ UI" },
   { label: "Material por comprar", phase: "Fase 6" },
-  { label: "Máquinas ocupadas", phase: "Fase 5" },
   { label: "Entregas próximas", phase: "Fase 9" },
 ];
 
@@ -32,9 +31,15 @@ export default async function DashboardPage() {
   const canReadEngineering = snapshot.user.permissions.includes(
     PERMISSION_IDS.engineeringRead,
   );
+  const canReadProduction = snapshot.user.permissions.includes(
+    PERMISSION_IDS.productionView,
+  );
   const quoteStats = canReadQuotes ? await getQuoteDashboardStats() : null;
   const engineeringStats = canReadEngineering
     ? await getEngineeringDashboardStats()
+    : null;
+  const productionStats = canReadProduction
+    ? await getProductionDashboardStats()
     : null;
   const roleNames = snapshot.user.roles.map(
     (roleId) => ROLES[roleId as RoleId]?.name ?? roleId,
@@ -109,7 +114,31 @@ export default async function DashboardPage() {
             <KpiCard
               label="Diseños liberados"
               value={String(engineeringStats.released)}
-              hint="Listos para cotización final / OP"
+              hint="Listos para cotización final / OT"
+            />
+          </>
+        ) : null}
+        {productionStats ? (
+          <>
+            <KpiCard
+              label="OT activas"
+              value={String(productionStats.active)}
+              hint="OT no cerradas ni canceladas"
+            />
+            <KpiCard
+              label="OT retrasadas"
+              value={String(productionStats.delayed)}
+              hint="Fecha prometida vencida"
+            />
+            <KpiCard
+              label="Horas máquina"
+              value={String(productionStats.machineHours)}
+              hint="Registros cerrados"
+            />
+            <KpiCard
+              label="Horas hombre"
+              value={String(productionStats.laborHours)}
+              hint="Registros cerrados"
             />
           </>
         ) : null}

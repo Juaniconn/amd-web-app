@@ -25,13 +25,17 @@ import {
 import { listCustomerActivity } from "@/server/services/activity";
 import { getCustomerById } from "@/server/services/customers";
 import { listEngineeringByCustomer } from "@/server/services/engineering";
+import { listProductionByCustomer } from "@/server/services/production";
 import { listQuotesByCustomer } from "@/server/services/quotes";
 import { ENGINEERING_STATUS_LABELS, type EngineeringStatus } from "@/lib/engineering/status";
+import {
+  PRODUCTION_STATUS_LABELS,
+  type ProductionStatus,
+} from "@/lib/production/status";
 import { QUOTE_STATUS_LABELS } from "@/lib/quotes/status";
 
 const UPCOMING = [
-  { label: "Pedidos", phase: "Fase 5+" },
-  { label: "Órdenes de producción", phase: "Fase 5" },
+  { label: "Pedidos", phase: "Fase 6+ UI" },
   { label: "Facturación / ventas", phase: "Posterior" },
   { label: "Pagos", phase: "Posterior" },
   { label: "Documentos", phase: "Fase 3+" },
@@ -71,6 +75,12 @@ export default async function CustomerDetailPage({
   );
   const engineering = canReadEngineering
     ? await listEngineeringByCustomer(customer.id)
+    : [];
+  const canReadProduction = access.permissions.includes(
+    PERMISSION_IDS.productionView,
+  );
+  const productionOrders = canReadProduction
+    ? await listProductionByCustomer(customer.id)
     : [];
   const archived = Boolean(customer.deletedAt);
 
@@ -307,6 +317,58 @@ export default async function CustomerDetailPage({
                       </TableCell>
                       <TableCell>
                         {item.dueDate ? item.dueDate.toLocaleDateString("es-MX") : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {canReadProduction ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <CardTitle>Órdenes de trabajo</CardTitle>
+            {access.permissions.includes(PERMISSION_IDS.productionCreate) && !archived ? (
+              <Link href="/production/new" className={buttonVariants({ size: "sm" })}>
+                Nueva OT
+              </Link>
+            ) : null}
+          </CardHeader>
+          <CardContent>
+            {productionOrders.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Este cliente aún no tiene órdenes de trabajo.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>OT</TableHead>
+                    <TableHead>Pedido</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Prometida</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {productionOrders.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <Link
+                          href={`/production/${item.id}`}
+                          className="font-medium hover:underline"
+                        >
+                          {item.number}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{item.orderNumber}</TableCell>
+                      <TableCell>
+                        {PRODUCTION_STATUS_LABELS[item.status as ProductionStatus]}
+                      </TableCell>
+                      <TableCell>
+                        {item.promisedDate.toLocaleDateString("es-MX")}
                       </TableCell>
                     </TableRow>
                   ))}

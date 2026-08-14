@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,108 @@ function money(value: string | null, currency: string) {
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
+function ItemFields({
+  item,
+}: {
+  item?: Pick<
+    QuoteItem,
+    | "description"
+    | "partNumber"
+    | "quantity"
+    | "unit"
+    | "unitPrice"
+    | "discountPercent"
+    | "taxPercent"
+    | "estimatedCost"
+  >;
+}) {
+  return (
+    <>
+      <div className="space-y-1 md:col-span-2">
+        <Label htmlFor="description">Descripción</Label>
+        <Input
+          id="description"
+          name="description"
+          required
+          minLength={2}
+          defaultValue={item?.description}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="partNumber">N° parte</Label>
+        <Input
+          id="partNumber"
+          name="partNumber"
+          defaultValue={item?.partNumber ?? ""}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="quantity">Cantidad</Label>
+        <Input
+          id="quantity"
+          name="quantity"
+          type="number"
+          min="0"
+          step="0.0001"
+          required
+          defaultValue={item?.quantity ?? "1"}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="unit">Unidad</Label>
+        <Input id="unit" name="unit" defaultValue={item?.unit ?? "pza"} />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="unitPrice">Precio unitario</Label>
+        <Input
+          id="unitPrice"
+          name="unitPrice"
+          type="number"
+          min="0"
+          step="0.0001"
+          required
+          defaultValue={item?.unitPrice ?? "0"}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="discountPercent">Desc. %</Label>
+        <Input
+          id="discountPercent"
+          name="discountPercent"
+          type="number"
+          min="0"
+          max="100"
+          step="0.01"
+          defaultValue={item?.discountPercent ?? "0"}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="taxPercent">IVA %</Label>
+        <Input
+          id="taxPercent"
+          name="taxPercent"
+          type="number"
+          min="0"
+          max="100"
+          step="0.01"
+          defaultValue={item?.taxPercent ?? "16"}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="estimatedCost">Costo est.</Label>
+        <Input
+          id="estimatedCost"
+          name="estimatedCost"
+          type="number"
+          min="0"
+          step="0.0001"
+          defaultValue={item?.estimatedCost ?? "0"}
+        />
+      </div>
+    </>
+  );
+}
+
 export function QuoteItemsPanel({
   quoteId,
   currency,
@@ -59,8 +162,15 @@ export function QuoteItemsPanel({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editingItem = items.find((item) => item.id === editingId);
 
-  async function run(action: (formData: FormData) => Promise<{ ok: boolean; error?: string }>, formData: FormData) {
+  async function run(
+    action: (formData: FormData) => Promise<{ ok: boolean; error?: string }>,
+    formData: FormData,
+    onSuccess?: () => void,
+  ) {
     setPending(true);
     setError(null);
     const result = await action(formData);
@@ -69,7 +179,13 @@ export function QuoteItemsPanel({
       setError(result.error ?? "No se pudo guardar.");
       return;
     }
+    onSuccess?.();
     router.refresh();
+  }
+
+  function closeForms() {
+    setAdding(false);
+    setEditingId(null);
   }
 
   return (
@@ -94,7 +210,10 @@ export function QuoteItemsPanel({
           </TableHeader>
           <TableBody>
             {items.map((item) => (
-              <TableRow key={item.id}>
+              <TableRow
+                key={item.id}
+                className={editingId === item.id ? "bg-muted/40" : undefined}
+              >
                 <TableCell className="font-medium">{item.description}</TableCell>
                 <TableCell>{item.partNumber ?? "—"}</TableCell>
                 <TableCell className="text-right">
@@ -114,15 +233,39 @@ export function QuoteItemsPanel({
                 </TableCell>
                 {canWrite ? (
                   <TableCell className="text-right">
-                    <form
-                      action={(formData) => run(deleteQuoteItemAction, formData)}
-                    >
-                      <input type="hidden" name="id" value={item.id} />
-                      <input type="hidden" name="quoteId" value={quoteId} />
-                      <Button type="submit" variant="ghost" size="sm" disabled={pending}>
-                        Quitar
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => {
+                          setAdding(false);
+                          setError(null);
+                          setEditingId(item.id);
+                        }}
+                      >
+                        Editar
                       </Button>
-                    </form>
+                      <form
+                        action={(formData) =>
+                          run(deleteQuoteItemAction, formData, () => {
+                            if (editingId === item.id) setEditingId(null);
+                          })
+                        }
+                      >
+                        <input type="hidden" name="id" value={item.id} />
+                        <input type="hidden" name="quoteId" value={quoteId} />
+                        <Button
+                          type="submit"
+                          variant="ghost"
+                          size="sm"
+                          disabled={pending}
+                        >
+                          Quitar
+                        </Button>
+                      </form>
+                    </div>
                   </TableCell>
                 ) : null}
               </TableRow>
@@ -131,81 +274,71 @@ export function QuoteItemsPanel({
         </Table>
       )}
 
-      {canWrite ? (
+      {canWrite && adding ? (
         <form
+          key="add-item"
           className="grid gap-3 rounded-lg border p-4 md:grid-cols-4"
-          action={(formData) => run(addQuoteItemAction, formData)}
+          action={(formData) => run(addQuoteItemAction, formData, closeForms)}
         >
           <input type="hidden" name="quoteId" value={quoteId} />
-          <div className="space-y-1 md:col-span-2">
-            <Label htmlFor="description">Descripción</Label>
-            <Input id="description" name="description" required minLength={2} />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="partNumber">N° parte</Label>
-            <Input id="partNumber" name="partNumber" />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="quantity">Cantidad</Label>
-            <Input id="quantity" name="quantity" type="number" min="0" step="0.0001" required defaultValue="1" />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="unit">Unidad</Label>
-            <Input id="unit" name="unit" defaultValue="pza" />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="unitPrice">Precio unitario</Label>
-            <Input id="unitPrice" name="unitPrice" type="number" min="0" step="0.0001" required defaultValue="0" />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="discountPercent">Desc. %</Label>
-            <Input id="discountPercent" name="discountPercent" type="number" min="0" max="100" step="0.01" defaultValue="0" />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="taxPercent">IVA %</Label>
-            <Input id="taxPercent" name="taxPercent" type="number" min="0" max="100" step="0.01" defaultValue="16" />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="estimatedCost">Costo est.</Label>
-            <Input id="estimatedCost" name="estimatedCost" type="number" min="0" step="0.0001" defaultValue="0" />
-          </div>
-          <div className="flex items-end">
+          <p className="text-sm font-medium md:col-span-4">Nueva partida</p>
+          <ItemFields />
+          <div className="flex items-end gap-2 md:col-span-4">
             <Button type="submit" disabled={pending}>
               Agregar partida
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={closeForms}
+            >
+              Cancelar
             </Button>
           </div>
         </form>
       ) : null}
 
-      {canWrite && items.length > 0 ? (
-        <details className="rounded-lg border p-4">
-          <summary className="cursor-pointer text-sm font-medium">
-            Editar una partida existente
-          </summary>
-          <div className="mt-4 space-y-4">
-            {items.map((item) => (
-              <form
-                key={item.id}
-                className="grid gap-3 md:grid-cols-4"
-                action={(formData) => run(updateQuoteItemAction, formData)}
-              >
-                <input type="hidden" name="id" value={item.id} />
-                <input type="hidden" name="quoteId" value={quoteId} />
-                <Input name="description" defaultValue={item.description} className="md:col-span-2" />
-                <Input name="partNumber" defaultValue={item.partNumber ?? ""} placeholder="N° parte" />
-                <Input name="quantity" type="number" step="0.0001" defaultValue={item.quantity} />
-                <Input name="unit" defaultValue={item.unit} />
-                <Input name="unitPrice" type="number" step="0.0001" defaultValue={item.unitPrice} />
-                <Input name="discountPercent" type="number" step="0.01" defaultValue={item.discountPercent} />
-                <Input name="taxPercent" type="number" step="0.01" defaultValue={item.taxPercent} />
-                <Input name="estimatedCost" type="number" step="0.0001" defaultValue={item.estimatedCost} />
-                <Button type="submit" variant="outline" disabled={pending}>
-                  Guardar
-                </Button>
-              </form>
-            ))}
+      {canWrite && editingItem ? (
+        <form
+          key={editingItem.id}
+          className="grid gap-3 rounded-lg border p-4 md:grid-cols-4"
+          action={(formData) =>
+            run(updateQuoteItemAction, formData, closeForms)
+          }
+        >
+          <input type="hidden" name="id" value={editingItem.id} />
+          <input type="hidden" name="quoteId" value={quoteId} />
+          <p className="text-sm font-medium md:col-span-4">Editar partida</p>
+          <ItemFields item={editingItem} />
+          <div className="flex items-end gap-2 md:col-span-4">
+            <Button type="submit" disabled={pending}>
+              Guardar cambios
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={closeForms}
+            >
+              Cancelar
+            </Button>
           </div>
-        </details>
+        </form>
+      ) : null}
+
+      {canWrite && !adding && !editingId ? (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setError(null);
+            setAdding(true);
+          }}
+        >
+          <Plus />
+          Agregar partida
+        </Button>
       ) : null}
 
       {error ? (
