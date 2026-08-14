@@ -7,27 +7,44 @@ import {
 } from "./catalog";
 
 describe("RBAC catalog", () => {
-  it("gives the administrator every Phase 1 permission", () => {
+  it("gives the administrator every catalog permission", () => {
     for (const permission of Object.values(PERMISSION_IDS)) {
       expect(roleHasPermission(ROLE_IDS.administrador, permission)).toBe(true);
     }
   });
 
-  it("lets Dirección read dashboard, settings, users and roles, but not write users", () => {
+  it("lets Dirección read dashboard, settings, users, roles and customers, but not write", () => {
     expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.dashboardRead)).toBe(
       true,
     );
     expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.usersRead)).toBe(
       true,
     );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.customersRead)).toBe(
+      true,
+    );
     expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.usersWrite)).toBe(
+      false,
+    );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.customersWrite)).toBe(
       false,
     );
   });
 
-  it("limits operational roles to dashboard access in Phase 1", () => {
+  it("lets Ventas read and write customers", () => {
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.customersRead)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.customersWrite)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.usersWrite)).toBe(
+      false,
+    );
+  });
+
+  it("limits remaining operational roles to dashboard access", () => {
     const operational = [
-      ROLE_IDS.ventas,
       ROLE_IDS.compras,
       ROLE_IDS.produccion,
       ROLE_IDS.calidad,
@@ -36,6 +53,7 @@ describe("RBAC catalog", () => {
 
     for (const role of operational) {
       expect(roleHasPermission(role, PERMISSION_IDS.dashboardRead)).toBe(true);
+      expect(roleHasPermission(role, PERMISSION_IDS.customersRead)).toBe(false);
       expect(roleHasPermission(role, PERMISSION_IDS.usersWrite)).toBe(false);
       expect(roleHasPermission(role, PERMISSION_IDS.rolesRead)).toBe(false);
     }

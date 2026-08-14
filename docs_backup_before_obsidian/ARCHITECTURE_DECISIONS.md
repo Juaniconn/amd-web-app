@@ -520,6 +520,50 @@ AMD Operations / AI Engineering Agent
 
 ---
 
+# ADR-020 — CRM de Fase 2
+
+## Estado
+
+Aceptada
+
+## Contexto
+
+La Fase 2 requiere clientes, contactos, ficha de cliente e historial, sin avanzar a cotizaciones ni archivos.
+
+## Decisión
+
+- Se crean las tablas `customers`, `contacts` y `activity_logs`.
+- El historial del cliente usa `activity_logs` append-only (base de ADR-010).
+- Clientes y contactos usan soft delete (`deleted_at`).
+- El contacto principal es `contacts.is_primary`, con un único principal activo por cliente.
+- Permisos: `customers:read` y `customers:write`. Dirección lee; Ventas lee y escribe; Administrador tiene ambos.
+- Tipo de cliente: `industrial | maquiladora | comercial | otro`.
+- Estado: `activo | inactivo`.
+- TanStack Table queda aplazado; el listado usa la tabla shadcn existente con paginación en servidor.
+- React Hook Form se usa en el formulario de cliente.
+- Cloudflare R2, documentos y cotizaciones quedan fuera de esta fase.
+- Los clientes demo se identifican con `is_demo` y códigos `DEMO_CLIENTE_00N`.
+
+## Alternativas consideradas
+
+- Duplicar el contacto principal en columnas de `customers`: rechazado por redundancia.
+- Hard delete: rechazado para preservar historial y relaciones futuras.
+- Instalar TanStack Table ahora: innecesario para el primer listado.
+
+## Razón
+
+Cumple el alcance de Fase 2 reutilizando auth, layout, RBAC y Server Actions de Fase 1.
+
+## Fecha
+
+2026-08-13
+
+## Autor
+
+AMD Operations / AI Engineering Agent
+
+---
+
 # PLANTILLA PARA NUEVAS DECISIONES
 
 Cuando sea necesario registrar una nueva decisión, utilizar:

@@ -11,6 +11,7 @@ import {
   users,
 } from "@/db/schema";
 import { getUserAccess } from "@/server/services/access";
+import { countActiveCustomers } from "@/server/services/customers";
 
 export async function getDashboardSnapshot(userId: string) {
   const [userRow] = await db
@@ -35,6 +36,7 @@ export async function getDashboardSnapshot(userId: string) {
     .select({ value: count() })
     .from(sessions)
     .where(gt(sessions.expiresAt, new Date()));
+  const activeCustomers = await countActiveCustomers();
 
   return {
     user: {
@@ -46,6 +48,7 @@ export async function getDashboardSnapshot(userId: string) {
       users: Number(userCount.value),
       roles: Number(roleCount.value),
       activeSessions: Number(activeSessionCount.value),
+      activeCustomers,
     },
     generatedAt: new Date().toISOString(),
   };

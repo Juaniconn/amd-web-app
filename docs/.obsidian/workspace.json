@@ -4,17 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "9956ad0d2a8ffed0",
+        "id": "78a3ac64cfd3cb6f",
         "type": "tabs",
         "children": [
           {
-            "id": "0f9547b52f0878f4",
+            "id": "5dc32ec8c7e48a8a",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "type": "markdown",
+              "state": {
+                "file": "audits/phase-2-audit.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "phase-2-audit"
             }
           }
         ]
@@ -184,10 +188,34 @@
       "bases:Create new base": false
     }
   },
-  "active": "0f9547b52f0878f4",
+  "active": "5dc32ec8c7e48a8a",
   "lastOpenFiles": [
-    "Welcome.md",
+    "changelogs/phase-2.md",
+    "Procesos/Proceso Facturación.md",
+    "Procesos/Proceso Compras.md",
+    "Procesos/Proceso Producción.md",
+    "Procesos/Proceso Calidad.md",
+    "Procesos/Proceso RFQ.md",
+    "Procesos/Proceso Entregas.md",
+    "audits/phase-2-audit.md",
+    "audits",
+    "executive-summary/phase-2-summary.md",
+    "executive-summary",
+    "modules/crm.md",
+    "modules/production.md",
+    "modules/rfq.md",
+    "modules/inventory.md",
+    "modules/quality.md",
+    "modules/dashboard.md",
+    "modules/shipping.md",
+    "modules/purchasing.md",
+    "modules",
+    "changelogs/phase-1.md",
+    "changelogs",
+    "roadmap.md",
     "ARCHITECTURE_DECISIONS.md",
+    "Procesos",
+    "Welcome.md",
     "AMD_OPERATIONS_TECHNICAL_SPEC.md",
     "AMD_OPERATIONS_BUSINESS_SPEC.md"
   ]

@@ -5,6 +5,7 @@ import postgres from "postgres";
 import { hashPassword } from "better-auth/crypto";
 import { accounts, permissions, rolePermissions, roles, userRoles, users } from "./schema";
 import { PERMISSIONS, ROLES } from "../lib/permissions/catalog";
+import { seedCrmDemo } from "./seed-crm";
 
 config({ path: ".env.local" });
 config();
@@ -117,7 +118,15 @@ async function seed() {
       console.log(`Admin user ${adminEmail} already exists`);
     }
 
-    console.log("Foundation seed completed.");
+    const [admin] = await db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(eq(users.email, adminEmail))
+      .limit(1);
+
+    await seedCrmDemo(db, admin ?? null);
+
+    console.log("Foundation and CRM seed completed.");
   } finally {
     await client.end({ timeout: 5 });
   }

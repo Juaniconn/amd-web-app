@@ -42,7 +42,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Usuarios"
           value={String(snapshot.foundation.users)}
@@ -58,6 +58,13 @@ export default async function DashboardPage() {
           value={String(snapshot.foundation.activeSessions)}
           hint="Sesiones con expires_at vigente"
         />
+        {snapshot.user.permissions.includes(PERMISSION_IDS.customersRead) ? (
+          <KpiCard
+            label="Clientes activos"
+            value={String(snapshot.foundation.activeCustomers)}
+            hint="Clientes con estado activo, no archivados"
+          />
+        ) : null}
       </div>
 
       <Card>

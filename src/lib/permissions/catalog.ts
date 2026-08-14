@@ -17,6 +17,8 @@ export const PERMISSION_IDS = {
   usersWrite: "users:write",
   rolesRead: "roles:read",
   rolesWrite: "roles:write",
+  customersRead: "customers:read",
+  customersWrite: "customers:write",
 } as const;
 
 export type PermissionId = (typeof PERMISSION_IDS)[keyof typeof PERMISSION_IDS];
@@ -38,12 +40,17 @@ export const ROLES: Record<
       PERMISSION_IDS.settingsRead,
       PERMISSION_IDS.usersRead,
       PERMISSION_IDS.rolesRead,
+      PERMISSION_IDS.customersRead,
     ],
   },
   ventas: {
     name: "Ventas",
-    description: "Clientes, cotizaciones y pedidos (módulos posteriores).",
-    permissions: [PERMISSION_IDS.dashboardRead],
+    description: "Clientes, cotizaciones y pedidos.",
+    permissions: [
+      PERMISSION_IDS.dashboardRead,
+      PERMISSION_IDS.customersRead,
+      PERMISSION_IDS.customersWrite,
+    ],
   },
   compras: {
     name: "Compras",
@@ -94,6 +101,14 @@ export const PERMISSIONS: Record<
   "roles:write": {
     name: "Gestionar roles",
     description: "Modificar la matriz de permisos. Reservado al administrador.",
+  },
+  "customers:read": {
+    name: "Ver clientes",
+    description: "Listar clientes y abrir su ficha.",
+  },
+  "customers:write": {
+    name: "Gestionar clientes",
+    description: "Crear, editar y archivar clientes y contactos.",
   },
 };
 

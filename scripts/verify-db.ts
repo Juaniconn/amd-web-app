@@ -20,6 +20,18 @@ async function main() {
     const permissions = await sql<{ n: number }[]>`
       SELECT count(*)::int AS n FROM permissions
     `;
+    const customerCounts = await sql<{ n: number; active: number }[]>`
+      SELECT
+        count(*)::int AS n,
+        count(*) FILTER (WHERE deleted_at IS NULL AND status = 'activo')::int AS active
+      FROM customers
+    `;
+    const contactCount = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM contacts WHERE deleted_at IS NULL
+    `;
+    const activityCount = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM activity_logs
+    `;
     const accounts = await sql<{ password: string }[]>`
       SELECT password FROM accounts WHERE provider_id = 'credential'
     `;
@@ -27,6 +39,9 @@ async function main() {
     console.log("users:", users);
     console.log("roles:", roles.map((row) => row.id).join(", "));
     console.log("permissions:", permissions[0]?.n);
+    console.log("customers:", customerCounts[0]?.n, "active:", customerCounts[0]?.active);
+    console.log("contacts:", contactCount[0]?.n);
+    console.log("activity_logs:", activityCount[0]?.n);
     console.log("credential accounts:", accounts.length);
 
     const password = process.env.SEED_ADMIN_PASSWORD;

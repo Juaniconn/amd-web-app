@@ -16,6 +16,8 @@ type AppShellProps = {
 
 const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
+  "/customers": "Clientes",
+  "/customers/new": "Nuevo cliente",
   "/settings/users": "Usuarios",
   "/settings/roles": "Roles",
 };
@@ -30,7 +32,11 @@ export function AppShell({
   const pathname = usePathname();
   const title =
     TITLES[pathname] ??
-    (pathname.startsWith("/settings") ? "Configuración" : "AMD Operations");
+    (pathname.startsWith("/customers")
+      ? "Cliente"
+      : pathname.startsWith("/settings")
+        ? "Configuración"
+        : "AMD Operations");
 
   return (
     <div className="flex min-h-full bg-background">

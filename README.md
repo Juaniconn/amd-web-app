@@ -1,6 +1,6 @@
 # AMD Operations
 
-Plataforma operativa interna de AMD México. Fase 1 — Fundación.
+Plataforma operativa interna de AMD México. Fase 2 — CRM.
 
 ## Requisitos
 
