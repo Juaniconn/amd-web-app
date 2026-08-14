@@ -6,3 +6,4 @@ export * from "./quotes";
 export * from "./documents";
 export * from "./engineering";
 export * from "./production";
+export * from "./inventory";

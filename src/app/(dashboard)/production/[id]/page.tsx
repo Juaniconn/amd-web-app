@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ProductionMaterialsPanel } from "@/features/inventory/production-materials-panel";
 import { ProductionAssignPanel } from "@/features/production/production-assign-panel";
 import { ProductionReworkPanel } from "@/features/production/production-rework-panel";
 import { ProductionStatusActions } from "@/features/production/production-status-actions";
@@ -27,6 +28,10 @@ import {
   listDowntimeReasons,
   listUsersForProduction,
 } from "@/server/services/production";
+import {
+  listActiveMaterialsForSelect,
+  listOrderMaterials,
+} from "@/server/services/inventory";
 import { listMachines, listWorkCenters } from "@/server/services/production-catalogs";
 import {
   listDowntime,
@@ -65,6 +70,8 @@ export default async function ProductionDetailPage({
   const laborEntries = await listLaborHours(order.id);
   const downtime = await listDowntime(order.id);
   const rework = await listRework(order.id);
+  const orderMaterials = await listOrderMaterials(order.id);
+  const catalogMaterials = await listActiveMaterialsForSelect();
   const packageDocs =
     order.origin === "rfq_ingenieria" && order.engineeringRequestId
       ? await listEngineeringDocuments(order.engineeringRequestId)
@@ -177,6 +184,24 @@ export default async function ProductionDetailPage({
           <Field label="Máquina" value={order.machineName} />
           <Field label="Operador" value={order.operatorName} />
           <Field label="Observaciones" value={order.notes} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Material / reservas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProductionMaterialsPanel
+            productionOrderId={order.id}
+            lines={orderMaterials}
+            materials={catalogMaterials}
+            canReserve={access.permissions.includes(PERMISSION_IDS.inventoryReserve)}
+            canConsume={
+              access.permissions.includes(PERMISSION_IDS.inventoryConsume) &&
+              canLogProductionTime(status)
+            }
+          />
         </CardContent>
       </Card>
 

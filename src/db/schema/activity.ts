@@ -19,6 +19,7 @@ export const activityActionEnum = pgEnum("activity_action", [
   "closed",
   "downtime_logged",
   "rework_logged",
+  "stock_moved",
 ]);
 
 export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
@@ -38,6 +39,9 @@ export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "labor_hours",
   "production_downtime",
   "production_rework",
+  "material",
+  "inventory_movement",
+  "warehouse",
 ]);
 
 export const activityLogs = pgTable(

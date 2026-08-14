@@ -7,6 +7,7 @@ import { accounts, permissions, rolePermissions, roles, userRoles, users } from 
 import { PERMISSIONS, ROLES } from "../lib/permissions/catalog";
 import { seedCrmDemo } from "./seed-crm";
 import { seedEngineeringDemo } from "./seed-engineering";
+import { seedInventoryDemo } from "./seed-inventory";
 import { seedProductionDemo } from "./seed-production";
 import { seedQuotesDemo } from "./seed-quotes";
 
@@ -131,8 +132,11 @@ async function seed() {
     await seedQuotesDemo(db, admin ?? null);
     await seedEngineeringDemo(db, admin ?? null);
     await seedProductionDemo(db, admin ?? null);
+    await seedInventoryDemo(db, admin ?? null);
 
-    console.log("Foundation, CRM, quotes, engineering and production seed completed.");
+    console.log(
+      "Foundation, CRM, quotes, engineering, production and inventory seed completed.",
+    );
   } finally {
     await client.end({ timeout: 5 });
   }

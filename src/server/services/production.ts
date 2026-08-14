@@ -52,6 +52,11 @@ import type {
 } from "@/lib/validation/production";
 import { recordActivity } from "@/server/services/activity";
 import type { Actor } from "@/server/services/customers";
+import {
+  orderHasUncoveredMaterial,
+  receiveFinishedGoodsForOrder,
+  releaseReservationsForOrder,
+} from "@/server/services/inventory";
 import { nextDocumentNumber } from "@/server/services/numbering";
 import { assertMachineBelongsToCenter } from "@/server/services/production-catalogs";
 
@@ -410,6 +415,16 @@ export async function changeProductionStatus(
     );
   }
 
+  if (status === "programada" || status === "en_produccion") {
+    if (await orderHasUncoveredMaterial(row.id)) {
+      throw new AppError(
+        "Hay material requerido sin reservar. Completa la reserva o pasa la OT a Esperando Material.",
+        "MATERIAL_SHORTAGE",
+        409,
+      );
+    }
+  }
+
   if (pauseReasonId) {
     const [reason] = await db
       .select({ id: downtimeReasons.id, active: downtimeReasons.active })
@@ -500,6 +515,14 @@ export async function changeProductionStatus(
         startedAt: now,
         createdBy: actor.userId,
       });
+    }
+
+    if (status === "cancelada") {
+      await releaseReservationsForOrder(tx, row.id, actor);
+    }
+
+    if (status === "terminada") {
+      await receiveFinishedGoodsForOrder(tx, row.id, actor);
     }
 
     await recordActivity(tx, {

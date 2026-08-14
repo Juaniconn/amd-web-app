@@ -59,6 +59,15 @@ async function main() {
     const workCenterCount = await sql<{ n: number }[]>`
       SELECT count(*)::int AS n FROM work_centers
     `;
+    const materialCount = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM materials
+    `;
+    const warehouseCount = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM warehouses
+    `;
+    const movementCount = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM inventory_movements
+    `;
     const accounts = await sql<{ password: string }[]>`
       SELECT password FROM accounts WHERE provider_id = 'credential'
     `;
@@ -78,6 +87,9 @@ async function main() {
     console.log("production_orders:", productionCount[0]?.n);
     console.log("machines:", machineCount[0]?.n);
     console.log("work_centers:", workCenterCount[0]?.n);
+    console.log("warehouses:", warehouseCount[0]?.n);
+    console.log("materials:", materialCount[0]?.n);
+    console.log("inventory_movements:", movementCount[0]?.n);
     console.log("credential accounts:", accounts.length);
 
     const password = process.env.SEED_ADMIN_PASSWORD;

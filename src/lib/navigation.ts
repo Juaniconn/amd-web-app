@@ -48,7 +48,13 @@ export const NAV_ITEMS: NavItem[] = [
     permission: PERMISSION_IDS.productionView,
     phase: "Fase 5",
   },
-  { href: "/inventory", label: "Inventario", enabled: false, phase: "Fase 6" },
+  {
+    href: "/inventory",
+    label: "Inventario",
+    enabled: true,
+    permission: PERMISSION_IDS.inventoryRead,
+    phase: "Fase 6",
+  },
   { href: "/purchasing", label: "Compras", enabled: false, phase: "Fase 7" },
   { href: "/suppliers", label: "Proveedores", enabled: false, phase: "Fase 7" },
   {

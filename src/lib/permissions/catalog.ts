@@ -38,6 +38,11 @@ export const PERMISSION_IDS = {
   productionAssignMachine: "production:assign_machine",
   productionAssignOperator: "production:assign_operator",
   qualityRelease: "quality:release",
+  inventoryRead: "inventory:read",
+  inventoryWrite: "inventory:write",
+  inventoryAdjust: "inventory:adjust",
+  inventoryReserve: "inventory:reserve",
+  inventoryConsume: "inventory:consume",
 } as const;
 
 export type PermissionId = (typeof PERMISSION_IDS)[keyof typeof PERMISSION_IDS];
@@ -50,6 +55,14 @@ const ENGINEERING_ALL: PermissionId[] = [
   PERMISSION_IDS.engineeringApprove,
   PERMISSION_IDS.engineeringRelease,
   PERMISSION_IDS.engineeringDelete,
+];
+
+const INVENTORY_ALL: PermissionId[] = [
+  PERMISSION_IDS.inventoryRead,
+  PERMISSION_IDS.inventoryWrite,
+  PERMISSION_IDS.inventoryAdjust,
+  PERMISSION_IDS.inventoryReserve,
+  PERMISSION_IDS.inventoryConsume,
 ];
 
 const PRODUCTION_ALL: PermissionId[] = [
@@ -84,6 +97,7 @@ export const ROLES: Record<
       PERMISSION_IDS.quotesRead,
       PERMISSION_IDS.engineeringRead,
       PERMISSION_IDS.productionView,
+      PERMISSION_IDS.inventoryRead,
     ],
   },
   ventas: {
@@ -99,6 +113,7 @@ export const ROLES: Record<
       PERMISSION_IDS.engineeringCreate,
       PERMISSION_IDS.engineeringApprove,
       PERMISSION_IDS.productionView,
+      PERMISSION_IDS.inventoryRead,
     ],
   },
   ingenieria: {
@@ -108,12 +123,13 @@ export const ROLES: Record<
       PERMISSION_IDS.dashboardRead,
       ...ENGINEERING_ALL,
       PERMISSION_IDS.productionView,
+      PERMISSION_IDS.inventoryRead,
     ],
   },
   compras: {
     name: "Compras",
-    description: "Proveedores, compras e inventario (módulos posteriores).",
-    permissions: [PERMISSION_IDS.dashboardRead],
+    description: "Proveedores, compras e inventario.",
+    permissions: [PERMISSION_IDS.dashboardRead, PERMISSION_IDS.inventoryRead],
   },
   produccion: {
     name: "Producción",
@@ -122,6 +138,9 @@ export const ROLES: Record<
       PERMISSION_IDS.dashboardRead,
       PERMISSION_IDS.engineeringRead,
       ...PRODUCTION_ALL,
+      PERMISSION_IDS.inventoryRead,
+      PERMISSION_IDS.inventoryReserve,
+      PERMISSION_IDS.inventoryConsume,
     ],
   },
   calidad: {
@@ -132,12 +151,17 @@ export const ROLES: Record<
       PERMISSION_IDS.engineeringRead,
       PERMISSION_IDS.productionView,
       PERMISSION_IDS.qualityRelease,
+      PERMISSION_IDS.inventoryRead,
     ],
   },
   almacen: {
     name: "Almacén",
-    description: "Inventario, entradas, salidas y recepción (módulos posteriores).",
-    permissions: [PERMISSION_IDS.dashboardRead],
+    description: "Inventario, entradas, salidas, ajustes y existencias. Consulta OT para reservar y entregar a piso.",
+    permissions: [
+      PERMISSION_IDS.dashboardRead,
+      PERMISSION_IDS.productionView,
+      ...INVENTORY_ALL,
+    ],
   },
 };
 
@@ -249,6 +273,26 @@ export const PERMISSIONS: Record<
   "quality:release": {
     name: "Liberar calidad",
     description: "Cierre físico del producto. Pasa la OT de Calidad a Terminada.",
+  },
+  "inventory:read": {
+    name: "Ver inventario",
+    description: "Consultar catálogo, existencias, movimientos, reservas y KPIs.",
+  },
+  "inventory:write": {
+    name: "Gestionar inventario",
+    description: "Crear y editar materiales, registrar entradas y salidas.",
+  },
+  "inventory:adjust": {
+    name: "Ajustar inventario",
+    description: "Corregir existencias con motivo obligatorio.",
+  },
+  "inventory:reserve": {
+    name: "Reservar material",
+    description: "Reservar o liberar material contra una orden de trabajo.",
+  },
+  "inventory:consume": {
+    name: "Consumir material",
+    description: "Registrar consumo de producción contra una reserva de OT.",
   },
 };
 

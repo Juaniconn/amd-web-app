@@ -39,6 +39,9 @@ yarn-error.log*
 # local postgres data (embedded)
 .data/
 
+# Obsidian vault (symlink to amd-docs). Tailwind/Turbopack must not walk /mnt/c.
+/docs
+
 # vercel
 .vercel
 

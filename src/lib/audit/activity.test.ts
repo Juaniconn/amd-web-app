@@ -46,6 +46,17 @@ describe("activitySummary", () => {
     ).toBe("Supervisor Piso creó la orden de trabajo OP-2026-00001.");
   });
 
+  it("describes an inventory movement", () => {
+    expect(
+      activitySummary({
+        actorName: "Almacén",
+        action: "stock_moved",
+        entityType: "inventory_movement",
+        entityLabel: "Entrada 10 kg · DEMO_MAT_001",
+      }),
+    ).toBe("Almacén registró un movimiento de inventario en Entrada 10 kg · DEMO_MAT_001.");
+  });
+
   it("describes a quote conversion", () => {
     expect(
       activitySummary({

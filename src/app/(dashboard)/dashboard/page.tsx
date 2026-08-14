@@ -7,13 +7,14 @@ import { auth } from "@/lib/auth/auth";
 import { PERMISSION_IDS, ROLES, type RoleId } from "@/lib/permissions/catalog";
 import { getDashboardSnapshot } from "@/server/services/dashboard";
 import { getEngineeringDashboardStats } from "@/server/services/engineering";
+import { getInventoryDashboardStats } from "@/server/services/inventory-kpis";
 import { getProductionDashboardStats } from "@/server/services/production-kpis";
 import { getQuoteDashboardStats } from "@/server/services/quotes";
 
 const UPCOMING = [
   { label: "Ventas hoy", phase: "Fase 10+" },
   { label: "Pedidos activos", phase: "Fase 6+ UI" },
-  { label: "Material por comprar", phase: "Fase 6" },
+  { label: "Material por comprar", phase: "Fase 7" },
   { label: "Entregas próximas", phase: "Fase 9" },
 ];
 
@@ -34,12 +35,18 @@ export default async function DashboardPage() {
   const canReadProduction = snapshot.user.permissions.includes(
     PERMISSION_IDS.productionView,
   );
+  const canReadInventory = snapshot.user.permissions.includes(
+    PERMISSION_IDS.inventoryRead,
+  );
   const quoteStats = canReadQuotes ? await getQuoteDashboardStats() : null;
   const engineeringStats = canReadEngineering
     ? await getEngineeringDashboardStats()
     : null;
   const productionStats = canReadProduction
     ? await getProductionDashboardStats()
+    : null;
+  const inventoryStats = canReadInventory
+    ? await getInventoryDashboardStats()
     : null;
   const roleNames = snapshot.user.roles.map(
     (roleId) => ROLES[roleId as RoleId]?.name ?? roleId,
@@ -139,6 +146,20 @@ export default async function DashboardPage() {
               label="Horas hombre"
               value={String(productionStats.laborHours)}
               hint="Registros cerrados"
+            />
+          </>
+        ) : null}
+        {inventoryStats ? (
+          <>
+            <KpiCard
+              label="Crítico bajo stock"
+              value={String(inventoryStats.criticalLowStock)}
+              hint="Material crítico con disponible ≤ mínimo"
+            />
+            <KpiCard
+              label="Movimientos del día"
+              value={String(inventoryStats.movementsToday)}
+              hint="Entradas, salidas, reservas, consumos y ajustes"
             />
           </>
         ) : null}

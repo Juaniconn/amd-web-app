@@ -16,6 +16,7 @@ export const ACTIVITY_ACTIONS = [
   "closed",
   "downtime_logged",
   "rework_logged",
+  "stock_moved",
 ] as const;
 
 export const ACTIVITY_ENTITY_TYPES = [
@@ -35,6 +36,9 @@ export const ACTIVITY_ENTITY_TYPES = [
   "labor_hours",
   "production_downtime",
   "production_rework",
+  "material",
+  "inventory_movement",
+  "warehouse",
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
@@ -173,6 +177,17 @@ export function activitySummary({
       return `${who} registró un retrabajo en ${label}.`;
     }
     if (action === "released") return `${who} liberó el retrabajo ${label}.`;
+  }
+
+  if (entityType === "material") {
+    if (action === "created") return `${who} creó el material ${label}.`;
+    if (action === "updated") return `${who} actualizó el material ${label}.`;
+  }
+
+  if (entityType === "inventory_movement") {
+    if (action === "stock_moved" || action === "created") {
+      return `${who} registró un movimiento de inventario en ${label}.`;
+    }
   }
 
   return `${who} registró ${action} sobre ${label}.`;

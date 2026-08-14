@@ -2,7 +2,13 @@ import "server-only";
 
 import { desc, like, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { engineeringRequests, orders, productionOrders, quotes } from "@/db/schema";
+import {
+  engineeringRequests,
+  materials,
+  orders,
+  productionOrders,
+  quotes,
+} from "@/db/schema";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -17,6 +23,7 @@ const TABLES = {
     table: productionOrders,
     column: productionOrders.number,
   },
+  materials: { table: materials, column: materials.code },
 } as const;
 
 export async function nextDocumentNumber(

@@ -2,6 +2,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Vault Obsidian (symlink docs/ → amd-docs). No escanear: Turbopack paniquea al salir a /mnt/c. */
+@source not "../../docs";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
