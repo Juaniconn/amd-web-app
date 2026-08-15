@@ -9,6 +9,7 @@ import { seedCrmDemo } from "./seed-crm";
 import { seedEngineeringDemo } from "./seed-engineering";
 import { seedInventoryDemo } from "./seed-inventory";
 import { seedProductionDemo } from "./seed-production";
+import { seedProjectsDemo } from "./seed-projects";
 import { seedQuotesDemo } from "./seed-quotes";
 
 config({ path: ".env.local" });
@@ -133,9 +134,10 @@ async function seed() {
     await seedEngineeringDemo(db, admin ?? null);
     await seedProductionDemo(db, admin ?? null);
     await seedInventoryDemo(db, admin ?? null);
+    await seedProjectsDemo(db, admin ?? null);
 
     console.log(
-      "Foundation, CRM, quotes, engineering, production and inventory seed completed.",
+      "Foundation, CRM, quotes, engineering, production, inventory, orders and projects seed completed.",
     );
   } finally {
     await client.end({ timeout: 5 });

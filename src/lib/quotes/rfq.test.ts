@@ -21,14 +21,14 @@ describe("RFQ engineering fields", () => {
     expect(defaultEngineeringType("solo_fabricacion")).toBe(null);
   });
 
-  it("allows optional engineering on fabrication-only RFQs", () => {
-    const optional = resolveQuoteEngineeringFields({
+  it("blocks engineering on fabrication-only RFQs", () => {
+    const blocked = resolveQuoteEngineeringFields({
       rfqType: "solo_fabricacion",
       requiresEngineering: true,
       engineeringType: "manufacturabilidad",
     });
-    expect(optional.requiresEngineering).toBe(true);
-    expect(optional.engineeringType).toBe("manufacturabilidad");
+    expect(blocked.requiresEngineering).toBe(false);
+    expect(blocked.engineeringType).toBe(null);
   });
 
   it("clears engineering type when not required", () => {

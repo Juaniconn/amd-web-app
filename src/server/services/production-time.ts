@@ -220,7 +220,7 @@ export async function createRework(input: CreateReworkInput, actor: Actor) {
     partNumber: input.partNumber ?? op.partNumber,
     quantity: String(input.quantity),
     scrapQuantity: String(input.scrapQuantity),
-    rootCause: input.rootCause,
+    rootCause: input.rootCause ?? "Retrabajo de piso",
     laborHours: String(input.laborHours),
     machineHours: String(input.machineHours),
     notes: input.notes ?? null,

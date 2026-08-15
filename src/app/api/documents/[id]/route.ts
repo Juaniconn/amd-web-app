@@ -5,7 +5,10 @@ import { getStorage } from "@/lib/storage";
 import { AppError } from "@/lib/errors";
 import { userHasPermission } from "@/server/services/access";
 import { getDocumentForDownload } from "@/server/services/documents";
-import { quoteHasProductionOrder } from "@/server/services/production";
+import {
+  engineeringRequestHasProductionOrder,
+  quoteHasProductionOrder,
+} from "@/server/services/production";
 
 export async function GET(
   _request: Request,
@@ -41,6 +44,43 @@ export async function GET(
       const allowed = await userHasPermission(
         session.user.id,
         PERMISSION_IDS.engineeringRead,
+      );
+      if (!allowed) {
+        const canReadQuotes = await userHasPermission(
+          session.user.id,
+          PERMISSION_IDS.quotesRead,
+        );
+        const canViewProduction = await userHasPermission(
+          session.user.id,
+          PERMISSION_IDS.productionView,
+        );
+        const linked = canViewProduction
+          ? await engineeringRequestHasProductionOrder(doc.entityId)
+          : false;
+        if (!canReadQuotes && !linked) {
+          return NextResponse.json({ error: "Sin permiso." }, { status: 403 });
+        }
+      }
+    } else if (doc.entityType === "order") {
+      const allowed = await userHasPermission(
+        session.user.id,
+        PERMISSION_IDS.ordersView,
+      );
+      if (!allowed) {
+        return NextResponse.json({ error: "Sin permiso." }, { status: 403 });
+      }
+    } else if (doc.entityType === "project") {
+      const allowed = await userHasPermission(
+        session.user.id,
+        PERMISSION_IDS.projectsView,
+      );
+      if (!allowed) {
+        return NextResponse.json({ error: "Sin permiso." }, { status: 403 });
+      }
+    } else if (doc.entityType === "production_order") {
+      const allowed = await userHasPermission(
+        session.user.id,
+        PERMISSION_IDS.productionView,
       );
       if (!allowed) {
         return NextResponse.json({ error: "Sin permiso." }, { status: 403 });

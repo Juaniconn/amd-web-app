@@ -9,6 +9,7 @@ import {
   ilike,
   inArray,
   lt,
+  ne,
   or,
 } from "drizzle-orm";
 import { db } from "@/db";
@@ -28,6 +29,7 @@ import {
   workCenters,
 } from "@/db/schema";
 import { pickChangedFields } from "@/lib/audit/activity";
+import { canIssueOtFromOrderStatus, type OrderStatus } from "@/lib/orders/status";
 import { AppError } from "@/lib/errors";
 import type { EngineeringStatus } from "@/lib/engineering/status";
 import {
@@ -35,6 +37,7 @@ import {
   type ProductionPriority,
 } from "@/lib/production/catalog";
 import { canCreateProductionOrder, type OrderOrigin } from "@/lib/production/gates";
+import { isManufacturingItem } from "@/lib/quotes/items";
 import type { RfqType } from "@/lib/quotes/rfq";
 import {
   assertProductionTransition,
@@ -57,6 +60,7 @@ import {
   receiveFinishedGoodsForOrder,
   releaseReservationsForOrder,
 } from "@/server/services/inventory";
+import { attachDocumentsToProductionOrder } from "@/server/services/documents";
 import { nextDocumentNumber } from "@/server/services/numbering";
 import { assertMachineBelongsToCenter } from "@/server/services/production-catalogs";
 
@@ -87,6 +91,7 @@ async function loadCommercialOrder(orderId: string) {
       quoteNumber: quotes.number,
       rfqType: quotes.rfqType,
       origin: orders.origin,
+      status: orders.status,
       engineeringRequestId: orders.engineeringRequestId,
       engineeringStatus: engineeringRequests.status,
       engineeringNumber: engineeringRequests.number,
@@ -150,6 +155,7 @@ export async function listOrdersEligibleForProduction() {
       quoteNumber: quotes.number,
       rfqType: quotes.rfqType,
       origin: orders.origin,
+      status: orders.status,
       engineeringRequestId: orders.engineeringRequestId,
       engineeringStatus: engineeringRequests.status,
       engineeringNumber: engineeringRequests.number,
@@ -163,13 +169,14 @@ export async function listOrdersEligibleForProduction() {
     )
     .orderBy(desc(orders.createdAt));
 
-  return rows.filter((row) =>
-    canCreateProductionOrder({
+  return rows.filter((row) => {
+    if (!canIssueOtFromOrderStatus(row.status as OrderStatus)) return false;
+    return canCreateProductionOrder({
       origin: row.origin as OrderOrigin,
       rfqType: row.rfqType as RfqType,
       engineeringStatus: (row.engineeringStatus as EngineeringStatus | null) ?? null,
-    }).ok,
-  );
+    }).ok;
+  });
 }
 
 export async function listOrderItems(orderId: string) {
@@ -177,6 +184,7 @@ export async function listOrderItems(orderId: string) {
     .select({
       id: orderItems.id,
       position: orderItems.position,
+      kind: orderItems.kind,
       description: orderItems.description,
       partNumber: orderItems.partNumber,
       quantity: orderItems.quantity,
@@ -185,6 +193,42 @@ export async function listOrderItems(orderId: string) {
     .from(orderItems)
     .where(eq(orderItems.orderId, orderId))
     .orderBy(asc(orderItems.position));
+}
+
+async function loadOrderItemForOt(orderId: string, orderItemId: string) {
+  const [item] = await db
+    .select()
+    .from(orderItems)
+    .where(and(eq(orderItems.id, orderItemId), eq(orderItems.orderId, orderId)))
+    .limit(1);
+  if (!item) {
+    throw new AppError("La partida no pertenece a este pedido.", "ORDER_ITEM_NOT_FOUND", 404);
+  }
+  if (!isManufacturingItem(item.kind)) {
+    throw new AppError(
+      "El servicio de ingeniería no genera OT. Se cobra en la cotización.",
+      "ENGINEERING_SERVICE_NO_OT",
+      409,
+    );
+  }
+  const [existing] = await db
+    .select({ id: productionOrders.id, status: productionOrders.status })
+    .from(productionOrders)
+    .where(
+      and(
+        eq(productionOrders.orderItemId, item.id),
+        ne(productionOrders.status, "cancelada"),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    throw new AppError(
+      "Esta partida ya tiene una OT. Una pieza = una orden de trabajo.",
+      "ORDER_ITEM_HAS_OT",
+      409,
+    );
+  }
+  return item;
 }
 
 export async function createProductionOrder(
@@ -201,6 +245,15 @@ export async function createProductionOrder(
   if (!gate.ok) {
     throw new AppError(gate.message, gate.code, 409);
   }
+  if (!canIssueOtFromOrderStatus(commercial.status as OrderStatus)) {
+    throw new AppError(
+      "Solo un pedido aprobado o en producción puede generar OT.",
+      "ORDER_NOT_APPROVED",
+      409,
+    );
+  }
+
+  const item = await loadOrderItemForOt(input.orderId, input.orderItemId);
 
   if (input.machineId) {
     if (!input.workCenterId) {
@@ -215,22 +268,22 @@ export async function createProductionOrder(
 
   const created = await db.transaction(async (tx) => {
     const year = new Date().getFullYear();
-    const number = await nextDocumentNumber(tx, "production_orders", `OP-${year}-`);
+    const number = await nextDocumentNumber(tx, "production_orders", `OT-${year}-`);
     const id = crypto.randomUUID();
     await tx.insert(productionOrders).values({
       id,
       number,
       orderId: commercial.id,
-      orderItemId: input.orderItemId ?? null,
+      orderItemId: item.id,
       customerId: commercial.customerId,
       quoteId: commercial.quoteId,
       engineeringRequestId: commercial.engineeringRequestId,
       origin: commercial.origin,
       routeId: input.routeId ?? null,
-      description: input.description,
-      partNumber: input.partNumber ?? null,
-      quantity: String(input.quantity),
-      unit: input.unit,
+      description: input.description || item.description,
+      partNumber: input.partNumber ?? item.partNumber,
+      quantity: String(input.quantity || item.quantity),
+      unit: input.unit || item.unit,
       promisedDate: input.promisedDate,
       priority: input.priority,
       notes: input.notes ?? null,
@@ -243,6 +296,23 @@ export async function createProductionOrder(
     });
     if (input.routeId) {
       await instantiateRoute(tx, id, input.routeId);
+    }
+    await attachDocumentsToProductionOrder(
+      tx,
+      id,
+      input.documentIds ?? [],
+      actor,
+      {
+        quoteId: commercial.quoteId,
+        orderId: commercial.id,
+        engineeringRequestId: commercial.engineeringRequestId,
+      },
+    );
+    if (input.machineId && input.operatorUserId) {
+      await tx
+        .update(machines)
+        .set({ status: "en_produccion", updatedAt: new Date() })
+        .where(eq(machines.id, input.machineId));
     }
     await recordActivity(tx, {
       actorUserId: actor.userId,
@@ -260,6 +330,28 @@ export async function createProductionOrder(
         promisedDate: input.promisedDate.toISOString(),
       },
     });
+    if (commercial.status === "aprobado") {
+      await tx
+        .update(orders)
+        .set({
+          status: "en_produccion",
+          updatedBy: actor.userId,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, commercial.id));
+      await recordActivity(tx, {
+        actorUserId: actor.userId,
+        actorName: actor.name,
+        action: "status_changed",
+        entityType: "order",
+        entityId: commercial.id,
+        entityLabel: `${commercial.number} → En producción`,
+        parentEntityType: "customer",
+        parentEntityId: commercial.customerId,
+        previousValue: { status: "aprobado" },
+        newValue: { status: "en_produccion" },
+      });
+    }
     return { id, number };
   });
 
@@ -350,16 +442,34 @@ export async function assignProduction(
   }
 
   const now = new Date();
-  await db
-    .update(productionOrders)
-    .set({
-      workCenterId: input.workCenterId ?? row.workCenterId,
-      machineId: input.machineId ?? row.machineId,
-      operatorUserId: input.operatorUserId ?? row.operatorUserId,
-      updatedBy: actor.userId,
-      updatedAt: now,
-    })
-    .where(eq(productionOrders.id, row.id));
+  const nextMachineId = input.machineId ?? row.machineId;
+  const nextOperatorId = input.operatorUserId ?? row.operatorUserId;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(productionOrders)
+      .set({
+        workCenterId: input.workCenterId ?? row.workCenterId,
+        machineId: nextMachineId,
+        operatorUserId: nextOperatorId,
+        updatedBy: actor.userId,
+        updatedAt: now,
+      })
+      .where(eq(productionOrders.id, row.id));
+
+    if (row.machineId && row.machineId !== nextMachineId) {
+      await tx
+        .update(machines)
+        .set({ status: "disponible", updatedAt: now })
+        .where(eq(machines.id, row.machineId));
+    }
+    if (nextMachineId && nextOperatorId) {
+      await tx
+        .update(machines)
+        .set({ status: "en_produccion", updatedAt: now })
+        .where(eq(machines.id, nextMachineId));
+    }
+  });
 
   await recordActivity(db, {
     actorUserId: actor.userId,
@@ -741,6 +851,7 @@ export async function listProductionByCustomer(customerId: string) {
       status: productionOrders.status,
       promisedDate: productionOrders.promisedDate,
       priority: productionOrders.priority,
+      orderId: productionOrders.orderId,
       orderNumber: orders.number,
     })
     .from(productionOrders)
@@ -751,6 +862,17 @@ export async function listProductionByCustomer(customerId: string) {
     ...row,
     monitoring: productionMonitoring(row.promisedDate, row.status),
   }));
+}
+
+export async function engineeringRequestHasProductionOrder(
+  engineeringRequestId: string,
+) {
+  const [row] = await db
+    .select({ id: productionOrders.id })
+    .from(productionOrders)
+    .where(eq(productionOrders.engineeringRequestId, engineeringRequestId))
+    .limit(1);
+  return Boolean(row);
 }
 
 export async function quoteHasProductionOrder(quoteId: string) {

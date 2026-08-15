@@ -274,11 +274,8 @@ export async function createReworkAction(formData: FormData) {
     const parsed = createReworkSchema.safeParse({
       productionOrderId: formData.get("productionOrderId"),
       partNumber: formData.get("partNumber") || undefined,
-      quantity: formData.get("quantity"),
+      quantity: formData.get("quantity") || 0,
       scrapQuantity: formData.get("scrapQuantity") || 0,
-      rootCause: formData.get("rootCause"),
-      laborHours: formData.get("laborHours") || 0,
-      machineHours: formData.get("machineHours") || 0,
       notes: formData.get("notes") || undefined,
     });
     if (!parsed.success) {

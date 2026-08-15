@@ -9,11 +9,12 @@ import { getDashboardSnapshot } from "@/server/services/dashboard";
 import { getEngineeringDashboardStats } from "@/server/services/engineering";
 import { getInventoryDashboardStats } from "@/server/services/inventory-kpis";
 import { getProductionDashboardStats } from "@/server/services/production-kpis";
+import { getOrderDashboardStats } from "@/server/services/orders-kpis";
+import { getProjectDashboardStats } from "@/server/services/projects-kpis";
 import { getQuoteDashboardStats } from "@/server/services/quotes";
 
 const UPCOMING = [
   { label: "Ventas hoy", phase: "Fase 10+" },
-  { label: "Pedidos activos", phase: "Fase 6+ UI" },
   { label: "Material por comprar", phase: "Fase 7" },
   { label: "Entregas próximas", phase: "Fase 9" },
 ];
@@ -38,6 +39,10 @@ export default async function DashboardPage() {
   const canReadInventory = snapshot.user.permissions.includes(
     PERMISSION_IDS.inventoryRead,
   );
+  const canReadOrders = snapshot.user.permissions.includes(PERMISSION_IDS.ordersView);
+  const canReadProjects = snapshot.user.permissions.includes(
+    PERMISSION_IDS.projectsView,
+  );
   const quoteStats = canReadQuotes ? await getQuoteDashboardStats() : null;
   const engineeringStats = canReadEngineering
     ? await getEngineeringDashboardStats()
@@ -48,6 +53,8 @@ export default async function DashboardPage() {
   const inventoryStats = canReadInventory
     ? await getInventoryDashboardStats()
     : null;
+  const orderStats = canReadOrders ? await getOrderDashboardStats() : null;
+  const projectStats = canReadProjects ? await getProjectDashboardStats() : null;
   const roleNames = snapshot.user.roles.map(
     (roleId) => ROLES[roleId as RoleId]?.name ?? roleId,
   );
@@ -148,6 +155,27 @@ export default async function DashboardPage() {
               hint="Registros cerrados"
             />
           </>
+        ) : null}
+        {orderStats ? (
+          <>
+            <KpiCard
+              label="Pedidos activos"
+              value={String(orderStats.active)}
+              hint="No completados ni cancelados"
+            />
+            <KpiCard
+              label="Pedidos retrasados"
+              value={String(orderStats.delayed)}
+              hint="Fecha prometida vencida"
+            />
+          </>
+        ) : null}
+        {projectStats ? (
+          <KpiCard
+            label="Proyectos activos"
+            value={String(projectStats.active)}
+            hint="Agrupadores en ejecución"
+          />
         ) : null}
         {inventoryStats ? (
           <>

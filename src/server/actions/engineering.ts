@@ -13,6 +13,8 @@ import {
   deleteEngineeringDocumentSchema,
   engineeringIdSchema,
   logEngineeringHoursSchema,
+  startEngineeringHoursSchema,
+  stopEngineeringHoursSchema,
   updateEngineeringRequestSchema,
 } from "@/lib/validation/engineering";
 import {
@@ -25,6 +27,8 @@ import {
   changeEngineeringStatus,
   createEngineeringRequest,
   logEngineeringHours,
+  startEngineeringHours,
+  stopEngineeringHours,
   updateEngineeringRequest,
 } from "@/server/services/engineering";
 
@@ -138,6 +142,39 @@ export async function logEngineeringHoursAction(formData: FormData) {
       return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
     }
     await logEngineeringHours(parsed.data, actorFrom(session));
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function startEngineeringHoursAction(formData: FormData) {
+  try {
+    const { session } = await requirePermission(PERMISSION_IDS.engineeringUpdate);
+    const parsed = startEngineeringHoursSchema.safeParse({
+      engineeringRequestId: formData.get("engineeringRequestId"),
+      note: formData.get("note") || undefined,
+    });
+    if (!parsed.success) {
+      return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+    }
+    await startEngineeringHours(parsed.data, actorFrom(session));
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function stopEngineeringHoursAction(formData: FormData) {
+  try {
+    const { session } = await requirePermission(PERMISSION_IDS.engineeringUpdate);
+    const parsed = stopEngineeringHoursSchema.safeParse({
+      id: formData.get("id"),
+    });
+    if (!parsed.success) {
+      return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+    }
+    await stopEngineeringHours(parsed.data, actorFrom(session));
     return { ok: true as const };
   } catch (error) {
     return fail(error);

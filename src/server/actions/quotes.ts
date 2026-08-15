@@ -110,7 +110,10 @@ export async function changeQuoteStatusAction(formData: FormData) {
 
 export async function convertQuoteToOrderAction(formData: FormData) {
   try {
-    const { session } = await requirePermission(PERMISSION_IDS.quotesWrite);
+    const { session, access } = await requirePermission(PERMISSION_IDS.quotesWrite);
+    if (!access.permissions.includes(PERMISSION_IDS.ordersCreate)) {
+      return { ok: false as const, error: "No tienes permiso para crear pedidos." };
+    }
     const parsed = quoteIdSchema.safeParse({ id: formData.get("id") });
     if (!parsed.success) {
       return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
@@ -147,8 +150,9 @@ function readItemPayload(formData: FormData) {
     unit: formData.get("unit"),
     unitPrice: formData.get("unitPrice"),
     discountPercent: formData.get("discountPercent") || "0",
-    taxPercent: formData.get("taxPercent") || "16",
+    taxPercent: formData.get("taxPercent") || undefined,
     estimatedCost: formData.get("estimatedCost") || "0",
+    kind: formData.get("kind") || undefined,
   };
 }
 

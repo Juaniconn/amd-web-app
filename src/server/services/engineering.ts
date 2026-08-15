@@ -21,6 +21,7 @@ import {
   customers,
   engineeringHours,
   engineeringRequests,
+  quoteItems,
   quotes,
   users,
 } from "@/db/schema";
@@ -35,11 +36,25 @@ import {
   type EngineeringStatus,
 } from "@/lib/engineering/status";
 import { AppError } from "@/lib/errors";
+import { durationMinutes } from "@/lib/production/catalog";
+import {
+  ENGINEERING_SERVICE_DESCRIPTION,
+  ENGINEERING_SERVICE_UNIT,
+} from "@/lib/quotes/items";
+import {
+  calculateLineTotals,
+  calculateQuoteTotals,
+  formatMoney,
+  parseMoney,
+  taxPercentForCurrency,
+} from "@/lib/quotes/money";
 import type { QuoteEngineeringType } from "@/lib/quotes/rfq";
 import type {
   AssignEngineeringInput,
   CreateEngineeringRequestInput,
   LogEngineeringHoursInput,
+  StartEngineeringHoursInput,
+  StopEngineeringHoursInput,
   UpdateEngineeringRequestInput,
 } from "@/lib/validation/engineering";
 import { recordActivity } from "@/server/services/activity";
@@ -158,7 +173,91 @@ async function insertEngineeringRequest(
     parentEntityId: input.quoteId,
     newValue: { number, quoteId: input.quoteId },
   });
+  await ensureEngineeringServiceLine(tx, input.quoteId);
   return number;
+}
+
+async function ensureEngineeringServiceLine(tx: Tx, quoteId: string) {
+  const [quote] = await tx
+    .select()
+    .from(quotes)
+    .where(eq(quotes.id, quoteId))
+    .limit(1);
+  if (!quote) return;
+  const existing = await tx
+    .select({ id: quoteItems.id })
+    .from(quoteItems)
+    .where(
+      and(
+        eq(quoteItems.quoteId, quoteId),
+        eq(quoteItems.kind, "servicio_ingenieria"),
+      ),
+    )
+    .limit(1);
+  if (existing[0]) return;
+
+  const last = await tx
+    .select({ position: quoteItems.position })
+    .from(quoteItems)
+    .where(eq(quoteItems.quoteId, quoteId))
+    .orderBy(desc(quoteItems.position))
+    .limit(1);
+  const taxPercent = taxPercentForCurrency(quote.currency);
+  const totals = calculateLineTotals({
+    quantity: 1,
+    unitPrice: 0,
+    discountPercent: 0,
+    taxPercent,
+    estimatedCost: 0,
+  });
+  await tx.insert(quoteItems).values({
+    id: crypto.randomUUID(),
+    quoteId,
+    position: (last[0]?.position ?? 0) + 1,
+    kind: "servicio_ingenieria",
+    description: ENGINEERING_SERVICE_DESCRIPTION,
+    quantity: formatMoney(1, 4),
+    unit: ENGINEERING_SERVICE_UNIT,
+    unitPrice: formatMoney(0, 4),
+    discountPercent: formatMoney(0),
+    taxPercent: formatMoney(taxPercent),
+    estimatedCost: formatMoney(0, 4),
+    lineSubtotal: formatMoney(totals.lineSubtotal),
+    lineTax: formatMoney(totals.lineTax),
+    lineTotal: formatMoney(totals.lineTotal),
+    lineEstimatedCost: formatMoney(totals.lineEstimatedCost),
+    lineProfit: formatMoney(totals.lineProfit),
+    lineMarginPercent:
+      totals.lineMarginPercent === null ? null : formatMoney(totals.lineMarginPercent),
+  });
+  const items = await tx
+    .select()
+    .from(quoteItems)
+    .where(eq(quoteItems.quoteId, quoteId));
+  const header = calculateQuoteTotals(
+    items.map((item) =>
+      calculateLineTotals({
+        quantity: parseMoney(item.quantity),
+        unitPrice: parseMoney(item.unitPrice),
+        discountPercent: parseMoney(item.discountPercent),
+        taxPercent: parseMoney(item.taxPercent),
+        estimatedCost: parseMoney(item.estimatedCost),
+      }),
+    ),
+  );
+  await tx
+    .update(quotes)
+    .set({
+      subtotal: formatMoney(header.subtotal),
+      taxTotal: formatMoney(header.taxTotal),
+      total: formatMoney(header.total),
+      estimatedCost: formatMoney(header.estimatedCost),
+      estimatedProfit: formatMoney(header.estimatedProfit),
+      marginPercent:
+        header.marginPercent === null ? null : formatMoney(header.marginPercent),
+      updatedAt: new Date(),
+    })
+    .where(eq(quotes.id, quoteId));
 }
 
 export async function ensureEngineeringRequestForQuote(
@@ -262,6 +361,13 @@ export async function createEngineeringRequest(
     throw new AppError("La cotización no existe.", "QUOTE_NOT_FOUND", 404);
   }
   const existing = await getActiveEngineeringByQuoteId(quote.id);
+  if (quote.rfqType === "solo_fabricacion") {
+    throw new AppError(
+      "Solo fabricación no abre ingeniería. El cliente entrega el plano en la cotización.",
+      "ENGINEERING_BLOCKED",
+      409,
+    );
+  }
   if (existing) {
     throw new AppError(
       "Esta RFQ ya tiene una solicitud de ingeniería.",
@@ -577,6 +683,94 @@ export async function logEngineeringHours(
   return { id };
 }
 
+export async function startEngineeringHours(
+  input: StartEngineeringHoursInput,
+  actor: Actor,
+) {
+  const current = await loadRequestRow(input.engineeringRequestId);
+  if (!canLogEngineeringHours(current.status as EngineeringStatus)) {
+    throw new AppError(
+      "No se pueden registrar horas en este estado.",
+      "ENGINEERING_LOCKED",
+      409,
+    );
+  }
+  const startedAt = new Date();
+  const id = crypto.randomUUID();
+  try {
+    await db.insert(engineeringHours).values({
+      id,
+      engineeringRequestId: current.id,
+      userId: actor.userId,
+      hours: "0",
+      note: input.note ?? null,
+      workedOn: startedAt,
+      startedAt,
+      createdBy: actor.userId,
+    });
+  } catch {
+    throw new AppError(
+      "Ya tienes un registro de horas abierto en esta solicitud.",
+      "ENGINEERING_HOURS_OPEN",
+      409,
+    );
+  }
+  await recordActivity(db, {
+    actorUserId: actor.userId,
+    actorName: actor.name,
+    action: "hours_logged",
+    entityType: "engineering_hours",
+    entityId: id,
+    entityLabel: `${current.number} · iniciado`,
+    parentEntityType: "engineering_request",
+    parentEntityId: current.id,
+  });
+  return { id };
+}
+
+export async function stopEngineeringHours(
+  input: StopEngineeringHoursInput,
+  actor: Actor,
+) {
+  const [row] = await db
+    .select()
+    .from(engineeringHours)
+    .where(eq(engineeringHours.id, input.id))
+    .limit(1);
+  if (!row) {
+    throw new AppError("El registro de horas no existe.", "HOURS_NOT_FOUND", 404);
+  }
+  if (row.endedAt) {
+    throw new AppError("Ese registro ya está cerrado.", "HOURS_CLOSED", 409);
+  }
+  if (!row.startedAt) {
+    throw new AppError("Ese registro no es un cronómetro.", "HOURS_NOT_TIMER", 409);
+  }
+  const endedAt = new Date();
+  const minutes = durationMinutes(row.startedAt, endedAt);
+  const hours = (minutes / 60).toFixed(2);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(engineeringHours)
+      .set({
+        endedAt,
+        durationMinutes: minutes,
+        hours,
+      })
+      .where(eq(engineeringHours.id, row.id));
+    await tx
+      .update(engineeringRequests)
+      .set({
+        hoursLogged: sql`${engineeringRequests.hoursLogged} + ${hours}`,
+        updatedBy: actor.userId,
+        updatedAt: new Date(),
+      })
+      .where(eq(engineeringRequests.id, row.engineeringRequestId));
+  });
+  void actor;
+  return { id: row.id };
+}
+
 export async function getEngineeringRequestById(id: string) {
   const [row] = await db
     .select({
@@ -602,6 +796,9 @@ export async function getEngineeringRequestById(id: string) {
       hours: engineeringHours.hours,
       note: engineeringHours.note,
       workedOn: engineeringHours.workedOn,
+      startedAt: engineeringHours.startedAt,
+      endedAt: engineeringHours.endedAt,
+      durationMinutes: engineeringHours.durationMinutes,
       createdAt: engineeringHours.createdAt,
       userName: users.name,
     })

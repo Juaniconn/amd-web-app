@@ -120,6 +120,52 @@ export async function listProductionActivity(productionOrderId: string) {
     .orderBy(desc(activityLogs.createdAt));
 }
 
+export async function listOrderActivity(orderId: string) {
+  return db
+    .select({
+      id: activityLogs.id,
+      action: activityLogs.action,
+      entityType: activityLogs.entityType,
+      entityId: activityLogs.entityId,
+      summary: activityLogs.summary,
+      createdAt: activityLogs.createdAt,
+    })
+    .from(activityLogs)
+    .where(
+      or(
+        and(eq(activityLogs.entityType, "order"), eq(activityLogs.entityId, orderId)),
+        and(
+          eq(activityLogs.parentEntityType, "order"),
+          eq(activityLogs.parentEntityId, orderId),
+        ),
+      ),
+    )
+    .orderBy(desc(activityLogs.createdAt));
+}
+
+export async function listProjectActivity(projectId: string) {
+  return db
+    .select({
+      id: activityLogs.id,
+      action: activityLogs.action,
+      entityType: activityLogs.entityType,
+      entityId: activityLogs.entityId,
+      summary: activityLogs.summary,
+      createdAt: activityLogs.createdAt,
+    })
+    .from(activityLogs)
+    .where(
+      or(
+        and(eq(activityLogs.entityType, "project"), eq(activityLogs.entityId, projectId)),
+        and(
+          eq(activityLogs.parentEntityType, "project"),
+          eq(activityLogs.parentEntityId, projectId),
+        ),
+      ),
+    )
+    .orderBy(desc(activityLogs.createdAt));
+}
+
 export async function listEngineeringActivity(engineeringRequestId: string) {
   return db
     .select({

@@ -261,6 +261,10 @@ export async function seedQuotesDemo(
     }
 
     if (demo.convert && orderId && orderNumber) {
+      const promisedDate = new Date(issueDate);
+      promisedDate.setDate(
+        promisedDate.getDate() + (demo.number.endsWith("005") ? -3 : 18),
+      );
       await db
         .insert(orders)
         .values({
@@ -271,7 +275,10 @@ export async function seedQuotesDemo(
           origin: "rfq_directa",
           currency: demo.currency,
           total: formatMoney(header.total),
-          status: "nuevo",
+          status: "en_produccion",
+          ownerUserId: actor?.id ?? null,
+          promisedDate,
+          notes: demo.notes,
           isDemo: true,
           createdBy: actor?.id ?? null,
           updatedBy: actor?.id ?? null,
@@ -282,6 +289,9 @@ export async function seedQuotesDemo(
           target: orders.number,
           set: {
             total: formatMoney(header.total),
+            status: "en_produccion",
+            promisedDate,
+            notes: demo.notes,
             updatedAt: now,
           },
         });

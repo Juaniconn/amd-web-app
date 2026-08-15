@@ -16,6 +16,10 @@ import {
   type EngineeringStatus,
 } from "@/lib/engineering/status";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
+import {
+  formatHoursMinutes,
+  hoursToMinutes,
+} from "@/lib/production/catalog";
 import { QUOTE_ENGINEERING_TYPE_LABELS, type QuoteEngineeringType } from "@/lib/quotes/rfq";
 import { listEngineeringActivity } from "@/server/services/activity";
 import {
@@ -126,7 +130,10 @@ export default async function EngineeringDetailPage({
             label="Fecha compromiso"
             value={request.dueDate?.toLocaleDateString("es-MX") ?? null}
           />
-          <Field label="Horas" value={`${request.hoursLogged} h`} />
+          <Field
+            label="Horas"
+            value={formatHoursMinutes(hoursToMinutes(Number(request.hoursLogged)))}
+          />
           <Field
             label="Liberado"
             value={request.releasedAt?.toLocaleString("es-MX") ?? null}

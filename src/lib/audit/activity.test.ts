@@ -57,6 +57,28 @@ describe("activitySummary", () => {
     ).toBe("Almacén registró un movimiento de inventario en Entrada 10 kg · DEMO_MAT_001.");
   });
 
+  it("describes an order approval", () => {
+    expect(
+      activitySummary({
+        actorName: "Ana Ventas",
+        action: "approved",
+        entityType: "order",
+        entityLabel: "AMD-2026-00001",
+      }),
+    ).toBe("Ana Ventas aprobó el pedido AMD-2026-00001.");
+  });
+
+  it("describes a project creation", () => {
+    expect(
+      activitySummary({
+        actorName: "Ana Ventas",
+        action: "created",
+        entityType: "project",
+        entityLabel: "PRY-2026-00001",
+      }),
+    ).toBe("Ana Ventas creó el proyecto PRY-2026-00001.");
+  });
+
   it("describes a quote conversion", () => {
     expect(
       activitySummary({

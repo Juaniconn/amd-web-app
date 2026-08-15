@@ -13,6 +13,7 @@ import {
   PRODUCTION_MONITORING_LABELS,
   PRODUCTION_PRIORITY_LABELS,
   PRODUCTION_ROUTE_STEP_KIND_LABELS,
+  productionPriorityVariant,
 } from "@/lib/production/catalog";
 import {
   canAssignProduction,
@@ -33,12 +34,8 @@ import {
   listOrderMaterials,
 } from "@/server/services/inventory";
 import { listMachines, listWorkCenters } from "@/server/services/production-catalogs";
-import {
-  listDowntime,
-  listLaborHours,
-  listMachineHours,
-  listRework,
-} from "@/server/services/production-time";
+import { listProductionOrderDocuments } from "@/server/services/documents";
+import { listMachineHours, listRework } from "@/server/services/production-time";
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -67,15 +64,22 @@ export default async function ProductionDetailPage({
   const workCenters = await listWorkCenters({ activeOnly: true });
   const machines = await listMachines({ activeOnly: true });
   const machineEntries = await listMachineHours(order.id);
-  const laborEntries = await listLaborHours(order.id);
-  const downtime = await listDowntime(order.id);
   const rework = await listRework(order.id);
   const orderMaterials = await listOrderMaterials(order.id);
   const catalogMaterials = await listActiveMaterialsForSelect();
+  const attachedDocs = await listProductionOrderDocuments(order.id);
   const packageDocs =
-    order.origin === "rfq_ingenieria" && order.engineeringRequestId
-      ? await listEngineeringDocuments(order.engineeringRequestId)
-      : await listQuoteDocuments(order.quoteId);
+    attachedDocs.length > 0
+      ? attachedDocs
+      : order.origin === "rfq_ingenieria" && order.engineeringRequestId
+        ? await listEngineeringDocuments(order.engineeringRequestId)
+        : await listQuoteDocuments(order.quoteId);
+  const drawingsTitle =
+    attachedDocs.length > 0
+      ? "Plano de la OT"
+      : order.origin === "rfq_ingenieria"
+        ? "Paquete liberado"
+        : "Adjuntos de RFQ";
 
   const status = order.status;
   const canUpdate = access.permissions.includes(PERMISSION_IDS.productionUpdate);
@@ -100,7 +104,9 @@ export default async function ProductionDetailPage({
               {order.customerName}
             </Link>
             {" · Pedido "}
-            {order.orderNumber}
+            <Link href={`/orders/${order.orderId}`} className="hover:underline">
+              {order.orderNumber}
+            </Link>
             {" · "}
             <Link href={`/quotes/${order.quoteId}`} className="hover:underline">
               {order.quoteNumber}
@@ -178,7 +184,16 @@ export default async function ProductionDetailPage({
             label="Fecha prometida"
             value={order.promisedDate.toLocaleDateString("es-MX")}
           />
-          <Field label="Prioridad" value={PRODUCTION_PRIORITY_LABELS[order.priority]} />
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Prioridad
+            </p>
+            <div className="mt-1">
+              <Badge variant={productionPriorityVariant(order.priority)}>
+                {PRODUCTION_PRIORITY_LABELS[order.priority]}
+              </Badge>
+            </div>
+          </div>
           <Field label="Estado" value={PRODUCTION_STATUS_LABELS[status]} />
           <Field label="Centro" value={order.workCenterName} />
           <Field label="Máquina" value={order.machineName} />
@@ -229,70 +244,44 @@ export default async function ProductionDetailPage({
         </CardContent>
       </Card>
 
-      {order.origin === "rfq_ingenieria" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Paquete liberado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {packageDocs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Sin archivos en la solicitud de ingeniería. El piso solo puede
-                usar el paquete Liberado.
-              </p>
-            ) : (
-              <ul className="space-y-1 text-sm">
-                {packageDocs.map((doc) => (
-                  <li key={doc.id}>
-                    <a href={`/api/documents/${doc.id}`} className="hover:underline">
-                      {doc.originalName}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Adjuntos de RFQ</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {packageDocs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Origen RFQ directa: no hay archivos en la cotización{" "}
-                <Link href={`/quotes/${order.quoteId}`} className="font-medium hover:underline">
-                  {order.quoteNumber}
-                </Link>
-                .
-              </p>
-            ) : (
-              <ul className="space-y-1 text-sm">
-                {packageDocs.map((doc) => (
-                  <li key={doc.id}>
-                    <a href={`/api/documents/${doc.id}`} className="hover:underline">
-                      {doc.originalName}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle>{drawingsTitle}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {packageDocs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Esta OT no tiene plano asignado. Al crearla desde el pedido se
+              eligen los archivos de cotización o ingeniería.
+            </p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {packageDocs.map((doc) => (
+                <li key={doc.id}>
+                  <a
+                    href={`/api/documents/${doc.id}`}
+                    className="font-medium hover:underline"
+                  >
+                    {doc.originalName}
+                  </a>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    Descargar
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Tiempos</CardTitle>
+          <CardTitle>Horas máquina</CardTitle>
         </CardHeader>
         <CardContent>
           <ProductionTimePanel
             productionOrderId={order.id}
             machineEntries={machineEntries}
-            laborEntries={laborEntries}
-            downtime={downtime}
-            downtimeReasons={reasons}
             canWrite={canUpdate && canLogProductionTime(status)}
           />
         </CardContent>
@@ -300,14 +289,13 @@ export default async function ProductionDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Retrabajos</CardTitle>
+          <CardTitle>Scrap y retrabajo</CardTitle>
         </CardHeader>
         <CardContent>
           <ProductionReworkPanel
             productionOrderId={order.id}
             rows={rework}
             canWrite={canUpdate}
-            canRelease={access.permissions.includes(PERMISSION_IDS.qualityRelease)}
           />
         </CardContent>
       </Card>

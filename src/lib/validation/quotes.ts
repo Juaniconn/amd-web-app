@@ -31,10 +31,22 @@ const optionalText = (max: number) =>
     .transform((value) => (value && value.length > 0 ? value : undefined));
 
 const moneyNumber = (label: string, max = 10_000_000) =>
-  z.coerce
-    .number({ error: `${label} inválido` })
-    .min(0, `${label} no puede ser negativo`)
-    .max(max, `${label} excede el máximo permitido`);
+  z.preprocess(
+    (value) => (value === "" || value === null || value === undefined ? undefined : value),
+    z.coerce
+      .number({ error: `${label} es obligatorio` })
+      .min(0, `${label} no puede ser negativo`)
+      .max(max, `${label} excede el máximo permitido`),
+  );
+
+const optionalMoneyNumber = (label: string, max = 10_000_000) =>
+  z.preprocess(
+    (value) => (value === "" || value === null || value === undefined ? 0 : value),
+    z.coerce
+      .number({ error: `${label} inválido` })
+      .min(0, `${label} no puede ser negativo`)
+      .max(max, `${label} excede el máximo permitido`),
+  );
 
 const engineeringFields = {
   rfqType: rfqTypeSchema.default("solo_fabricacion"),
@@ -128,9 +140,18 @@ export const quoteItemFields = {
     .optional()
     .transform((value) => value || "pza"),
   unitPrice: moneyNumber("Precio unitario"),
-  discountPercent: moneyNumber("Descuento", 100),
-  taxPercent: moneyNumber("Impuesto", 100),
-  estimatedCost: moneyNumber("Costo estimado"),
+  discountPercent: optionalMoneyNumber("Descuento", 100),
+  taxPercent: z.preprocess(
+    (value) =>
+      value === "" || value === null || value === undefined ? undefined : value,
+    z.coerce
+      .number({ error: "Impuesto inválido" })
+      .min(0, "Impuesto no puede ser negativo")
+      .max(100, "Impuesto excede el máximo permitido")
+      .optional(),
+  ),
+  estimatedCost: optionalMoneyNumber("Costo estimado"),
+  kind: z.enum(["pieza", "servicio_ingenieria"]).optional(),
 };
 
 export const addQuoteItemSchema = z.object({

@@ -40,7 +40,20 @@ export const NAV_ITEMS: NavItem[] = [
     permission: PERMISSION_IDS.engineeringRead,
     phase: "Fase 4",
   },
-  { href: "/orders", label: "Pedidos", enabled: false, phase: "Fase 6+" },
+  {
+    href: "/orders",
+    label: "Pedidos",
+    enabled: true,
+    permission: PERMISSION_IDS.ordersView,
+    phase: "Pedidos",
+  },
+  {
+    href: "/projects",
+    label: "Proyectos",
+    enabled: true,
+    permission: PERMISSION_IDS.projectsView,
+    phase: "Proyectos",
+  },
   {
     href: "/production",
     label: "Producción",
@@ -66,7 +79,6 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { href: "/quality", label: "Calidad", enabled: false, phase: "Fase 8" },
   { href: "/deliveries", label: "Entregas", enabled: false, phase: "Fase 8" },
-  { href: "/projects", label: "Proyectos", enabled: false, phase: "Fase 4+" },
   { href: "/reports", label: "Reportes", enabled: false, phase: "Fase 9" },
 ];
 

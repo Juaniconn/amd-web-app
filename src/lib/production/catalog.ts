@@ -16,14 +16,31 @@ export const PRODUCTION_PRIORITY_RANK: Record<ProductionPriority, 1 | 2 | 3 | 4>
   };
 
 export const PRODUCTION_PRIORITY_LABELS: Record<ProductionPriority, string> = {
-  urgente: "1 Urgente",
-  compromiso_inmediato: "2 Compromiso Inmediato",
-  programada: "3 Programada",
-  produccion_normal: "4 Producción Normal",
+  urgente: "Urgente",
+  compromiso_inmediato: "Compromiso inmediato",
+  programada: "Programada",
+  produccion_normal: "Producción normal",
 };
+
+export function productionPriorityVariant(
+  priority: ProductionPriority,
+): "destructive" | "default" | "secondary" | "outline" {
+  if (priority === "urgente") return "destructive";
+  if (priority === "compromiso_inmediato") return "default";
+  if (priority === "programada") return "secondary";
+  return "outline";
+}
 
 export const DEFAULT_PRODUCTION_PRIORITY: ProductionPriority =
   "produccion_normal";
+
+/** Orden del selector: default primero, no el rango 1–4. */
+export const PRODUCTION_PRIORITY_OPTIONS: ProductionPriority[] = [
+  "produccion_normal",
+  "programada",
+  "compromiso_inmediato",
+  "urgente",
+];
 
 export const MACHINE_STATUSES = [
   "disponible",
@@ -125,4 +142,17 @@ export function durationMinutes(startedAt: Date, endedAt: Date): number {
 
 export function minutesToHours(minutes: number): number {
   return Math.round((minutes / 60) * 100) / 100;
+}
+
+export function formatHoursMinutes(totalMinutes: number): string {
+  const minutes = Math.max(0, Math.round(totalMinutes));
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest} min`;
+  if (rest === 0) return `${hours} h`;
+  return `${hours} h ${rest} min`;
+}
+
+export function hoursToMinutes(hours: number): number {
+  return Math.round(Math.max(0, hours) * 60);
 }

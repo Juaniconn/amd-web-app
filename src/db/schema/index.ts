@@ -3,6 +3,7 @@ export * from "./rbac";
 export * from "./crm";
 export * from "./activity";
 export * from "./quotes";
+export * from "./projects";
 export * from "./documents";
 export * from "./engineering";
 export * from "./production";

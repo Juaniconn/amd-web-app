@@ -1,3 +1,8 @@
+import {
+  rfqLocksItemsUntilRelease,
+  type RfqType,
+} from "@/lib/quotes/rfq";
+
 export const QUOTE_STATUSES = [
   "borrador",
   "en_revision",
@@ -36,6 +41,18 @@ export function canEditQuote(status: QuoteStatus): boolean {
   return EDITABLE_QUOTE_STATUSES.includes(status);
 }
 
+export function canEditQuoteItems(input: {
+  status: QuoteStatus;
+  rfqType: RfqType;
+  engineeringReleased: boolean;
+}): boolean {
+  if (!canEditQuote(input.status)) return false;
+  if (rfqLocksItemsUntilRelease(input.rfqType) && !input.engineeringReleased) {
+    return false;
+  }
+  return true;
+}
+
 export function canTransitionQuote(
   from: QuoteStatus,
   to: QuoteStatus,
@@ -68,7 +85,19 @@ export type SendReadiness = {
 export function canMarkQuoteSent(input: {
   itemCount: number;
   itemsHaveUnitPrice: boolean;
+  rfqType?: RfqType;
+  engineeringReleased?: boolean;
 }): SendReadiness {
+  if (
+    input.rfqType &&
+    rfqLocksItemsUntilRelease(input.rfqType) &&
+    !input.engineeringReleased
+  ) {
+    return {
+      ok: false,
+      reason: "Libera ingeniería antes de cotizar partidas y enviar al cliente.",
+    };
+  }
   if (input.itemCount < 1) {
     return { ok: false, reason: "Agrega al menos una partida antes de enviar." };
   }

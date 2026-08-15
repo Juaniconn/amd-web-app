@@ -8,6 +8,7 @@ describe("production validation", () => {
   it("defaults priority to producción normal", () => {
     const result = createProductionOrderSchema.safeParse({
       orderId: "demo-quote-005-order",
+      orderItemId: "demo-item-001",
       description: "Fabricar eje torneado",
       quantity: 10,
       promisedDate: "2026-08-20",
@@ -16,6 +17,16 @@ describe("production validation", () => {
     if (result.success) {
       expect(result.data.priority).toBe("produccion_normal");
     }
+  });
+
+  it("requires a manufacturing line item for each OT", () => {
+    const result = createProductionOrderSchema.safeParse({
+      orderId: "demo-quote-005-order",
+      description: "Fabricar eje torneado",
+      quantity: 10,
+      promisedDate: "2026-08-20",
+    });
+    expect(result.success).toBe(false);
   });
 
   it("requires promised date and description", () => {

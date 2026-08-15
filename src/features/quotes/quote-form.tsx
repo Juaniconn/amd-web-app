@@ -118,7 +118,7 @@ export function QuoteForm({
       leadTime: values.leadTime,
       notes: values.notes,
       rfqType: values.rfqType,
-      requiresEngineering: rfqTypeForcesEngineering(values.rfqType) || values.requiresEngineering,
+      requiresEngineering: rfqTypeForcesEngineering(values.rfqType),
       engineeringType: values.engineeringType || null,
     };
 
@@ -209,6 +209,12 @@ export function QuoteForm({
             )}
           </select>
         </div>
+        {rfqType === "solo_fabricacion" ? (
+          <p className="text-sm text-muted-foreground md:col-span-2">
+            Solo fabricación: ingeniería queda bloqueada. Se cotizan las partidas
+            con el plano del cliente.
+          </p>
+        ) : (
         <div className="space-y-2">
           <Label htmlFor="requiresEngineering">Requiere ingeniería</Label>
           <select
@@ -229,6 +235,7 @@ export function QuoteForm({
             <option value="si">Sí</option>
           </select>
         </div>
+        )}
         {showEngineeringType ? (
           <div className="space-y-2">
             <Label htmlFor="engineeringType">Tipo de ingeniería</Label>

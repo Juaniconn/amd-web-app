@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   DEFAULT_PRODUCTION_PRIORITY,
   PRODUCTION_PRIORITY_LABELS,
+  PRODUCTION_PRIORITY_OPTIONS,
   type ProductionPriority,
 } from "@/lib/production/catalog";
+import { isManufacturingItem } from "@/lib/quotes/items";
 import {
   createProductionOrderAction,
   updateProductionOrderAction,
@@ -28,8 +31,15 @@ type OrderOption = {
   engineeringNumber: string | null;
 };
 
+type DocumentOption = {
+  id: string;
+  originalName: string;
+  source: string;
+};
+
 type ItemOption = {
   id: string;
+  kind?: string;
   description: string;
   partNumber: string | null;
   quantity: string;
@@ -61,6 +71,7 @@ export function ProductionForm({
   workCenters,
   machines,
   users,
+  documents = [],
   defaultValues,
 }: {
   mode: "create" | "edit";
@@ -71,9 +82,12 @@ export function ProductionForm({
   workCenters: { id: string; name: string }[];
   machines: { id: string; name: string; workCenterId: string }[];
   users: { id: string; name: string }[];
+  documents?: DocumentOption[];
   defaultValues?: Partial<FormValues>;
 }) {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const manufacturingItems = items.filter((item) => isManufacturingItem(item.kind));
   const form = useForm<FormValues>({
     defaultValues: {
       orderId: "",
@@ -99,13 +113,27 @@ export function ProductionForm({
   const filteredMachines = machines.filter(
     (machine) => !centerFilter || machine.workCenterId === centerFilter,
   );
+  const [documentIds, setDocumentIds] = useState<string[]>([]);
+  const selectedItemId = form.watch("orderItemId");
+
+  useEffect(() => {
+    if (mode !== "create") return;
+    const selected = items.find(
+      (item) => item.id === selectedItemId && isManufacturingItem(item.kind),
+    );
+    if (!selected) return;
+    form.setValue("description", selected.description);
+    form.setValue("partNumber", selected.partNumber ?? "");
+    form.setValue("quantity", String(Number(selected.quantity)));
+    form.setValue("unit", selected.unit);
+  }, [form, items, mode, selectedItemId]);
 
   async function onSubmit(values: FormValues) {
     setError(null);
     const payload = {
       ...(mode === "edit" ? { id: productionOrderId } : {}),
       orderId: values.orderId,
-      orderItemId: values.orderItemId || undefined,
+      orderItemId: values.orderItemId,
       routeId: values.routeId || undefined,
       description: values.description,
       partNumber: values.partNumber || undefined,
@@ -117,6 +145,7 @@ export function ProductionForm({
       workCenterId: values.workCenterId || undefined,
       machineId: values.machineId || undefined,
       operatorUserId: values.operatorUserId || undefined,
+      documentIds,
     };
     const result =
       mode === "create"
@@ -133,7 +162,14 @@ export function ProductionForm({
           <select
             id="orderId"
             className={selectClassName}
-            {...form.register("orderId", { required: true })}
+            {...form.register("orderId", {
+              required: true,
+              onChange: (event) => {
+                const next = event.target.value;
+                form.setValue("orderItemId", "");
+                if (next) router.push(`/production/new?orderId=${next}`);
+              },
+            })}
           >
             <option value="">Selecciona un pedido convertido</option>
             {orders.map((order) => (
@@ -146,17 +182,31 @@ export function ProductionForm({
         </div>
       ) : null}
 
-      {items.length > 0 ? (
+      {mode === "create" ? (
         <div className="space-y-1">
-          <Label htmlFor="orderItemId">Partida (opcional)</Label>
-          <select id="orderItemId" className={selectClassName} {...form.register("orderItemId")}>
-            <option value="">Toda la orden / no aplicar</option>
-            {items.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.partNumber ?? item.description} · {item.quantity} {item.unit}
-              </option>
-            ))}
-          </select>
+          <Label htmlFor="orderItemId">Partida</Label>
+          {manufacturingItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Este pedido no tiene piezas para OT. El servicio de ingeniería se
+              cobra en la cotización y no genera orden de trabajo.
+            </p>
+          ) : (
+            <select
+              id="orderItemId"
+              className={selectClassName}
+              {...form.register("orderItemId", { required: true })}
+            >
+              <option value="">Selecciona la pieza</option>
+              {manufacturingItems.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.partNumber ?? item.description} · {item.quantity} {item.unit}
+                </option>
+              ))}
+            </select>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Una partida de pieza = una OT. Tres números de parte = tres OT.
+          </p>
         </div>
       ) : null}
 
@@ -188,11 +238,9 @@ export function ProductionForm({
         <div className="space-y-1">
           <Label htmlFor="priority">Prioridad</Label>
           <select id="priority" className={selectClassName} {...form.register("priority")}>
-            {(
-              Object.entries(PRODUCTION_PRIORITY_LABELS) as [ProductionPriority, string][]
-            ).map(([value, label]) => (
+            {PRODUCTION_PRIORITY_OPTIONS.map((value) => (
               <option key={value} value={value}>
-                {label}
+                {PRODUCTION_PRIORITY_LABELS[value]}
               </option>
             ))}
           </select>
@@ -258,6 +306,39 @@ export function ProductionForm({
             </div>
           </div>
         </>
+      ) : null}
+
+      {mode === "create" && documents.length > 0 ? (
+        <div className="space-y-2">
+          <Label>Planos / archivos de la OT</Label>
+          <p className="text-xs text-muted-foreground">
+            Elige los adjuntos que el operador verá y descargará en la OT.
+          </p>
+          <ul className="space-y-2 rounded-lg border p-3">
+            {documents.map((doc) => (
+              <li key={doc.id} className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={documentIds.includes(doc.id)}
+                  onChange={(event) => {
+                    setDocumentIds((current) =>
+                      event.target.checked
+                        ? [...current, doc.id]
+                        : current.filter((id) => id !== doc.id),
+                    );
+                  }}
+                />
+                <span>
+                  <span className="font-medium">{doc.originalName}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {doc.source}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       <div className="space-y-1">

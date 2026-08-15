@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canEditQuote,
+  canEditQuoteItems,
   canMarkQuoteSent,
   canTransitionQuote,
   isQuoteExpired,
@@ -51,5 +52,40 @@ describe("quote status machine", () => {
     expect(canMarkQuoteSent({ itemCount: 1, itemsHaveUnitPrice: true }).ok).toBe(
       true,
     );
+  });
+
+  it("locks design+fabrication items until engineering is released", () => {
+    expect(
+      canEditQuoteItems({
+        status: "borrador",
+        rfqType: "diseno_fabricacion",
+        engineeringReleased: false,
+      }),
+    ).toBe(false);
+    expect(
+      canEditQuoteItems({
+        status: "borrador",
+        rfqType: "diseno_fabricacion",
+        engineeringReleased: true,
+      }),
+    ).toBe(true);
+    expect(
+      canEditQuoteItems({
+        status: "borrador",
+        rfqType: "solo_fabricacion",
+        engineeringReleased: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("blocks sending a design RFQ before engineering release", () => {
+    expect(
+      canMarkQuoteSent({
+        itemCount: 1,
+        itemsHaveUnitPrice: true,
+        rfqType: "diseno_fabricacion",
+        engineeringReleased: false,
+      }).ok,
+    ).toBe(false);
   });
 });

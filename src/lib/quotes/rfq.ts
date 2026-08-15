@@ -57,6 +57,26 @@ export function rfqTypeForcesEngineering(rfqType: RfqType): boolean {
   return rfqType !== "solo_fabricacion";
 }
 
+/** Solo fabricación: el cliente trae plano. Ingeniería no se abre desde la RFQ. */
+export function rfqBlocksEngineering(rfqType: RfqType): boolean {
+  return rfqType === "solo_fabricacion";
+}
+
+/** Diseño + fabricación (y tipos de diseño): partidas bloqueadas hasta Liberado. */
+export function rfqLocksItemsUntilRelease(rfqType: RfqType): boolean {
+  return rfqTypeForcesEngineering(rfqType);
+}
+
+export function isEngineeringReleasedForQuote(input: {
+  engineeringRequestStatus?: string | null;
+  quoteEngineeringStatus?: string | null;
+}): boolean {
+  return (
+    input.engineeringRequestStatus === "liberado" ||
+    input.quoteEngineeringStatus === "liberada"
+  );
+}
+
 export function defaultEngineeringType(
   rfqType: RfqType,
 ): QuoteEngineeringType | null {
@@ -74,6 +94,13 @@ export function resolveQuoteEngineeringFields(input: {
   requiresEngineering: boolean;
   engineeringType: QuoteEngineeringType | null;
 } {
+  if (rfqBlocksEngineering(input.rfqType)) {
+    return {
+      rfqType: input.rfqType,
+      requiresEngineering: false,
+      engineeringType: null,
+    };
+  }
   const requiresEngineering =
     rfqTypeForcesEngineering(input.rfqType) || input.requiresEngineering;
   if (!requiresEngineering) {

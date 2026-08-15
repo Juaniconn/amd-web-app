@@ -7,6 +7,7 @@ import {
   materials,
   orders,
   productionOrders,
+  projects,
   quotes,
 } from "@/db/schema";
 
@@ -24,6 +25,7 @@ const TABLES = {
     column: productionOrders.number,
   },
   materials: { table: materials, column: materials.code },
+  projects: { table: projects, column: projects.code },
 } as const;
 
 export async function nextDocumentNumber(

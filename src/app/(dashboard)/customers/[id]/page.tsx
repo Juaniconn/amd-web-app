@@ -32,10 +32,13 @@ import {
   PRODUCTION_STATUS_LABELS,
   type ProductionStatus,
 } from "@/lib/production/status";
+import { ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/orders/status";
+import { PROJECT_STATUS_LABELS, type ProjectStatus } from "@/lib/projects/status";
 import { QUOTE_STATUS_LABELS } from "@/lib/quotes/status";
+import { listOrdersByCustomer } from "@/server/services/orders";
+import { listProjectsByCustomer } from "@/server/services/projects";
 
 const UPCOMING = [
-  { label: "Pedidos", phase: "Fase 6+ UI" },
   { label: "Facturación / ventas", phase: "Posterior" },
   { label: "Pagos", phase: "Posterior" },
   { label: "Documentos", phase: "Fase 3+" },
@@ -81,6 +84,12 @@ export default async function CustomerDetailPage({
   );
   const productionOrders = canReadProduction
     ? await listProductionByCustomer(customer.id)
+    : [];
+  const canReadOrders = access.permissions.includes(PERMISSION_IDS.ordersView);
+  const customerOrders = canReadOrders ? await listOrdersByCustomer(customer.id) : [];
+  const canReadProjects = access.permissions.includes(PERMISSION_IDS.projectsView);
+  const customerProjects = canReadProjects
+    ? await listProjectsByCustomer(customer.id)
     : [];
   const archived = Boolean(customer.deletedAt);
 
@@ -268,6 +277,99 @@ export default async function CustomerDetailPage({
         </Card>
       ) : null}
 
+      {canReadOrders ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pedidos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {customerOrders.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Este cliente aún no tiene pedidos.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Número</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>RFQ</TableHead>
+                    <TableHead>Prometida</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {customerOrders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell>
+                        <Link href={`/orders/${order.id}`} className="font-medium hover:underline">
+                          {order.number}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        {ORDER_STATUS_LABELS[order.status as OrderStatus]}
+                      </TableCell>
+                      <TableCell>
+                        <Link href={`/quotes/${order.quoteId}`} className="hover:underline">
+                          {order.quoteNumber}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        {order.promisedDate
+                          ? order.promisedDate.toLocaleDateString("es-MX")
+                          : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {canReadProjects ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Proyectos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {customerProjects.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Este cliente no tiene proyectos agrupadores.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Código</TableHead>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Estado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {customerProjects.map((project) => (
+                    <TableRow key={project.id}>
+                      <TableCell>
+                        <Link
+                          href={`/projects/${project.id}`}
+                          className="font-medium hover:underline"
+                        >
+                          {project.code}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{project.name}</TableCell>
+                      <TableCell>
+                        {PROJECT_STATUS_LABELS[project.status as ProjectStatus]}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {canReadEngineering ? (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4">
@@ -363,7 +465,11 @@ export default async function CustomerDetailPage({
                           {item.number}
                         </Link>
                       </TableCell>
-                      <TableCell>{item.orderNumber}</TableCell>
+                      <TableCell>
+                        <Link href={`/orders/${item.orderId}`} className="hover:underline">
+                          {item.orderNumber}
+                        </Link>
+                      </TableCell>
                       <TableCell>
                         {PRODUCTION_STATUS_LABELS[item.status as ProductionStatus]}
                       </TableCell>

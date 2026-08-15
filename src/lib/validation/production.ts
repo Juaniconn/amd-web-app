@@ -21,7 +21,7 @@ export const routeStepKindSchema = z.enum(PRODUCTION_ROUTE_STEP_KINDS);
 
 export const createProductionOrderSchema = z.object({
   orderId: z.string().trim().min(1, "El pedido es obligatorio"),
-  orderItemId: optionalText(80),
+  orderItemId: z.string().trim().min(1, "La partida es obligatoria. Cada pieza tiene su OT."),
   routeId: optionalText(80),
   description: z
     .string()
@@ -39,6 +39,7 @@ export const createProductionOrderSchema = z.object({
   workCenterId: optionalText(80),
   machineId: optionalText(80),
   operatorUserId: optionalText(80),
+  documentIds: z.array(z.string().trim().min(1)).optional().default([]),
 });
 
 export const updateProductionOrderSchema = z.object({
@@ -161,16 +162,20 @@ export const logDowntimeSchema = z.object({
   endedAt: z.coerce.date().optional().nullable(),
 });
 
-export const createReworkSchema = z.object({
-  productionOrderId: z.string().trim().min(1, "La OT es obligatoria"),
-  partNumber: optionalText(80),
-  quantity: z.coerce.number().positive("La cantidad debe ser mayor a 0"),
-  scrapQuantity: z.coerce.number().min(0).default(0),
-  rootCause: z.string().trim().min(4, "La causa raíz es obligatoria").max(2000),
-  laborHours: z.coerce.number().min(0).max(999).default(0),
-  machineHours: z.coerce.number().min(0).max(999).default(0),
-  notes: optionalText(2000),
-});
+export const createReworkSchema = z
+  .object({
+    productionOrderId: z.string().trim().min(1, "La OT es obligatoria"),
+    partNumber: optionalText(80),
+    quantity: z.coerce.number().min(0, "El retrabajo no puede ser negativo").default(0),
+    scrapQuantity: z.coerce.number().min(0).default(0),
+    rootCause: optionalText(2000),
+    laborHours: z.coerce.number().min(0).max(999).default(0),
+    machineHours: z.coerce.number().min(0).max(999).default(0),
+    notes: optionalText(2000),
+  })
+  .refine((data) => data.quantity > 0 || data.scrapQuantity > 0, {
+    message: "Indica piezas de retrabajo o de scrap.",
+  });
 
 export const releaseReworkSchema = z.object({
   id: z.string().trim().min(1, "El retrabajo es obligatorio"),

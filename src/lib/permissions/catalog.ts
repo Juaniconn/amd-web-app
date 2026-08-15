@@ -43,6 +43,16 @@ export const PERMISSION_IDS = {
   inventoryAdjust: "inventory:adjust",
   inventoryReserve: "inventory:reserve",
   inventoryConsume: "inventory:consume",
+  ordersView: "orders:view",
+  ordersCreate: "orders:create",
+  ordersUpdate: "orders:update",
+  ordersCancel: "orders:cancel",
+  ordersApprove: "orders:approve",
+  projectsView: "projects:view",
+  projectsCreate: "projects:create",
+  projectsUpdate: "projects:update",
+  projectsClose: "projects:close",
+  projectsCancel: "projects:cancel",
 } as const;
 
 export type PermissionId = (typeof PERMISSION_IDS)[keyof typeof PERMISSION_IDS];
@@ -63,6 +73,22 @@ const INVENTORY_ALL: PermissionId[] = [
   PERMISSION_IDS.inventoryAdjust,
   PERMISSION_IDS.inventoryReserve,
   PERMISSION_IDS.inventoryConsume,
+];
+
+const ORDERS_ALL: PermissionId[] = [
+  PERMISSION_IDS.ordersView,
+  PERMISSION_IDS.ordersCreate,
+  PERMISSION_IDS.ordersUpdate,
+  PERMISSION_IDS.ordersCancel,
+  PERMISSION_IDS.ordersApprove,
+];
+
+const PROJECTS_ALL: PermissionId[] = [
+  PERMISSION_IDS.projectsView,
+  PERMISSION_IDS.projectsCreate,
+  PERMISSION_IDS.projectsUpdate,
+  PERMISSION_IDS.projectsClose,
+  PERMISSION_IDS.projectsCancel,
 ];
 
 const PRODUCTION_ALL: PermissionId[] = [
@@ -96,6 +122,8 @@ export const ROLES: Record<
       PERMISSION_IDS.customersRead,
       PERMISSION_IDS.quotesRead,
       PERMISSION_IDS.engineeringRead,
+      PERMISSION_IDS.ordersView,
+      PERMISSION_IDS.projectsView,
       PERMISSION_IDS.productionView,
       PERMISSION_IDS.inventoryRead,
     ],
@@ -112,6 +140,8 @@ export const ROLES: Record<
       PERMISSION_IDS.engineeringRead,
       PERMISSION_IDS.engineeringCreate,
       PERMISSION_IDS.engineeringApprove,
+      ...ORDERS_ALL,
+      ...PROJECTS_ALL,
       PERMISSION_IDS.productionView,
       PERMISSION_IDS.inventoryRead,
     ],
@@ -122,6 +152,8 @@ export const ROLES: Record<
     permissions: [
       PERMISSION_IDS.dashboardRead,
       ...ENGINEERING_ALL,
+      PERMISSION_IDS.ordersView,
+      PERMISSION_IDS.projectsView,
       PERMISSION_IDS.productionView,
       PERMISSION_IDS.inventoryRead,
     ],
@@ -129,7 +161,12 @@ export const ROLES: Record<
   compras: {
     name: "Compras",
     description: "Proveedores, compras e inventario.",
-    permissions: [PERMISSION_IDS.dashboardRead, PERMISSION_IDS.inventoryRead],
+    permissions: [
+      PERMISSION_IDS.dashboardRead,
+      PERMISSION_IDS.ordersView,
+      PERMISSION_IDS.projectsView,
+      PERMISSION_IDS.inventoryRead,
+    ],
   },
   produccion: {
     name: "Producción",
@@ -137,6 +174,8 @@ export const ROLES: Record<
     permissions: [
       PERMISSION_IDS.dashboardRead,
       PERMISSION_IDS.engineeringRead,
+      PERMISSION_IDS.ordersView,
+      PERMISSION_IDS.projectsView,
       ...PRODUCTION_ALL,
       PERMISSION_IDS.inventoryRead,
       PERMISSION_IDS.inventoryReserve,
@@ -149,6 +188,8 @@ export const ROLES: Record<
     permissions: [
       PERMISSION_IDS.dashboardRead,
       PERMISSION_IDS.engineeringRead,
+      PERMISSION_IDS.ordersView,
+      PERMISSION_IDS.projectsView,
       PERMISSION_IDS.productionView,
       PERMISSION_IDS.qualityRelease,
       PERMISSION_IDS.inventoryRead,
@@ -159,6 +200,7 @@ export const ROLES: Record<
     description: "Inventario, entradas, salidas, ajustes y existencias. Consulta OT para reservar y entregar a piso.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
+      PERMISSION_IDS.ordersView,
       PERMISSION_IDS.productionView,
       ...INVENTORY_ALL,
     ],
@@ -293,6 +335,46 @@ export const PERMISSIONS: Record<
   "inventory:consume": {
     name: "Consumir material",
     description: "Registrar consumo de producción contra una reserva de OT.",
+  },
+  "orders:view": {
+    name: "Ver pedidos",
+    description: "Listar pedidos, abrir ficha y ver trazabilidad comercial.",
+  },
+  "orders:create": {
+    name: "Crear pedidos",
+    description: "Convertir una RFQ aprobada en pedido oficial.",
+  },
+  "orders:update": {
+    name: "Editar pedidos",
+    description: "Actualizar responsable, fecha prometida, notas, proyecto y estado operativo.",
+  },
+  "orders:cancel": {
+    name: "Cancelar pedidos",
+    description: "Cancelar un pedido sin borrar historial ni la RFQ.",
+  },
+  "orders:approve": {
+    name: "Aprobar pedidos",
+    description: "Aprobar comercialmente un pedido pendiente.",
+  },
+  "projects:view": {
+    name: "Ver proyectos",
+    description: "Listar proyectos agrupadores y abrir su expediente.",
+  },
+  "projects:create": {
+    name: "Crear proyectos",
+    description: "Abrir un proyecto agrupador para un cliente.",
+  },
+  "projects:update": {
+    name: "Editar proyectos",
+    description: "Editar datos del proyecto y asociar RFQ o pedidos.",
+  },
+  "projects:close": {
+    name: "Cerrar proyectos",
+    description: "Marcar un proyecto como completado.",
+  },
+  "projects:cancel": {
+    name: "Cancelar proyectos",
+    description: "Cancelar un proyecto agrupador. No borra pedidos ni OT.",
   },
 };
 

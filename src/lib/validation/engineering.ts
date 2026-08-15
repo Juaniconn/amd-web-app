@@ -68,6 +68,15 @@ export const logEngineeringHoursSchema = z.object({
   workedOn: z.coerce.date().optional(),
 });
 
+export const startEngineeringHoursSchema = z.object({
+  engineeringRequestId: z.string().trim().min(1, "La solicitud es obligatoria"),
+  note: optionalText(500),
+});
+
+export const stopEngineeringHoursSchema = z.object({
+  id: z.string().trim().min(1, "El registro es obligatorio"),
+});
+
 export const deleteEngineeringDocumentSchema = z.object({
   id: z.string().trim().min(1, "El archivo es obligatorio"),
   engineeringRequestId: z.string().trim().min(1, "La solicitud es obligatoria"),
@@ -84,3 +93,9 @@ export type ChangeEngineeringStatusInput = z.infer<
   typeof changeEngineeringStatusSchema
 >;
 export type LogEngineeringHoursInput = z.infer<typeof logEngineeringHoursSchema>;
+export type StartEngineeringHoursInput = z.infer<
+  typeof startEngineeringHoursSchema
+>;
+export type StopEngineeringHoursInput = z.infer<
+  typeof stopEngineeringHoursSchema
+>;

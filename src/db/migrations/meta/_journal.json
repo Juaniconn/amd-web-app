@@ -43,6 +43,27 @@
       "when": 1786704000000,
       "tag": "0005_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786716000000,
+      "tag": "0006_orders_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786728000000,
+      "tag": "0007_floor_quote_tracking",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786739000000,
+      "tag": "0008_ot_documents",
+      "breakpoints": true
     }
   ]
 }

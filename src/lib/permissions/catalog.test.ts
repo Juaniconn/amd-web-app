@@ -143,6 +143,39 @@ describe("RBAC catalog", () => {
     expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.inventoryWrite)).toBe(
       false,
     );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.ordersView)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.ordersApprove)).toBe(
+      false,
+    );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.projectsView)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.projectsCreate)).toBe(
+      false,
+    );
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.ordersCreate)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.ordersApprove)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.projectsClose)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.produccion, PERMISSION_IDS.ordersView)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.produccion, PERMISSION_IDS.ordersCreate)).toBe(
+      false,
+    );
+    expect(roleHasPermission(ROLE_IDS.compras, PERMISSION_IDS.projectsView)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.almacen, PERMISSION_IDS.projectsView)).toBe(
+      false,
+    );
 
     for (const role of [
       ROLE_IDS.compras,

@@ -22,6 +22,7 @@ import {
 
 type QuoteItem = {
   id: string;
+  kind?: string;
   description: string;
   partNumber: string | null;
   quantity: string;
@@ -46,11 +47,42 @@ function money(value: string | null, currency: string) {
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
+function DecimalInput({
+  id,
+  name,
+  defaultValue,
+  required,
+  placeholder,
+}: {
+  id: string;
+  name: string;
+  defaultValue?: string;
+  required?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <Input
+      id={id}
+      name={name}
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      required={required}
+      placeholder={placeholder}
+      defaultValue={defaultValue ?? ""}
+      onWheel={(event) => event.currentTarget.blur()}
+    />
+  );
+}
+
 function ItemFields({
   item,
+  currency,
 }: {
+  currency: string;
   item?: Pick<
     QuoteItem,
+    | "kind"
     | "description"
     | "partNumber"
     | "quantity"
@@ -61,8 +93,11 @@ function ItemFields({
     | "estimatedCost"
   >;
 }) {
+  const usd = currency.toLowerCase() === "usd";
+  const taxDefault = usd ? "0" : item?.taxPercent;
   return (
     <>
+      {item?.kind ? <input type="hidden" name="kind" value={item.kind} /> : null}
       <div className="space-y-1 md:col-span-2">
         <Label htmlFor="description">Descripción</Label>
         <Input
@@ -83,14 +118,12 @@ function ItemFields({
       </div>
       <div className="space-y-1">
         <Label htmlFor="quantity">Cantidad</Label>
-        <Input
+        <DecimalInput
           id="quantity"
           name="quantity"
-          type="number"
-          min="0"
-          step="0.0001"
           required
-          defaultValue={item?.quantity ?? "1"}
+          placeholder="Ej. 13"
+          defaultValue={item?.quantity}
         />
       </div>
       <div className="space-y-1">
@@ -99,49 +132,47 @@ function ItemFields({
       </div>
       <div className="space-y-1">
         <Label htmlFor="unitPrice">Precio unitario</Label>
-        <Input
+        <DecimalInput
           id="unitPrice"
           name="unitPrice"
-          type="number"
-          min="0"
-          step="0.0001"
           required
-          defaultValue={item?.unitPrice ?? "0"}
+          placeholder="Escribe el precio"
+          defaultValue={item?.unitPrice}
         />
       </div>
       <div className="space-y-1">
         <Label htmlFor="discountPercent">Desc. %</Label>
-        <Input
+        <DecimalInput
           id="discountPercent"
           name="discountPercent"
-          type="number"
-          min="0"
-          max="100"
-          step="0.01"
-          defaultValue={item?.discountPercent ?? "0"}
+          placeholder="0"
+          defaultValue={item?.discountPercent}
         />
       </div>
       <div className="space-y-1">
         <Label htmlFor="taxPercent">IVA %</Label>
-        <Input
-          id="taxPercent"
-          name="taxPercent"
-          type="number"
-          min="0"
-          max="100"
-          step="0.01"
-          defaultValue={item?.taxPercent ?? "16"}
-        />
+        {usd ? (
+          <>
+            <input type="hidden" name="taxPercent" value="0" />
+            <Input id="taxPercent" value="0" disabled />
+            <p className="text-xs text-muted-foreground">USD no cobra IVA.</p>
+          </>
+        ) : (
+          <DecimalInput
+            id="taxPercent"
+            name="taxPercent"
+            placeholder="16"
+            defaultValue={taxDefault}
+          />
+        )}
       </div>
       <div className="space-y-1">
         <Label htmlFor="estimatedCost">Costo est.</Label>
-        <Input
+        <DecimalInput
           id="estimatedCost"
           name="estimatedCost"
-          type="number"
-          min="0"
-          step="0.0001"
-          defaultValue={item?.estimatedCost ?? "0"}
+          placeholder="0"
+          defaultValue={item?.estimatedCost}
         />
       </div>
     </>
@@ -153,11 +184,13 @@ export function QuoteItemsPanel({
   currency,
   items,
   canWrite,
+  lockedReason,
 }: {
   quoteId: string;
   currency: string;
   items: QuoteItem[];
   canWrite: boolean;
+  lockedReason?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -190,6 +223,9 @@ export function QuoteItemsPanel({
 
   return (
     <div className="space-y-4">
+      {lockedReason ? (
+        <p className="text-sm text-muted-foreground">{lockedReason}</p>
+      ) : null}
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Aún no hay partidas. Agrega piezas, cantidades y precios.
@@ -198,6 +234,7 @@ export function QuoteItemsPanel({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Tipo</TableHead>
               <TableHead>Descripción</TableHead>
               <TableHead>N° parte</TableHead>
               <TableHead className="text-right">Cant.</TableHead>
@@ -214,6 +251,9 @@ export function QuoteItemsPanel({
                 key={item.id}
                 className={editingId === item.id ? "bg-muted/40" : undefined}
               >
+                <TableCell>
+                  {item.kind === "servicio_ingenieria" ? "Servicio ING" : "Pieza"}
+                </TableCell>
                 <TableCell className="font-medium">{item.description}</TableCell>
                 <TableCell>{item.partNumber ?? "—"}</TableCell>
                 <TableCell className="text-right">
@@ -282,7 +322,7 @@ export function QuoteItemsPanel({
         >
           <input type="hidden" name="quoteId" value={quoteId} />
           <p className="text-sm font-medium md:col-span-4">Nueva partida</p>
-          <ItemFields />
+          <ItemFields currency={currency} />
           <div className="flex items-end gap-2 md:col-span-4">
             <Button type="submit" disabled={pending}>
               Agregar partida
@@ -310,7 +350,7 @@ export function QuoteItemsPanel({
           <input type="hidden" name="id" value={editingItem.id} />
           <input type="hidden" name="quoteId" value={quoteId} />
           <p className="text-sm font-medium md:col-span-4">Editar partida</p>
-          <ItemFields item={editingItem} />
+          <ItemFields currency={currency} item={editingItem} />
           <div className="flex items-end gap-2 md:col-span-4">
             <Button type="submit" disabled={pending}>
               Guardar cambios

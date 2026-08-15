@@ -1,4 +1,9 @@
 export const DEFAULT_TAX_PERCENT = 16;
+export const USD_TAX_PERCENT = 0;
+
+export function taxPercentForCurrency(currency: string): number {
+  return currency.toLowerCase() === "usd" ? USD_TAX_PERCENT : DEFAULT_TAX_PERCENT;
+}
 export const MONEY_SCALE = 2;
 
 export type QuoteLineInput = {

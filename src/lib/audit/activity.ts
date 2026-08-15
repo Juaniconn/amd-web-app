@@ -39,6 +39,7 @@ export const ACTIVITY_ENTITY_TYPES = [
   "material",
   "inventory_movement",
   "warehouse",
+  "project",
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
@@ -104,6 +105,23 @@ export function activitySummary({
 
   if (entityType === "order") {
     if (action === "created") return `${who} creó el pedido ${label}.`;
+    if (action === "updated") return `${who} actualizó el pedido ${label}.`;
+    if (action === "status_changed") {
+      return `${who} cambió el estado del pedido ${label}.`;
+    }
+    if (action === "approved") return `${who} aprobó el pedido ${label}.`;
+    if (action === "cancelled") return `${who} canceló el pedido ${label}.`;
+    if (action === "closed") return `${who} completó el pedido ${label}.`;
+  }
+
+  if (entityType === "project") {
+    if (action === "created") return `${who} creó el proyecto ${label}.`;
+    if (action === "updated") return `${who} actualizó el proyecto ${label}.`;
+    if (action === "status_changed") {
+      return `${who} cambió el estado del proyecto ${label}.`;
+    }
+    if (action === "closed") return `${who} cerró el proyecto ${label}.`;
+    if (action === "cancelled") return `${who} canceló el proyecto ${label}.`;
   }
 
   if (entityType === "engineering_request") {

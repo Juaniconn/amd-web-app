@@ -31,11 +31,17 @@ import {
   calculateQuoteTotals,
   formatMoney,
   parseMoney,
+  taxPercentForCurrency,
 } from "@/lib/quotes/money";
-import { quoteOriginForProduction } from "@/lib/quotes/rfq";
-import type { QuoteEngineeringStatus, RfqType } from "@/lib/quotes/rfq";
+import {
+  isEngineeringReleasedForQuote,
+  quoteOriginForProduction,
+  type QuoteEngineeringStatus,
+  type RfqType,
+} from "@/lib/quotes/rfq";
 import {
   canEditQuote,
+  canEditQuoteItems,
   canMarkQuoteSent,
   canTransitionQuote,
   isQuoteExpired,
@@ -171,6 +177,33 @@ function assertEditable(status: QuoteStatus) {
     throw new AppError(
       "Esta cotización ya no se puede editar.",
       "QUOTE_LOCKED",
+      409,
+    );
+  }
+}
+
+async function assertCanEditQuoteItems(quote: {
+  id: string;
+  status: QuoteStatus;
+  rfqType: string;
+  engineeringStatus: string;
+}) {
+  assertEditable(quote.status);
+  const engineering = await getActiveEngineeringByQuoteId(quote.id);
+  const released = isEngineeringReleasedForQuote({
+    engineeringRequestStatus: engineering?.status,
+    quoteEngineeringStatus: quote.engineeringStatus,
+  });
+  if (
+    !canEditQuoteItems({
+      status: quote.status,
+      rfqType: quote.rfqType as RfqType,
+      engineeringReleased: released,
+    })
+  ) {
+    throw new AppError(
+      "Las partidas se habilitan cuando Ingeniería libera el plano.",
+      "QUOTE_ITEMS_LOCKED",
       409,
     );
   }
@@ -325,6 +358,31 @@ export async function updateQuote(input: UpdateQuoteInput, actor: Actor) {
       .update(quotes)
       .set({ ...next, updatedBy: actor.userId, updatedAt: new Date() })
       .where(eq(quotes.id, input.id));
+    if (current.currency !== next.currency) {
+      const nextTax = taxPercentForCurrency(next.currency);
+      const lines = await tx
+        .select()
+        .from(quoteItems)
+        .where(eq(quoteItems.quoteId, input.id));
+      for (const line of lines) {
+        const totals = calculateLineTotals({
+          quantity: parseMoney(line.quantity),
+          unitPrice: parseMoney(line.unitPrice),
+          discountPercent: parseMoney(line.discountPercent),
+          taxPercent: nextTax,
+          estimatedCost: parseMoney(line.estimatedCost),
+        });
+        await tx
+          .update(quoteItems)
+          .set({
+            taxPercent: formatMoney(nextTax),
+            ...moneyFields(totals),
+            updatedAt: new Date(),
+          })
+          .where(eq(quoteItems.id, line.id));
+      }
+      await persistTotals(tx, input.id);
+    }
     await ensureEngineeringRequestForQuote(
       tx,
       {
@@ -388,8 +446,11 @@ export async function archiveQuote(id: string, actor: Actor) {
 
 export async function addQuoteItem(input: AddQuoteItemInput, actor: Actor) {
   const quote = await loadQuoteRow(input.quoteId);
-  assertEditable(quote.status);
-  const totals = calculateLineTotals(input);
+  await assertCanEditQuoteItems(quote);
+  const taxPercent =
+    quote.currency === "usd" ? 0 : (input.taxPercent ?? taxPercentForCurrency(quote.currency));
+  const priced = { ...input, taxPercent };
+  const totals = calculateLineTotals(priced);
   const id = crypto.randomUUID();
 
   await db.transaction(async (tx) => {
@@ -404,13 +465,14 @@ export async function addQuoteItem(input: AddQuoteItemInput, actor: Actor) {
       id,
       quoteId: input.quoteId,
       position,
+      kind: input.kind ?? "pieza",
       description: input.description,
       partNumber: input.partNumber ?? null,
       quantity: formatMoney(input.quantity, 4),
       unit: input.unit,
       unitPrice: formatMoney(input.unitPrice, 4),
       discountPercent: formatMoney(input.discountPercent),
-      taxPercent: formatMoney(input.taxPercent),
+      taxPercent: formatMoney(taxPercent),
       estimatedCost: formatMoney(input.estimatedCost, 4),
       ...moneyFields(totals),
     });
@@ -432,7 +494,7 @@ export async function addQuoteItem(input: AddQuoteItemInput, actor: Actor) {
 
 export async function updateQuoteItem(input: UpdateQuoteItemInput, actor: Actor) {
   const quote = await loadQuoteRow(input.quoteId);
-  assertEditable(quote.status);
+  await assertCanEditQuoteItems(quote);
   const [current] = await db
     .select()
     .from(quoteItems)
@@ -441,7 +503,9 @@ export async function updateQuoteItem(input: UpdateQuoteItemInput, actor: Actor)
   if (!current) {
     throw new AppError("La partida no existe.", "QUOTE_ITEM_NOT_FOUND", 404);
   }
-  const totals = calculateLineTotals(input);
+  const taxPercent =
+    quote.currency === "usd" ? 0 : (input.taxPercent ?? taxPercentForCurrency(quote.currency));
+  const totals = calculateLineTotals({ ...input, taxPercent });
 
   await db.transaction(async (tx) => {
     await tx
@@ -453,7 +517,7 @@ export async function updateQuoteItem(input: UpdateQuoteItemInput, actor: Actor)
         unit: input.unit,
         unitPrice: formatMoney(input.unitPrice, 4),
         discountPercent: formatMoney(input.discountPercent),
-        taxPercent: formatMoney(input.taxPercent),
+        taxPercent: formatMoney(taxPercent),
         estimatedCost: formatMoney(input.estimatedCost, 4),
         ...moneyFields(totals),
         updatedAt: new Date(),
@@ -481,7 +545,7 @@ export async function deleteQuoteItem(
   actor: Actor,
 ) {
   const quote = await loadQuoteRow(quoteId);
-  assertEditable(quote.status);
+  await assertCanEditQuoteItems(quote);
   const [current] = await db
     .select()
     .from(quoteItems)
@@ -525,9 +589,15 @@ export async function changeQuoteStatus(
 
   if (nextStatus === "enviada") {
     const items = await loadItems(id);
+    const engineering = await getActiveEngineeringByQuoteId(id);
     const ready = canMarkQuoteSent({
       itemCount: items.length,
       itemsHaveUnitPrice: items.every((item) => item.unitPrice !== null),
+      rfqType: current.rfqType as RfqType,
+      engineeringReleased: isEngineeringReleasedForQuote({
+        engineeringRequestStatus: engineering?.status,
+        quoteEngineeringStatus: current.engineeringStatus,
+      }),
     });
     if (!ready.ok) {
       throw new AppError(ready.reason ?? "No se puede enviar.", "QUOTE_NOT_READY", 400);
@@ -608,7 +678,10 @@ export async function convertQuoteToOrder(id: string, actor: Actor) {
         engineering?.status === "liberado" ? engineering.id : null,
       currency: current.currency,
       total: current.total,
-      status: "nuevo",
+      status: "pendiente",
+      ownerUserId: current.ownerUserId,
+      projectId: current.projectId,
+      notes: current.notes,
       isDemo: current.isDemo,
       createdBy: actor.userId,
       updatedBy: actor.userId,
@@ -618,6 +691,7 @@ export async function convertQuoteToOrder(id: string, actor: Actor) {
         id: crypto.randomUUID(),
         orderId,
         position: item.position,
+        kind: item.kind,
         description: item.description,
         partNumber: item.partNumber,
         quantity: item.quantity,
@@ -751,6 +825,7 @@ export async function getQuoteById(id: string) {
       customerName: customers.legalName,
       customerIsDemo: customers.isDemo,
       contactName: contacts.name,
+      orderId: orders.id,
       orderNumber: orders.number,
     })
     .from(quotes)
@@ -769,6 +844,18 @@ export async function getQuoteById(id: string) {
     .where(and(eq(documents.entityType, "quote"), eq(documents.entityId, id)))
     .orderBy(desc(documents.createdAt));
   const engineering = await getActiveEngineeringByQuoteId(id);
+  const engineeringDocuments = engineering
+    ? await db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.entityType, "engineering_request"),
+            eq(documents.entityId, engineering.id),
+          ),
+        )
+        .orderBy(desc(documents.createdAt))
+    : [];
 
   return {
     ...row.quote,
@@ -776,9 +863,11 @@ export async function getQuoteById(id: string) {
     customerName: row.customerName,
     customerIsDemo: row.customerIsDemo,
     contactName: row.contactName,
+    orderId: row.orderId,
     orderNumber: row.orderNumber,
     items,
     documents: files,
+    engineeringDocuments,
     engineering,
     expiredNow: isQuoteExpired(row.quote.status, row.quote.validUntil),
   };

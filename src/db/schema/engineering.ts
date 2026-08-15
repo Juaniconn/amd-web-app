@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   index,
+  integer,
   numeric,
   pgEnum,
   pgTable,
@@ -102,9 +103,12 @@ export const engineeringHours = pgTable(
       .notNull()
       .references(() => engineeringRequests.id, { onDelete: "cascade" }),
     userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
-    hours: numeric("hours", { precision: 8, scale: 2 }).notNull(),
+    hours: numeric("hours", { precision: 8, scale: 2 }).notNull().default("0"),
     note: text("note"),
     workedOn: timestamp("worked_on", { withTimezone: true }).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    durationMinutes: integer("duration_minutes"),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -115,6 +119,9 @@ export const engineeringHours = pgTable(
   (table) => [
     index("engineering_hours_request_idx").on(table.engineeringRequestId),
     index("engineering_hours_user_idx").on(table.userId),
+    uniqueIndex("engineering_hours_open_uidx")
+      .on(table.engineeringRequestId, table.userId)
+      .where(sql`${table.endedAt} is null and ${table.startedAt} is not null`),
   ],
 );
 

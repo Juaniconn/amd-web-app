@@ -1,9 +1,9 @@
 import "server-only";
 
 import path from "node:path";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
-import { documents, engineeringRequests, quotes } from "@/db/schema";
+import { documents, engineeringRequests, orders, projects, quotes } from "@/db/schema";
 import { AppError } from "@/lib/errors";
 import {
   ENGINEERING_ALLOWED_EXTENSIONS,
@@ -11,6 +11,8 @@ import {
   ENGINEERING_MAX_FILE_BYTES,
 } from "@/lib/engineering/files";
 import { canAttachEngineeringFiles, type EngineeringStatus } from "@/lib/engineering/status";
+import { canEditOrder, type OrderStatus } from "@/lib/orders/status";
+import { canEditProject, type ProjectStatus } from "@/lib/projects/status";
 import { canEditQuote, type QuoteStatus } from "@/lib/quotes/status";
 import {
   documentObjectKey,
@@ -368,4 +370,280 @@ export async function deleteEngineeringDocument(
   });
   await storage.remove(doc.objectKey);
   return { id };
+}
+
+async function uploadEntityDocument(
+  entityType: "order" | "project",
+  entityId: string,
+  file: { originalName: string; bytes: Buffer },
+  actor: Actor,
+) {
+  const meta = assertAllowedDocument(file.originalName, file.bytes.byteLength);
+  const storage = getStorage();
+  const objectKey = documentObjectKey(entityType, entityId, file.originalName);
+  const stored = await storage.put(objectKey, file.bytes);
+  const id = crypto.randomUUID();
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(documents).values({
+        id,
+        entityType,
+        entityId,
+        originalName: file.originalName,
+        mimeType: meta.mimeType,
+        sizeBytes: stored.sizeBytes,
+        checksumSha256: stored.checksumSha256,
+        storageBackend: stored.backend,
+        objectKey: stored.objectKey,
+        uploadedBy: actor.userId,
+      });
+      await recordActivity(tx, {
+        actorUserId: actor.userId,
+        actorName: actor.name,
+        action: "created",
+        entityType: "document",
+        entityId: id,
+        entityLabel: file.originalName,
+        parentEntityType: entityType,
+        parentEntityId: entityId,
+      });
+    });
+  } catch (error) {
+    await storage.remove(objectKey);
+    throw error;
+  }
+
+  return { id };
+}
+
+async function deleteEntityDocument(
+  entityType: "order" | "project",
+  id: string,
+  entityId: string,
+  actor: Actor,
+) {
+  const [doc] = await db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.id, id),
+        eq(documents.entityType, entityType),
+        eq(documents.entityId, entityId),
+      ),
+    )
+    .limit(1);
+  if (!doc) {
+    throw new AppError("El archivo no existe.", "DOCUMENT_NOT_FOUND", 404);
+  }
+
+  const storage = getStorage();
+  await db.transaction(async (tx) => {
+    await tx.delete(documents).where(eq(documents.id, id));
+    await recordActivity(tx, {
+      actorUserId: actor.userId,
+      actorName: actor.name,
+      action: "deleted",
+      entityType: "document",
+      entityId: id,
+      entityLabel: doc.originalName,
+      parentEntityType: entityType,
+      parentEntityId: entityId,
+    });
+  });
+  await storage.remove(doc.objectKey);
+  return { id };
+}
+
+export async function uploadOrderDocument(
+  orderId: string,
+  file: { originalName: string; bytes: Buffer },
+  actor: Actor,
+) {
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (!order) {
+    throw new AppError("El pedido no existe.", "ORDER_NOT_FOUND", 404);
+  }
+  if (!canEditOrder(order.status as OrderStatus)) {
+    throw new AppError(
+      "No se pueden adjuntar archivos en este estado.",
+      "ORDER_LOCKED",
+      409,
+    );
+  }
+  return uploadEntityDocument("order", orderId, file, actor);
+}
+
+export async function deleteOrderDocument(
+  id: string,
+  orderId: string,
+  actor: Actor,
+) {
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (!order) {
+    throw new AppError("El pedido no existe.", "ORDER_NOT_FOUND", 404);
+  }
+  if (!canEditOrder(order.status as OrderStatus)) {
+    throw new AppError(
+      "No se pueden eliminar archivos en este estado.",
+      "ORDER_LOCKED",
+      409,
+    );
+  }
+  return deleteEntityDocument("order", id, orderId, actor);
+}
+
+export async function uploadProjectDocument(
+  projectId: string,
+  file: { originalName: string; bytes: Buffer },
+  actor: Actor,
+) {
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+  if (!project) {
+    throw new AppError("El proyecto no existe.", "PROJECT_NOT_FOUND", 404);
+  }
+  if (!canEditProject(project.status as ProjectStatus)) {
+    throw new AppError(
+      "No se pueden adjuntar archivos en este estado.",
+      "PROJECT_LOCKED",
+      409,
+    );
+  }
+  return uploadEntityDocument("project", projectId, file, actor);
+}
+
+export async function deleteProjectDocument(
+  id: string,
+  projectId: string,
+  actor: Actor,
+) {
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+  if (!project) {
+    throw new AppError("El proyecto no existe.", "PROJECT_NOT_FOUND", 404);
+  }
+  if (!canEditProject(project.status as ProjectStatus)) {
+    throw new AppError(
+      "No se pueden eliminar archivos en este estado.",
+      "PROJECT_LOCKED",
+      409,
+    );
+  }
+  return deleteEntityDocument("project", id, projectId, actor);
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export async function listAvailableOtDocuments(orderId: string) {
+  const [order] = await db
+    .select({
+      id: orders.id,
+      quoteId: orders.quoteId,
+      engineeringRequestId: orders.engineeringRequestId,
+    })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!order) return [];
+
+  const filters = [
+    and(eq(documents.entityType, "quote"), eq(documents.entityId, order.quoteId)),
+    and(eq(documents.entityType, "order"), eq(documents.entityId, order.id)),
+  ];
+  if (order.engineeringRequestId) {
+    filters.push(
+      and(
+        eq(documents.entityType, "engineering_request"),
+        eq(documents.entityId, order.engineeringRequestId),
+      ),
+    );
+  }
+
+  const rows = await db
+    .select()
+    .from(documents)
+    .where(or(...filters))
+    .orderBy(desc(documents.createdAt));
+
+  return rows.map((row) => ({
+    id: row.id,
+    originalName: row.originalName,
+    mimeType: row.mimeType,
+    sizeBytes: row.sizeBytes,
+    source:
+      row.entityType === "engineering_request"
+        ? "Ingeniería"
+        : row.entityType === "order"
+          ? "Pedido"
+          : "Cotización",
+  }));
+}
+
+export async function listProductionOrderDocuments(productionOrderId: string) {
+  return db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.entityType, "production_order"),
+        eq(documents.entityId, productionOrderId),
+      ),
+    )
+    .orderBy(desc(documents.createdAt));
+}
+
+export async function attachDocumentsToProductionOrder(
+  tx: Tx,
+  productionOrderId: string,
+  sourceIds: string[],
+  actor: Actor,
+  allowed: {
+    quoteId: string;
+    orderId: string;
+    engineeringRequestId: string | null;
+  },
+) {
+  if (sourceIds.length === 0) return;
+  const uniqueIds = [...new Set(sourceIds)];
+  const rows = await tx
+    .select()
+    .from(documents)
+    .where(inArray(documents.id, uniqueIds));
+  if (rows.length !== uniqueIds.length) {
+    throw new AppError("Uno de los archivos no existe.", "DOCUMENT_NOT_FOUND", 404);
+  }
+  for (const doc of rows) {
+    const allowedSource =
+      (doc.entityType === "quote" && doc.entityId === allowed.quoteId) ||
+      (doc.entityType === "order" && doc.entityId === allowed.orderId) ||
+      (doc.entityType === "engineering_request" &&
+        doc.entityId === allowed.engineeringRequestId);
+    if (!allowedSource) {
+      throw new AppError(
+        "El archivo no pertenece a este pedido.",
+        "DOCUMENT_NOT_LINKED",
+        409,
+      );
+    }
+    await tx.insert(documents).values({
+      id: crypto.randomUUID(),
+      entityType: "production_order",
+      entityId: productionOrderId,
+      originalName: doc.originalName,
+      mimeType: doc.mimeType,
+      sizeBytes: doc.sizeBytes,
+      checksumSha256: doc.checksumSha256,
+      storageBackend: doc.storageBackend,
+      objectKey: doc.objectKey,
+      uploadedBy: actor.userId,
+    });
+  }
 }

@@ -14,8 +14,11 @@ import {
   QUOTE_ENGINEERING_STATUS_LABELS,
   QUOTE_ENGINEERING_TYPE_LABELS,
   RFQ_TYPE_LABELS,
+  isEngineeringReleasedForQuote,
+  rfqBlocksEngineering,
+  rfqLocksItemsUntilRelease,
 } from "@/lib/quotes/rfq";
-import { QUOTE_STATUS_LABELS, canEditQuote } from "@/lib/quotes/status";
+import { QUOTE_STATUS_LABELS, canEditQuote, canEditQuoteItems } from "@/lib/quotes/status";
 import { listQuoteActivity } from "@/server/services/activity";
 import { getQuoteById } from "@/server/services/quotes";
 
@@ -53,6 +56,21 @@ export default async function QuoteDetailPage({
     PERMISSION_IDS.engineeringRead,
   );
   const editable = canWrite && canEditQuote(quote.status) && !quote.deletedAt;
+  const engineeringReleased = isEngineeringReleasedForQuote({
+    engineeringRequestStatus: quote.engineering?.status,
+    quoteEngineeringStatus: quote.engineeringStatus,
+  });
+  const canWriteItems =
+    editable &&
+    canEditQuoteItems({
+      status: quote.status,
+      rfqType: quote.rfqType,
+      engineeringReleased,
+    });
+  const itemsLockedReason =
+    editable && rfqLocksItemsUntilRelease(quote.rfqType) && !engineeringReleased
+      ? "Diseño + fabricación: las partidas se habilitan cuando Ingeniería libera el plano."
+      : undefined;
 
   return (
     <div className="space-y-6">
@@ -86,6 +104,14 @@ export default async function QuoteDetailPage({
           {canWrite && !quote.deletedAt && quote.status !== "convertida" ? (
             <ArchiveQuoteButton quoteId={quote.id} number={quote.number} />
           ) : null}
+          {!quote.deletedAt ? (
+            <a
+              href={`/api/quotes/${quote.id}/pdf`}
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Descargar PDF
+            </a>
+          ) : null}
         </div>
       </div>
 
@@ -100,9 +126,15 @@ export default async function QuoteDetailPage({
 
       {quote.orderNumber ? (
         <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          Pedido creado: <span className="font-medium">{quote.orderNumber}</span>
-          . Producción puede emitir OT desde ese pedido. La vista completa de
-          pedidos sigue diferida.
+          Pedido creado:{" "}
+          {quote.orderId ? (
+            <Link href={`/orders/${quote.orderId}`} className="font-medium hover:underline">
+              {quote.orderNumber}
+            </Link>
+          ) : (
+            <span className="font-medium">{quote.orderNumber}</span>
+          )}
+          . La OT se crea desde el pedido, no al convertir.
         </p>
       ) : null}
 
@@ -169,7 +201,12 @@ export default async function QuoteDetailPage({
           <CardTitle>Ingeniería</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          {quote.engineering ? (
+          {rfqBlocksEngineering(quote.rfqType) ? (
+            <p className="text-muted-foreground">
+              Solo fabricación: ingeniería bloqueada. Sube el plano del cliente
+              en Archivos, cotiza las partidas y envía al cliente.
+            </p>
+          ) : quote.engineering ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p>
                 Solicitud{" "}
@@ -216,7 +253,8 @@ export default async function QuoteDetailPage({
             quoteId={quote.id}
             currency={quote.currency}
             items={quote.items}
-            canWrite={editable}
+            canWrite={canWriteItems}
+            lockedReason={itemsLockedReason}
           />
         </CardContent>
       </Card>
@@ -226,6 +264,32 @@ export default async function QuoteDetailPage({
           <CardTitle>Archivos</CardTitle>
         </CardHeader>
         <CardContent>
+          {quote.engineeringDocuments.length > 0 ? (
+            <div className="mb-4 space-y-2">
+              <p className="text-sm font-medium">Planos de ingeniería</p>
+              <p className="text-xs text-muted-foreground">
+                Archivos liberados o en proceso. Úsalos para cotizar las partidas.
+              </p>
+              <ul className="space-y-2">
+                {quote.engineeringDocuments.map((doc) => (
+                  <li
+                    key={doc.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm"
+                  >
+                    <a
+                      className="font-medium underline-offset-4 hover:underline"
+                      href={`/api/documents/${doc.id}`}
+                    >
+                      {doc.originalName}
+                    </a>
+                    <span className="text-xs text-muted-foreground">
+                      {(doc.sizeBytes / 1024).toFixed(1)} KB
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <QuoteDocuments
             quoteId={quote.id}
             documents={quote.documents}

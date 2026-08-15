@@ -46,6 +46,18 @@ describe("quote validation", () => {
     expect(result.success).toBe(true);
   });
 
+  it("rejects empty required amounts so the user can type the number", () => {
+    const result = addQuoteItemSchema.safeParse({
+      quoteId: "demo-quote-001",
+      description: "Placa aluminio",
+      quantity: "",
+      unitPrice: "",
+      taxPercent: "",
+      estimatedCost: "",
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects a negative price", () => {
     const result = addQuoteItemSchema.safeParse({
       quoteId: "demo-quote-001",

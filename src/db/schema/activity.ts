@@ -42,6 +42,7 @@ export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "material",
   "inventory_movement",
   "warehouse",
+  "project",
 ]);
 
 export const activityLogs = pgTable(

@@ -15,6 +15,7 @@ import { requirePermission } from "@/lib/auth/session";
 import {
   PRODUCTION_MONITORING_LABELS,
   PRODUCTION_PRIORITY_LABELS,
+  productionPriorityVariant,
   type ProductionPriority,
 } from "@/lib/production/catalog";
 import {
@@ -171,7 +172,11 @@ export default async function ProductionPage({
                       </Badge>
                     ) : null}
                   </TableCell>
-                  <TableCell>{row.orderNumber}</TableCell>
+                  <TableCell>
+                    <Link href={`/orders/${row.orderId}`} className="hover:underline">
+                      {row.orderNumber}
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     <Link href={`/customers/${row.customerId}`} className="hover:underline">
                       {row.customerName}
@@ -183,7 +188,13 @@ export default async function ProductionPage({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {PRODUCTION_PRIORITY_LABELS[row.priority as ProductionPriority]}
+                    <Badge
+                      variant={productionPriorityVariant(
+                        row.priority as ProductionPriority,
+                      )}
+                    >
+                      {PRODUCTION_PRIORITY_LABELS[row.priority as ProductionPriority]}
+                    </Badge>
                   </TableCell>
                   <TableCell>{row.promisedDate.toLocaleDateString("es-MX")}</TableCell>
                   <TableCell>{PRODUCTION_MONITORING_LABELS[row.monitoring]}</TableCell>

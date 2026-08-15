@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { users } from "./auth";
 import { contacts, customers } from "./crm";
+import { projects } from "./projects";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -35,7 +36,19 @@ export const quoteStatusEnum = pgEnum("quote_status", [
 
 export const quoteCurrencyEnum = pgEnum("quote_currency", ["mxn", "usd"]);
 
-export const orderStatusEnum = pgEnum("order_status", ["nuevo"]);
+export const quoteItemKindEnum = pgEnum("quote_item_kind", [
+  "pieza",
+  "servicio_ingenieria",
+]);
+
+export const orderStatusEnum = pgEnum("order_status", [
+  "borrador",
+  "pendiente",
+  "aprobado",
+  "en_produccion",
+  "completado",
+  "cancelado",
+]);
 
 export const quoteRfqTypeEnum = pgEnum("quote_rfq_type", [
   "solo_fabricacion",
@@ -106,6 +119,9 @@ export const quotes = pgTable(
       .notNull()
       .default("0"),
     marginPercent: numeric("margin_percent", { precision: 7, scale: 2 }),
+    projectId: text("project_id").references(() => projects.id, {
+      onDelete: "set null",
+    }),
     convertedOrderId: text("converted_order_id").references(
       (): AnyPgColumn => orders.id,
       { onDelete: "set null" },
@@ -131,6 +147,7 @@ export const quotes = pgTable(
     uniqueIndex("quotes_converted_order_uidx")
       .on(table.convertedOrderId)
       .where(sql`${table.convertedOrderId} is not null`),
+    index("quotes_project_id_idx").on(table.projectId),
   ],
 );
 
@@ -142,6 +159,7 @@ export const quoteItems = pgTable(
       .notNull()
       .references(() => quotes.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
+    kind: quoteItemKindEnum("kind").notNull().default("pieza"),
     description: text("description").notNull(),
     partNumber: text("part_number"),
     quantity: numeric("quantity", { precision: 12, scale: 4 }).notNull(),
@@ -209,9 +227,17 @@ export const orders = pgTable(
       .references(() => quotes.id, { onDelete: "restrict" }),
     origin: orderOriginEnum("origin").notNull().default("rfq_directa"),
     engineeringRequestId: text("engineering_request_id"),
+    projectId: text("project_id").references(() => projects.id, {
+      onDelete: "set null",
+    }),
+    ownerUserId: text("owner_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    promisedDate: timestamp("promised_date", { withTimezone: true }),
+    notes: text("notes"),
     currency: quoteCurrencyEnum("currency").notNull().default("mxn"),
     total: numeric("total", { precision: 14, scale: 2 }).notNull().default("0"),
-    status: orderStatusEnum("status").notNull().default("nuevo"),
+    status: orderStatusEnum("status").notNull().default("pendiente"),
     isDemo: boolean("is_demo").default(false).notNull(),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
@@ -227,6 +253,9 @@ export const orders = pgTable(
     index("orders_customer_id_idx").on(table.customerId),
     index("orders_origin_idx").on(table.origin),
     index("orders_engineering_request_id_idx").on(table.engineeringRequestId),
+    index("orders_project_id_idx").on(table.projectId),
+    index("orders_status_idx").on(table.status),
+    index("orders_promised_date_idx").on(table.promisedDate),
   ],
 );
 
@@ -238,6 +267,7 @@ export const orderItems = pgTable(
       .notNull()
       .references(() => orders.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
+    kind: quoteItemKindEnum("kind").notNull().default("pieza"),
     description: text("description").notNull(),
     partNumber: text("part_number"),
     quantity: numeric("quantity", { precision: 12, scale: 4 }).notNull(),
@@ -278,6 +308,10 @@ export const quotesRelations = relations(quotes, ({ one, many }) => ({
     references: [users.id],
   }),
   items: many(quoteItems),
+  project: one(projects, {
+    fields: [quotes.projectId],
+    references: [projects.id],
+  }),
   convertedOrder: one(orders, {
     fields: [quotes.convertedOrderId],
     references: [orders.id],
@@ -299,6 +333,14 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   quote: one(quotes, {
     fields: [orders.quoteId],
     references: [quotes.id],
+  }),
+  project: one(projects, {
+    fields: [orders.projectId],
+    references: [projects.id],
+  }),
+  owner: one(users, {
+    fields: [orders.ownerUserId],
+    references: [users.id],
   }),
   items: many(orderItems),
 }));

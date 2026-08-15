@@ -4,6 +4,7 @@ import {
   calculateQuoteTotals,
   formatMoney,
   roundMoney,
+  taxPercentForCurrency,
 } from "./money";
 
 describe("quote money", () => {
@@ -80,5 +81,20 @@ describe("quote money", () => {
     expect(header.estimatedCost).toBe(80);
     expect(header.estimatedProfit).toBe(120);
     expect(header.marginPercent).toBe(60);
+  });
+
+  it("does not charge IVA on USD", () => {
+    expect(taxPercentForCurrency("usd")).toBe(0);
+    expect(taxPercentForCurrency("USD")).toBe(0);
+    expect(taxPercentForCurrency("mxn")).toBe(16);
+    const line = calculateLineTotals({
+      quantity: 1,
+      unitPrice: 100,
+      discountPercent: 0,
+      taxPercent: taxPercentForCurrency("usd"),
+      estimatedCost: 40,
+    });
+    expect(line.lineTax).toBe(0);
+    expect(line.lineTotal).toBe(100);
   });
 });
