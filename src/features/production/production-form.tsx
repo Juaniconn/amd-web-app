@@ -14,6 +14,8 @@ import {
   type ProductionPriority,
 } from "@/lib/production/catalog";
 import { isManufacturingItem } from "@/lib/quotes/items";
+import { workOrderNumber } from "@/lib/production/ot-number";
+import { displayQty, inputQty } from "@/lib/inventory/catalog";
 import {
   createProductionOrderAction,
   updateProductionOrderAction,
@@ -124,7 +126,7 @@ export function ProductionForm({
     if (!selected) return;
     form.setValue("description", selected.description);
     form.setValue("partNumber", selected.partNumber ?? "");
-    form.setValue("quantity", String(Number(selected.quantity)));
+    form.setValue("quantity", inputQty(selected.quantity));
     form.setValue("unit", selected.unit);
   }, [form, items, mode, selectedItemId]);
 
@@ -156,9 +158,21 @@ export function ProductionForm({
 
   return (
     <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+      {mode === "edit" && orders[0] ? (
+        <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Orden de trabajo
+          </p>
+          <p className="mt-1 font-medium">{workOrderNumber(orders[0].number)}</p>
+          <p className="text-muted-foreground">
+            {orders[0].customerName} · {orders[0].quoteNumber}
+          </p>
+        </div>
+      ) : null}
+
       {mode === "create" ? (
         <div className="space-y-1">
-          <Label htmlFor="orderId">Pedido</Label>
+          <Label htmlFor="orderId">Orden de trabajo</Label>
           <select
             id="orderId"
             className={selectClassName}
@@ -171,10 +185,10 @@ export function ProductionForm({
               },
             })}
           >
-            <option value="">Selecciona un pedido convertido</option>
+            <option value="">Selecciona una orden de trabajo</option>
             {orders.map((order) => (
               <option key={order.id} value={order.id}>
-                {order.number} · {order.customerName} · {order.quoteNumber}
+                {workOrderNumber(order.number)} · {order.customerName} · {order.quoteNumber}
                 {order.engineeringNumber ? ` · ${order.engineeringNumber}` : ""}
               </option>
             ))}
@@ -187,8 +201,8 @@ export function ProductionForm({
           <Label htmlFor="orderItemId">Partida</Label>
           {manufacturingItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Este pedido no tiene piezas para OT. El servicio de ingeniería se
-              cobra en la cotización y no genera orden de trabajo.
+              Esta orden de trabajo no tiene piezas para número de parte. El servicio de ingeniería se
+              cobra en la cotización y no genera número de parte.
             </p>
           ) : (
             <select
@@ -199,30 +213,31 @@ export function ProductionForm({
               <option value="">Selecciona la pieza</option>
               {manufacturingItems.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.partNumber ?? item.description} · {item.quantity} {item.unit}
+                  {item.partNumber ?? item.description} · {displayQty(item.quantity)} {item.unit}
                 </option>
               ))}
             </select>
           )}
           <p className="text-xs text-muted-foreground">
-            Una partida de pieza = una OT. Tres números de parte = tres OT.
+            Una partida de pieza = un número de parte. Tres planos = tres números de parte.
           </p>
         </div>
       ) : null}
+
+      <div className="space-y-1">
+        <Label htmlFor="partNumber">Número de parte (ID)</Label>
+        <Input id="partNumber" {...form.register("partNumber")} />
+      </div>
 
       <div className="space-y-1">
         <Label htmlFor="description">Descripción</Label>
         <Textarea id="description" rows={3} {...form.register("description", { required: true })} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="space-y-1">
-          <Label htmlFor="partNumber">Número de parte</Label>
-          <Input id="partNumber" {...form.register("partNumber")} />
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1">
           <Label htmlFor="quantity">Cantidad</Label>
-          <Input id="quantity" type="number" min="0.0001" step="0.0001" {...form.register("quantity")} />
+          <Input id="quantity" type="number" min="1" step="1" {...form.register("quantity")} />
         </div>
         <div className="space-y-1">
           <Label htmlFor="unit">Unidad</Label>
@@ -247,72 +262,68 @@ export function ProductionForm({
         </div>
       </div>
 
-      {mode === "create" ? (
-        <>
-          <div className="space-y-1">
-            <Label htmlFor="routeId">Ruta</Label>
-            <select id="routeId" className={selectClassName} {...form.register("routeId")}>
-              <option value="">Sin ruta (configurable después)</option>
-              {routes.map((route) => (
-                <option key={route.id} value={route.id}>
-                  {route.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-1">
-              <Label htmlFor="workCenterId">Centro</Label>
-              <select
-                id="workCenterId"
-                className={selectClassName}
-                {...form.register("workCenterId", {
-                  onChange: (event) => setCenterFilter(event.target.value),
-                })}
-              >
-                <option value="">Sin asignar</option>
-                {workCenters.map((center) => (
-                  <option key={center.id} value={center.id}>
-                    {center.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="machineId">Máquina</Label>
-              <select id="machineId" className={selectClassName} {...form.register("machineId")}>
-                <option value="">Sin asignar</option>
-                {filteredMachines.map((machine) => (
-                  <option key={machine.id} value={machine.id}>
-                    {machine.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="operatorUserId">Operador</Label>
-              <select
-                id="operatorUserId"
-                className={selectClassName}
-                {...form.register("operatorUserId")}
-              >
-                <option value="">Sin asignar</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </>
-      ) : null}
+      <div className="space-y-1">
+        <Label htmlFor="routeId">Ruta</Label>
+        <select id="routeId" className={selectClassName} {...form.register("routeId")}>
+          <option value="">Sin ruta (configurable después)</option>
+          {routes.map((route) => (
+            <option key={route.id} value={route.id}>
+              {route.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="space-y-1">
+          <Label htmlFor="workCenterId">Centro</Label>
+          <select
+            id="workCenterId"
+            className={selectClassName}
+            {...form.register("workCenterId", {
+              onChange: (event) => setCenterFilter(event.target.value),
+            })}
+          >
+            <option value="">Sin asignar</option>
+            {workCenters.map((center) => (
+              <option key={center.id} value={center.id}>
+                {center.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="machineId">Máquina</Label>
+          <select id="machineId" className={selectClassName} {...form.register("machineId")}>
+            <option value="">Sin asignar</option>
+            {filteredMachines.map((machine) => (
+              <option key={machine.id} value={machine.id}>
+                {machine.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="operatorUserId">Operador</Label>
+          <select
+            id="operatorUserId"
+            className={selectClassName}
+            {...form.register("operatorUserId")}
+          >
+            <option value="">Sin asignar</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {mode === "create" && documents.length > 0 ? (
         <div className="space-y-2">
-          <Label>Planos / archivos de la OT</Label>
+          <Label>Planos / archivos del número de parte</Label>
           <p className="text-xs text-muted-foreground">
-            Elige los adjuntos que el operador verá y descargará en la OT.
+            Elige los adjuntos que el operador verá y descargará en este número de parte.
           </p>
           <ul className="space-y-2 rounded-lg border p-3">
             {documents.map((doc) => (
@@ -353,7 +364,7 @@ export function ProductionForm({
       ) : null}
 
       <Button type="submit" disabled={form.formState.isSubmitting}>
-        {mode === "create" ? "Crear OT" : "Guardar"}
+        {mode === "create" ? "Crear número de parte" : "Guardar número de parte"}
       </Button>
     </form>
   );

@@ -3,8 +3,11 @@ import { notFound } from "next/navigation";
 import { MaterialForm } from "@/features/inventory/material-form";
 import { buttonVariants } from "@/components/ui/button";
 import { requirePermission } from "@/lib/auth/session";
+import { inputQty } from "@/lib/inventory/catalog";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
-import { getMaterialById, listUnitsOfMeasure } from "@/server/services/inventory";
+import { getMaterialById, listUnitsOfMeasure, listWarehouses } from "@/server/services/inventory";
+import { listActiveSuppliers, listAllSupplierMaterials } from "@/server/services/purchasing";
+import { listBranches } from "@/server/services/branches";
 
 export default async function EditMaterialPage({
   params,
@@ -15,7 +18,13 @@ export default async function EditMaterialPage({
   const { id } = await params;
   const material = await getMaterialById(id);
   if (!material) notFound();
-  const units = await listUnitsOfMeasure();
+  const [units, warehouses, branches, suppliers, supplierMaterials] = await Promise.all([
+    listUnitsOfMeasure(),
+    listWarehouses(),
+    listBranches({ activeOnly: true }),
+    listActiveSuppliers(),
+    listAllSupplierMaterials(),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -39,14 +48,29 @@ export default async function EditMaterialPage({
         mode="edit"
         materialId={material.id}
         units={units}
+        warehouses={warehouses}
+        branches={branches}
+        suppliers={suppliers}
+        supplierMaterials={supplierMaterials}
         defaultValues={{
           description: material.description,
           category: material.category,
           unitId: material.unitId,
+          warehouseId: material.warehouseId,
+          branchId: material.branchId ?? "",
           isCritical: material.isCritical,
           active: material.active,
-          minStock: material.minStock ?? undefined,
+          minStock: material.minStock ? inputQty(material.minStock) : undefined,
           notes: material.notes ?? "",
+          grade: material.grade ?? "",
+          thicknessIn: material.thicknessIn ?? undefined,
+          costPerKg: material.costPerKg ?? undefined,
+          sheetWidthIn: material.sheetWidthIn ?? undefined,
+          sheetLengthIn: material.sheetLengthIn ?? undefined,
+          densityGCm3: material.densityGCm3 ?? undefined,
+          supplierId: material.supplierId ?? "",
+          supplierMaterialId: material.supplierMaterialId ?? "",
+          usedInCalculator: material.usedInCalculator,
         }}
       />
     </div>

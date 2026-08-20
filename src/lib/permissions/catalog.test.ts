@@ -29,8 +29,14 @@ describe("RBAC catalog", () => {
     expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.customersWrite)).toBe(
       false,
     );
-    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.quotesRead)).toBe(
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.branchesWrite)).toBe(
       true,
+    );
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.branchesRead)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.branchesWrite)).toBe(
+      false,
     );
     expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.quotesWrite)).toBe(
       false,
@@ -123,6 +129,29 @@ describe("RBAC catalog", () => {
       true,
     );
     expect(roleHasPermission(ROLE_IDS.compras, PERMISSION_IDS.inventoryRead)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.compras, PERMISSION_IDS.purchasingWrite)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.compras, PERMISSION_IDS.purchasingReceive)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.almacen, PERMISSION_IDS.purchasingReceive)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.almacen, PERMISSION_IDS.deliveriesConfirm)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.calidad, PERMISSION_IDS.qualityInspect)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.calidad, PERMISSION_IDS.qualityNcr)).toBe(true);
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.billingWrite)).toBe(true);
+    expect(roleHasPermission(ROLE_IDS.ventas, PERMISSION_IDS.inventoryReserve)).toBe(
+      true,
+    );
+    expect(roleHasPermission(ROLE_IDS.direccion, PERMISSION_IDS.billingRead)).toBe(
       true,
     );
     expect(roleHasPermission(ROLE_IDS.compras, PERMISSION_IDS.inventoryWrite)).toBe(

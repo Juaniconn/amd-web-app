@@ -5,7 +5,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { requirePermission } from "@/lib/auth/session";
 import { canEditOrder, type OrderStatus } from "@/lib/orders/status";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
-import { getOrderById, listUsersForOrders } from "@/server/services/orders";
+import { getOrderById, listUsersForOrders, resolveOrdersModuleId } from "@/server/services/orders";
 import { listProjectsByCustomer } from "@/server/services/projects";
 
 function toDateInput(value: Date | null) {
@@ -20,7 +20,9 @@ export default async function EditOrderPage({
 }) {
   await requirePermission(PERMISSION_IDS.ordersUpdate);
   const { id } = await params;
-  const order = await getOrderById(id);
+  const resolved = await resolveOrdersModuleId(id);
+  if (!resolved) notFound();
+  const order = await getOrderById(resolved.orderId);
   if (!order) notFound();
   if (!canEditOrder(order.status as OrderStatus)) {
     notFound();
@@ -35,10 +37,14 @@ export default async function EditOrderPage({
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Editar {order.number}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Campos comerciales. No cambia la RFQ ni las OT.
+            Campos comerciales. El material se gestiona en la ficha de la orden de
+            trabajo.
           </p>
         </div>
-        <Link href={`/orders/${order.id}`} className={buttonVariants({ variant: "outline" })}>
+        <Link
+          href={`/orders/${order.id}#materiales`}
+          className={buttonVariants({ variant: "outline" })}
+        >
           Volver
         </Link>
       </div>

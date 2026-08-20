@@ -22,14 +22,13 @@ import type {
   CustomerType,
   UpdateCustomerInput,
 } from "@/lib/validation/customers";
+import { resolvePageSize } from "@/lib/ui/pagination";
 import { recordActivity } from "@/server/services/activity";
 
 export type Actor = {
   userId: string;
   name: string;
 };
-
-export const CUSTOMER_PAGE_SIZE = 20;
 
 function customerSnapshot(row: {
   code: string;
@@ -45,6 +44,12 @@ function customerSnapshot(row: {
   type: string;
   status: string;
   notes: string | null;
+  shippingSameAsBilling?: boolean;
+  shippingAddress?: string | null;
+  shippingCity?: string | null;
+  shippingState?: string | null;
+  shippingPostalCode?: string | null;
+  shippingCountry?: string | null;
 }) {
   return {
     code: row.code,
@@ -60,6 +65,12 @@ function customerSnapshot(row: {
     type: row.type,
     status: row.status,
     notes: row.notes,
+    shippingSameAsBilling: row.shippingSameAsBilling,
+    shippingAddress: row.shippingAddress,
+    shippingCity: row.shippingCity,
+    shippingState: row.shippingState,
+    shippingPostalCode: row.shippingPostalCode,
+    shippingCountry: row.shippingCountry,
   };
 }
 
@@ -107,6 +118,38 @@ async function generateCustomerCode() {
   return `${prefix}${String(next).padStart(5, "0")}`;
 }
 
+export function resolveCustomerShipping(input: {
+  shippingSameAsBilling: boolean;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country: string;
+  shippingAddress?: string | null;
+  shippingCity?: string | null;
+  shippingState?: string | null;
+  shippingPostalCode?: string | null;
+  shippingCountry?: string | null;
+}) {
+  if (input.shippingSameAsBilling) {
+    return {
+      shippingSameAsBilling: true,
+      shippingAddress: input.address ?? null,
+      shippingCity: input.city ?? null,
+      shippingState: input.state ?? null,
+      shippingPostalCode: null,
+      shippingCountry: input.country,
+    };
+  }
+  return {
+    shippingSameAsBilling: false,
+    shippingAddress: input.shippingAddress ?? null,
+    shippingCity: input.shippingCity ?? null,
+    shippingState: input.shippingState ?? null,
+    shippingPostalCode: input.shippingPostalCode ?? null,
+    shippingCountry: input.shippingCountry ?? input.country,
+  };
+}
+
 export async function createCustomer(input: CreateCustomerInput, actor: Actor) {
   await assertUniqueRfc(input.rfc);
 
@@ -130,6 +173,7 @@ export async function createCustomer(input: CreateCustomerInput, actor: Actor) {
       type: input.type,
       status: input.status,
       notes: input.notes ?? null,
+      ...resolveCustomerShipping(input),
       isDemo: false,
       createdBy: actor.userId,
       updatedBy: actor.userId,
@@ -158,6 +202,7 @@ export async function createCustomer(input: CreateCustomerInput, actor: Actor) {
         type: input.type,
         status: input.status,
         notes: input.notes ?? null,
+        ...resolveCustomerShipping(input),
       }),
     });
   });
@@ -191,6 +236,7 @@ export async function updateCustomer(input: UpdateCustomerInput, actor: Actor) {
     type: input.type,
     status: input.status,
     notes: input.notes ?? null,
+    ...resolveCustomerShipping(input),
   };
 
   const changed = pickChangedFields(customerSnapshot(current), {
@@ -299,10 +345,12 @@ export type CustomerListQuery = {
   status?: CustomerStatus;
   type?: CustomerType;
   page?: number;
+  pageSize?: number;
 };
 
 export async function listCustomers(query: CustomerListQuery) {
   const page = Math.max(1, query.page ?? 1);
+  const pageSize = resolvePageSize(query.pageSize);
   const filters = [isNull(customers.deletedAt)];
 
   if (query.status) {
@@ -338,6 +386,7 @@ export async function listCustomers(query: CustomerListQuery) {
       legalName: customers.legalName,
       tradeName: customers.tradeName,
       rfc: customers.rfc,
+      phone: customers.phone,
       city: customers.city,
       type: customers.type,
       status: customers.status,
@@ -358,8 +407,8 @@ export async function listCustomers(query: CustomerListQuery) {
     )
     .where(where)
     .orderBy(asc(customers.legalName))
-    .limit(CUSTOMER_PAGE_SIZE)
-    .offset((page - 1) * CUSTOMER_PAGE_SIZE);
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
 
   const total = Number(totalRow.value);
 
@@ -367,8 +416,8 @@ export async function listCustomers(query: CustomerListQuery) {
     rows,
     total,
     page,
-    pageSize: CUSTOMER_PAGE_SIZE,
-    pageCount: Math.max(1, Math.ceil(total / CUSTOMER_PAGE_SIZE)),
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
   };
 }
 
@@ -389,6 +438,17 @@ export async function listActiveCustomersForSelect() {
       code: customers.code,
       legalName: customers.legalName,
       isDemo: customers.isDemo,
+      phone: customers.phone,
+      address: customers.address,
+      city: customers.city,
+      state: customers.state,
+      country: customers.country,
+      shippingSameAsBilling: customers.shippingSameAsBilling,
+      shippingAddress: customers.shippingAddress,
+      shippingCity: customers.shippingCity,
+      shippingState: customers.shippingState,
+      shippingPostalCode: customers.shippingPostalCode,
+      shippingCountry: customers.shippingCountry,
     })
     .from(customers)
     .where(and(isNull(customers.deletedAt), eq(customers.status, "activo")))
@@ -402,6 +462,8 @@ export async function listContactsForCustomer(customerId: string) {
       name: contacts.name,
       isPrimary: contacts.isPrimary,
       title: contacts.title,
+      department: contacts.department,
+      phone: contacts.phone,
     })
     .from(contacts)
     .where(and(eq(contacts.customerId, customerId), isNull(contacts.deletedAt)))

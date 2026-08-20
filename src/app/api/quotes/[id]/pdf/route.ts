@@ -8,7 +8,7 @@ import { userHasPermission } from "@/server/services/access";
 import { getQuoteById } from "@/server/services/quotes";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
@@ -36,9 +36,14 @@ export async function GET(
     customerName: quote.customerName,
     customerCode: quote.customerCode,
     contactName: quote.contactName,
+    contactPhone: quote.contactPhone,
+    contactTitle: quote.contactTitle,
+    contactDepartment: quote.contactDepartment,
+    addresseeMode: quote.addresseeMode,
     currency: quote.currency,
     issueDate: quote.issueDate,
     validUntil: quote.validUntil,
+    paymentTerm: quote.paymentTerm,
     paymentTerms: quote.paymentTerms,
     leadTime: quote.leadTime,
     notes: quote.notes,
@@ -56,12 +61,28 @@ export async function GET(
       lineTax: item.lineTax,
       lineTotal: item.lineTotal,
     })),
+    branchName: quote.branchName,
+    branchCode: quote.branchCode,
+    branchAddress: quote.branchAddress,
+    branchCity: quote.branchCity,
+    branchState: quote.branchState,
+    branchCountry: quote.branchCountry,
+    branchPostalCode: quote.branchPostalCode,
+    branchPhone: quote.branchPhone,
+    branchEmail: quote.branchEmail,
+    branchRfc: quote.branchRfc,
+    shippingAddress: quote.shippingAddress,
+    shippingCity: quote.shippingCity,
+    shippingState: quote.shippingState,
+    shippingPostalCode: quote.shippingPostalCode,
+    shippingCountry: quote.shippingCountry,
   });
 
+  const inline = new URL(request.url).searchParams.get("inline") === "1";
   return new NextResponse(Buffer.from(bytes), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${quote.number}.pdf"`,
+      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${quote.number}.pdf"`,
       "Cache-Control": "private, no-store",
     },
   });

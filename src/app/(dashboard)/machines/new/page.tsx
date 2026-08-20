@@ -25,7 +25,11 @@ export default async function NewMachinePage() {
         </Link>
       </div>
       <MachineForm
-        workCenters={workCenters.map((center) => ({ id: center.id, name: center.name }))}
+        workCenters={workCenters.map((center) => ({
+          id: center.id,
+          name: center.name,
+          code: center.code,
+        }))}
         users={users}
       />
     </div>

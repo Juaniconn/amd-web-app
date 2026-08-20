@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { EngineeringFilters } from "@/features/engineering/engineering-filters";
+import { EmptyTable, TableCard, TablePager } from "@/components/layout/data-table";
+import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { KpiCard } from "@/components/dashboard/kpi-card";
 import {
   Table,
   TableBody,
@@ -20,10 +21,8 @@ import {
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import { QUOTE_ENGINEERING_TYPE_LABELS, type QuoteEngineeringType } from "@/lib/quotes/rfq";
 import { engineeringStatusSchema } from "@/lib/validation/engineering";
-import {
-  getEngineeringDashboardStats,
-  listEngineeringRequests,
-} from "@/server/services/engineering";
+import { listEngineeringRequests } from "@/server/services/engineering";
+import { parsePage, parsePageSize } from "@/lib/ui/pagination";
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -44,6 +43,7 @@ export default async function EngineeringPage({
     status?: string | string[];
     overdue?: string | string[];
     page?: string | string[];
+    perPage?: string | string[];
   }>;
 }) {
   const { access } = await requirePermission(PERMISSION_IDS.engineeringRead);
@@ -51,65 +51,46 @@ export default async function EngineeringPage({
   const q = first(params.q)?.trim() || undefined;
   const statusParsed = engineeringStatusSchema.safeParse(first(params.status));
   const overdue = first(params.overdue) === "1";
-  const page = Number(first(params.page) ?? "1") || 1;
+  const page = parsePage(first(params.page));
+  const pageSize = parsePageSize(first(params.perPage));
   const canCreate = access.permissions.includes(PERMISSION_IDS.engineeringCreate);
-  const stats = await getEngineeringDashboardStats();
+  const filtered = Boolean(q || statusParsed.success || overdue);
   const result = await listEngineeringRequests({
     q,
     status: statusParsed.success ? statusParsed.data : undefined,
     overdue,
     page,
+    pageSize,
   });
 
   const query = new URLSearchParams();
   if (q) query.set("q", q);
   if (statusParsed.success) query.set("status", statusParsed.data);
   if (overdue) query.set("overdue", "1");
-
-  function pageHref(nextPage: number) {
-    const next = new URLSearchParams(query);
-    next.set("page", String(nextPage));
-    return `/engineering?${next.toString()}`;
-  }
+  query.set("perPage", String(pageSize));
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Ingeniería y diseño</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Solicitudes de CAD, revisión, aprobación del cliente y liberación. Los
-            registros DEMO no son proyectos reales.
-          </p>
-        </div>
-        {canCreate ? (
-          <Link href="/engineering/new" className={buttonVariants()}>
-            Nueva solicitud
-          </Link>
-        ) : null}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Solicitudes abiertas" value={String(stats.open)} hint="No aprobadas, liberadas ni canceladas" />
-        <KpiCard label="Solicitudes vencidas" value={String(stats.overdue)} hint="Abiertas con fecha compromiso vencida" />
-        <KpiCard label="Diseños aprobados" value={String(stats.approvedThisMonth)} hint="Aprobados este mes" />
-        <KpiCard label="Diseños rechazados" value={String(stats.rejected)} hint="Solicitudes canceladas" />
-        <KpiCard label="Diseños liberados" value={String(stats.released)} hint="Listos para cotización final / OT" />
-        <KpiCard label="Horas ingeniería" value={String(stats.hoursLogged)} hint="Suma capturada en solicitudes activas" />
-        <KpiCard
-          label="Tiempo promedio diseño"
-          value={stats.averageDesignDays === null ? "—" : `${stats.averageDesignDays} d`}
-          hint="Alta → aprobación o liberación"
-        />
-      </div>
+      <PageHeader
+        title="Ingeniería y diseño"
+        description="CAD, revisión, aprobación del cliente y liberación para cotizar o fabricar."
+        actions={
+          canCreate ? (
+            <Link href="/engineering/new" className={buttonVariants()}>
+              Nueva solicitud
+            </Link>
+          ) : null
+        }
+      />
 
       <EngineeringFilters
         q={q}
         status={statusParsed.success ? statusParsed.data : undefined}
         overdue={overdue}
+        perPage={pageSize}
       />
 
-      <div className="overflow-x-auto rounded-lg border">
+      <TableCard>
         <Table>
           <TableHeader>
             <TableRow>
@@ -125,11 +106,19 @@ export default async function EngineeringPage({
           </TableHeader>
           <TableBody>
             {result.rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-muted-foreground">
-                  No hay solicitudes con esos filtros.
-                </TableCell>
-              </TableRow>
+              <EmptyTable
+                colSpan={8}
+                title={
+                  filtered ? "No hay solicitudes con esos filtros." : "Aún no hay solicitudes."
+                }
+                description={
+                  filtered
+                    ? "Prueba otro estado o limpia los filtros."
+                    : "Las RFQ de diseño abren una solicitud aquí."
+                }
+                href={!filtered && canCreate ? "/engineering/new" : undefined}
+                actionLabel="Nueva solicitud"
+              />
             ) : (
               result.rows.map((row) => (
                 <TableRow key={row.id}>
@@ -162,9 +151,7 @@ export default async function EngineeringPage({
                       {ENGINEERING_STATUS_LABELS[row.status as EngineeringStatus]}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    {ENGINEERING_PRIORITY_LABELS[row.priority]}
-                  </TableCell>
+                  <TableCell>{ENGINEERING_PRIORITY_LABELS[row.priority]}</TableCell>
                   <TableCell>{row.assigneeName ?? "—"}</TableCell>
                   <TableCell>
                     {row.dueDate ? row.dueDate.toLocaleDateString("es-MX") : "—"}
@@ -174,26 +161,17 @@ export default async function EngineeringPage({
             )}
           </TableBody>
         </Table>
-      </div>
+      </TableCard>
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <p>
-          {result.total} registro{result.total === 1 ? "" : "s"} · página {result.page} de{" "}
-          {result.pageCount}
-        </p>
-        <div className="flex gap-2">
-          {result.page > 1 ? (
-            <Link href={pageHref(result.page - 1)} className={buttonVariants({ variant: "outline" })}>
-              Anterior
-            </Link>
-          ) : null}
-          {result.page < result.pageCount ? (
-            <Link href={pageHref(result.page + 1)} className={buttonVariants({ variant: "outline" })}>
-              Siguiente
-            </Link>
-          ) : null}
-        </div>
-      </div>
+      <TablePager
+        total={result.total}
+        page={result.page}
+        pageCount={result.pageCount}
+        label={result.total === 1 ? "solicitud" : "solicitudes"}
+        path="/engineering"
+        query={query}
+        pageSize={pageSize}
+      />
     </div>
   );
 }

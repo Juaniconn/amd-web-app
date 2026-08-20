@@ -22,6 +22,7 @@ import {
   CUSTOMER_STATUS_LABELS,
   CUSTOMER_TYPE_LABELS,
 } from "@/lib/validation/customers";
+import { displayMoney } from "@/lib/quotes/money";
 import { listCustomerActivity } from "@/server/services/activity";
 import { getCustomerById } from "@/server/services/customers";
 import { listEngineeringByCustomer } from "@/server/services/engineering";
@@ -32,17 +33,12 @@ import {
   PRODUCTION_STATUS_LABELS,
   type ProductionStatus,
 } from "@/lib/production/status";
-import { ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/orders/status";
 import { PROJECT_STATUS_LABELS, type ProjectStatus } from "@/lib/projects/status";
 import { QUOTE_STATUS_LABELS } from "@/lib/quotes/status";
 import { listOrdersByCustomer } from "@/server/services/orders";
 import { listProjectsByCustomer } from "@/server/services/projects";
-
-const UPCOMING = [
-  { label: "Facturación / ventas", phase: "Posterior" },
-  { label: "Pagos", phase: "Posterior" },
-  { label: "Documentos", phase: "Fase 3+" },
-];
+import { ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/orders/status";
+import { partIdentity, workOrderNumber } from "@/lib/production/ot-number";
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -86,7 +82,9 @@ export default async function CustomerDetailPage({
     ? await listProductionByCustomer(customer.id)
     : [];
   const canReadOrders = access.permissions.includes(PERMISSION_IDS.ordersView);
-  const customerOrders = canReadOrders ? await listOrdersByCustomer(customer.id) : [];
+  const customerOrders = canReadOrders
+    ? await listOrdersByCustomer(customer.id)
+    : [];
   const canReadProjects = access.permissions.includes(PERMISSION_IDS.projectsView);
   const customerProjects = canReadProjects
     ? await listProjectsByCustomer(customer.id)
@@ -141,13 +139,29 @@ export default async function CustomerDetailPage({
           <Field label="Nombre de empresa" value={customer.legalName} />
           <Field label="Nombre comercial" value={customer.tradeName} />
           <Field label="RFC" value={customer.rfc} />
-          <Field label="Teléfono" value={customer.phone} />
+          <Field label="Teléfono de la empresa" value={customer.phone} />
           <Field label="Email" value={customer.email} />
           <Field label="Tipo" value={CUSTOMER_TYPE_LABELS[customer.type]} />
-          <Field label="Dirección" value={customer.address} />
+          <Field label="Dirección fiscal" value={customer.address} />
           <Field label="Ciudad" value={customer.city} />
           <Field label="Estado" value={customer.state} />
           <Field label="País" value={customer.country} />
+          <Field
+            label="Dirección de envío"
+            value={
+              customer.shippingSameAsBilling
+                ? customer.address
+                : [
+                    customer.shippingAddress,
+                    customer.shippingCity,
+                    customer.shippingState,
+                    customer.shippingPostalCode,
+                    customer.shippingCountry,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")
+            }
+          />
           <Field
             label="Contacto principal"
             value={
@@ -156,6 +170,12 @@ export default async function CustomerDetailPage({
                     customer.primaryContact.phone
                       ? ` · ${customer.primaryContact.phone}`
                       : ""
+                  }${
+                    customer.primaryContact.department
+                      ? ` · ${customer.primaryContact.department}`
+                      : customer.primaryContact.title
+                        ? ` · ${customer.primaryContact.title}`
+                        : ""
                   }`
                 : null
             }
@@ -247,6 +267,7 @@ export default async function CustomerDetailPage({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número</TableHead>
+                    <TableHead>Número de planos</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead className="text-right">Total</TableHead>
@@ -260,13 +281,11 @@ export default async function CustomerDetailPage({
                           {quote.number}
                         </Link>
                       </TableCell>
+                      <TableCell>{Number(quote.drawingCount ?? 0)}</TableCell>
                       <TableCell>{QUOTE_STATUS_LABELS[quote.status]}</TableCell>
                       <TableCell>{quote.issueDate.toLocaleDateString("es-MX")}</TableCell>
                       <TableCell className="text-right">
-                        {new Intl.NumberFormat("es-MX", {
-                          style: "currency",
-                          currency: quote.currency.toUpperCase(),
-                        }).format(Number(quote.total))}
+                        {displayMoney(quote.total, quote.currency)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -280,18 +299,19 @@ export default async function CustomerDetailPage({
       {canReadOrders ? (
         <Card>
           <CardHeader>
-            <CardTitle>Pedidos</CardTitle>
+            <CardTitle>Órdenes de Trabajo</CardTitle>
           </CardHeader>
           <CardContent>
             {customerOrders.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Este cliente aún no tiene pedidos.
+                Este cliente aún no tiene órdenes de trabajo.
               </p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Número</TableHead>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Cantidad de Planos</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>RFQ</TableHead>
                     <TableHead>Prometida</TableHead>
@@ -302,9 +322,10 @@ export default async function CustomerDetailPage({
                     <TableRow key={order.id}>
                       <TableCell>
                         <Link href={`/orders/${order.id}`} className="font-medium hover:underline">
-                          {order.number}
+                          {order.workOrderNumber}
                         </Link>
                       </TableCell>
+                      <TableCell>{Number(order.drawingCount ?? 0)}</TableCell>
                       <TableCell>
                         {ORDER_STATUS_LABELS[order.status as OrderStatus]}
                       </TableCell>
@@ -432,24 +453,24 @@ export default async function CustomerDetailPage({
       {canReadProduction ? (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <CardTitle>Órdenes de trabajo</CardTitle>
+            <CardTitle>Números de parte</CardTitle>
             {access.permissions.includes(PERMISSION_IDS.productionCreate) && !archived ? (
               <Link href="/production/new" className={buttonVariants({ size: "sm" })}>
-                Nueva OT
+                Nueva partida
               </Link>
             ) : null}
           </CardHeader>
           <CardContent>
             {productionOrders.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Este cliente aún no tiene órdenes de trabajo.
+                Este cliente aún no tiene números de parte.
               </p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>OT</TableHead>
-                    <TableHead>Pedido</TableHead>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Orden de trabajo</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Prometida</TableHead>
                   </TableRow>
@@ -462,12 +483,12 @@ export default async function CustomerDetailPage({
                           href={`/production/${item.id}`}
                           className="font-medium hover:underline"
                         >
-                          {item.number}
+                          {partIdentity(item.partNumber, item.number)}
                         </Link>
                       </TableCell>
                       <TableCell>
                         <Link href={`/orders/${item.orderId}`} className="hover:underline">
-                          {item.orderNumber}
+                          {workOrderNumber(item.orderNumber)}
                         </Link>
                       </TableCell>
                       <TableCell>
@@ -520,30 +541,6 @@ export default async function CustomerDetailPage({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Módulos relacionados</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Estas secciones se conectarán cuando existan las fases
-            correspondientes. No se muestran datos inventados.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {UPCOMING.map((item) => (
-              <div
-                key={item.label}
-                className="rounded-lg border bg-muted/40 px-4 py-3"
-              >
-                <p className="text-sm font-medium">{item.label}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Pendiente · {item.phase}
-                </p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

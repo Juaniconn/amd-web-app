@@ -9,13 +9,16 @@ export function OrderFilters({
   q,
   status,
   delayed,
+  perPage,
 }: {
   q?: string;
   status?: string;
   delayed?: boolean;
+  perPage?: number;
 }) {
   return (
-    <form method="get" className="flex flex-wrap items-end gap-3">
+    <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border bg-card px-4 py-3">
+      {perPage ? <input type="hidden" name="perPage" value={perPage} /> : null}
       <div className="min-w-56 flex-1 space-y-1">
         <label htmlFor="q" className="text-xs font-medium text-muted-foreground">
           Buscar
@@ -24,7 +27,7 @@ export function OrderFilters({
           id="q"
           name="q"
           defaultValue={q}
-          placeholder="Número, cliente o RFQ"
+          placeholder="OT, cliente, RFQ o número de parte"
         />
       </div>
       <div className="space-y-1">

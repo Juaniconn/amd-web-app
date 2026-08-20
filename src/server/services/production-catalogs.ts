@@ -10,6 +10,7 @@ import {
   productionRoutes,
   workCenters,
 } from "@/db/schema";
+import { machineKindFromCenterCode } from "@/lib/quotes/center-calculator";
 import { pickChangedFields } from "@/lib/audit/activity";
 import { AppError } from "@/lib/errors";
 import type {
@@ -96,12 +97,14 @@ export async function upsertWorkCenter(input: WorkCenterInput, actor: Actor) {
 export async function listMachines(options?: {
   workCenterId?: string;
   activeOnly?: boolean;
+  kind?: "laser" | "press_brake" | "otro";
 }) {
   const filters = [];
   if (options?.workCenterId) {
     filters.push(eq(machines.workCenterId, options.workCenterId));
   }
   if (options?.activeOnly) filters.push(eq(machines.active, true));
+  if (options?.kind) filters.push(eq(machines.kind, options.kind));
 
   return db
     .select({
@@ -116,6 +119,11 @@ export async function listMachines(options?: {
       responsibleUserId: machines.responsibleUserId,
       hoursPerShift: machines.hoursPerShift,
       capacity: machines.capacity,
+      kind: machines.kind,
+      hourlyCost: machines.hourlyCost,
+      bendLengthMm: machines.bendLengthMm,
+      tonnageTon: machines.tonnageTon,
+      calculatorSpecs: machines.calculatorSpecs,
       notes: machines.notes,
       status: machines.status,
       active: machines.active,
@@ -143,6 +151,11 @@ export async function getMachineById(id: string) {
       responsibleUserId: machines.responsibleUserId,
       hoursPerShift: machines.hoursPerShift,
       capacity: machines.capacity,
+      kind: machines.kind,
+      hourlyCost: machines.hourlyCost,
+      bendLengthMm: machines.bendLengthMm,
+      tonnageTon: machines.tonnageTon,
+      calculatorSpecs: machines.calculatorSpecs,
       notes: machines.notes,
       status: machines.status,
       active: machines.active,
@@ -174,13 +187,14 @@ async function countMachineHistory(machineId: string) {
 export async function upsertMachine(input: MachineInput, actor: Actor) {
   const now = new Date();
   const [center] = await db
-    .select({ id: workCenters.id, active: workCenters.active })
+    .select({ id: workCenters.id, active: workCenters.active, code: workCenters.code })
     .from(workCenters)
     .where(eq(workCenters.id, input.workCenterId))
     .limit(1);
   if (!center) {
     throw new AppError("El centro de trabajo no existe.", "WORK_CENTER_NOT_FOUND", 404);
   }
+  const kind = machineKindFromCenterCode(center.code);
 
   const id = input.id ?? crypto.randomUUID();
   const existing = input.id ? await getMachineById(input.id) : null;
@@ -197,6 +211,11 @@ export async function upsertMachine(input: MachineInput, actor: Actor) {
         responsibleUserId: input.responsibleUserId ?? null,
         hoursPerShift: String(input.hoursPerShift),
         capacity: input.capacity ?? null,
+        kind,
+        hourlyCost: input.hourlyCost == null ? null : String(input.hourlyCost),
+        bendLengthMm: input.bendLengthMm == null ? null : String(input.bendLengthMm),
+        tonnageTon: input.tonnageTon == null ? null : String(input.tonnageTon),
+        calculatorSpecs: input.calculatorSpecs ?? null,
         notes: input.notes ?? null,
         status: input.status,
         active: input.active,
@@ -243,6 +262,11 @@ export async function upsertMachine(input: MachineInput, actor: Actor) {
     responsibleUserId: input.responsibleUserId ?? null,
     hoursPerShift: String(input.hoursPerShift),
     capacity: input.capacity ?? null,
+    kind,
+    hourlyCost: input.hourlyCost == null ? null : String(input.hourlyCost),
+    bendLengthMm: input.bendLengthMm == null ? null : String(input.bendLengthMm),
+    tonnageTon: input.tonnageTon == null ? null : String(input.tonnageTon),
+    calculatorSpecs: input.calculatorSpecs ?? null,
     notes: input.notes ?? null,
     status: input.status,
     active: input.active,

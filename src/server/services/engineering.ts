@@ -36,6 +36,7 @@ import {
   type EngineeringStatus,
 } from "@/lib/engineering/status";
 import { AppError } from "@/lib/errors";
+import { resolvePageSize } from "@/lib/ui/pagination";
 import { durationMinutes } from "@/lib/production/catalog";
 import {
   ENGINEERING_SERVICE_DESCRIPTION,
@@ -61,8 +62,7 @@ import { recordActivity } from "@/server/services/activity";
 import type { Actor } from "@/server/services/customers";
 import { listEngineeringDocuments } from "@/server/services/documents";
 import { nextDocumentNumber } from "@/server/services/numbering";
-
-export const ENGINEERING_PAGE_SIZE = 20;
+import { isDrawingFileName } from "@/lib/quotes/drawing-sets";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -545,6 +545,14 @@ export async function changeEngineeringStatus(
   if (nextStatus === "liberado") {
     extra.releasedAt = now;
     extra.releasedBy = actor.userId;
+    const files = await listEngineeringDocuments(id);
+    if (!files.some((file) => isDrawingFileName(file.originalName))) {
+      throw new AppError(
+        "Sube el plano PDF o el CAD antes de liberar. Esos archivos pasan a la cotización.",
+        "ENGINEERING_NO_DRAWING",
+        400,
+      );
+    }
   }
   if (nextStatus === "cancelado") extra.cancelledAt = now;
 
@@ -583,6 +591,14 @@ export async function changeEngineeringStatus(
       newValue: { status: nextStatus },
     });
   });
+
+  if (nextStatus === "liberado") {
+    const { materializeQuoteItemsFromEngineering } = await import(
+      "@/server/services/quotes"
+    );
+    await materializeQuoteItemsFromEngineering(current.quoteId, actor);
+  }
+
   return { id, status: nextStatus };
 }
 
@@ -826,10 +842,12 @@ export type EngineeringListQuery = {
   customerId?: string;
   overdue?: boolean;
   page?: number;
+  pageSize?: number;
 };
 
 export async function listEngineeringRequests(query: EngineeringListQuery) {
   const page = Math.max(1, query.page ?? 1);
+  const pageSize = resolvePageSize(query.pageSize);
   const filters = [isNull(engineeringRequests.deletedAt)];
   if (query.status) filters.push(eq(engineeringRequests.status, query.status));
   if (query.customerId) {
@@ -893,16 +911,16 @@ export async function listEngineeringRequests(query: EngineeringListQuery) {
     .leftJoin(users, eq(engineeringRequests.assigneeUserId, users.id))
     .where(where)
     .orderBy(desc(engineeringRequests.createdAt), desc(engineeringRequests.number))
-    .limit(ENGINEERING_PAGE_SIZE)
-    .offset((page - 1) * ENGINEERING_PAGE_SIZE);
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
 
   const total = Number(totalRow.value);
   return {
     rows,
     total,
     page,
-    pageSize: ENGINEERING_PAGE_SIZE,
-    pageCount: Math.max(1, Math.ceil(total / ENGINEERING_PAGE_SIZE)),
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
   };
 }
 

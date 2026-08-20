@@ -43,19 +43,22 @@ export function StockMovementForms({
   if (!canWrite && !canAdjust) return null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 rounded-xl border bg-card p-4 shadow-sm">
       {canWrite ? (
         <div className="grid gap-4 md:grid-cols-2">
           <form
-            className="space-y-2 rounded-lg border p-3"
+            className="space-y-3 rounded-xl border bg-background p-4"
             onSubmit={(event) => {
               event.preventDefault();
               void run(receiveStockAction, new FormData(event.currentTarget));
             }}
           >
-            <p className="text-sm font-medium">Entrada</p>
+          <p className="text-sm font-medium">Entrada</p>
+            <p className="text-xs text-muted-foreground">
+              Recibe material a esta sucursal. Solo cantidad y un motivo corto.
+            </p>
             <Label htmlFor="qty-in">Cantidad</Label>
-            <Input id="qty-in" name="quantity" required />
+            <Input id="qty-in" name="quantity" inputMode="decimal" required />
             <Label htmlFor="reason-in">Motivo</Label>
             <Input id="reason-in" name="reason" />
             <Button type="submit" disabled={pending} size="sm">
@@ -63,7 +66,7 @@ export function StockMovementForms({
             </Button>
           </form>
           <form
-            className="space-y-2 rounded-lg border p-3"
+            className="space-y-3 rounded-xl border bg-background p-4"
             onSubmit={(event) => {
               event.preventDefault();
               void run(issueStockAction, new FormData(event.currentTarget));
@@ -71,7 +74,7 @@ export function StockMovementForms({
           >
             <p className="text-sm font-medium">Salida</p>
             <Label htmlFor="qty-out">Cantidad</Label>
-            <Input id="qty-out" name="quantity" required />
+            <Input id="qty-out" name="quantity" inputMode="decimal" required />
             <Label htmlFor="reason-out">Motivo</Label>
             <Input id="reason-out" name="reason" required />
             <Button type="submit" disabled={pending} size="sm" variant="outline">
@@ -82,13 +85,16 @@ export function StockMovementForms({
       ) : null}
       {canAdjust ? (
         <form
-          className="space-y-2 rounded-lg border p-3"
+          className="space-y-3 rounded-xl border bg-background p-4"
           onSubmit={(event) => {
             event.preventDefault();
             void run(adjustStockAction, new FormData(event.currentTarget));
           }}
         >
           <p className="text-sm font-medium">Ajuste</p>
+          <p className="text-xs text-muted-foreground">
+            Corrige existencia sin ser una compra ni un consumo de OT.
+          </p>
           <div className="flex flex-wrap gap-3">
             <div className="space-y-1">
               <Label htmlFor="direction">Dirección</Label>
@@ -104,7 +110,7 @@ export function StockMovementForms({
             </div>
             <div className="space-y-1">
               <Label htmlFor="qty-adj">Cantidad</Label>
-              <Input id="qty-adj" name="quantity" required />
+              <Input id="qty-adj" name="quantity" inputMode="decimal" required />
             </div>
             <div className="min-w-56 flex-1 space-y-1">
               <Label htmlFor="reason-adj">Motivo</Label>

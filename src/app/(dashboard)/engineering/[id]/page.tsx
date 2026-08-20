@@ -6,7 +6,7 @@ import { EngineeringHoursPanel } from "@/features/engineering/engineering-hours-
 import { EngineeringStatusActions } from "@/features/engineering/engineering-status-actions";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requirePermission } from "@/lib/auth/session";
 import {
   canEditEngineering,
@@ -108,8 +108,9 @@ export default async function EngineeringDetailPage({
 
       {status === "liberado" ? (
         <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          Plano liberado. La RFQ puede cerrar cotización final y el pedido futuro
-          nacerá con origen <span className="font-medium">RFQ + Ingeniería</span>.
+          Plano liberado. Los planos pasan a la cotización, se generan las partidas
+          y la calculadora arma el precio. La orden de trabajo futura nacerá con origen{" "}
+          <span className="font-medium">RFQ + Ingeniería</span>.
         </p>
       ) : null}
 
@@ -158,6 +159,10 @@ export default async function EngineeringDetailPage({
       <Card>
         <CardHeader>
           <CardTitle>Archivos de ingeniería</CardTitle>
+          <CardDescription>
+            Sube el plano PDF y el CAD. Al liberar, pasan a la cotización y la
+            calculadora genera las partidas.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <EngineeringDocuments

@@ -9,6 +9,7 @@ import {
   detachOrderFromProjectAction,
   detachQuoteFromProjectAction,
 } from "@/server/actions/projects";
+import { workOrderNumber } from "@/lib/production/ot-number";
 
 type Option = { id: string; number: string; status: string };
 
@@ -90,15 +91,15 @@ export function ProjectMembers({
           required
           className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm"
         >
-          <option value="">Asociar pedido</option>
+          <option value="">Asociar orden de trabajo</option>
           {attachableOrders.map((order) => (
             <option key={order.id} value={order.id}>
-              {order.number}
+              {workOrderNumber(order.number)}
             </option>
           ))}
         </select>
         <Button type="submit" variant="outline" disabled={pending || attachableOrders.length === 0}>
-          Agregar pedido
+          Agregar OT
         </Button>
       </form>
       {error ? (

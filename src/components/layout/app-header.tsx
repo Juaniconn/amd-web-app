@@ -16,7 +16,10 @@ export function AppHeader({
   return (
     <header className="flex h-16 items-center justify-between border-b bg-card px-6">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        <p
+          className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground"
+          suppressHydrationWarning
+        >
           AMD Operations
         </p>
         <h1 className="text-lg font-semibold tracking-tight">{title}</h1>

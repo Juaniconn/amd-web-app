@@ -64,6 +64,90 @@
       "when": 1786739000000,
       "tag": "0008_ot_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786900000000,
+      "tag": "0009_branches_commercial",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786910000000,
+      "tag": "0010_purchasing",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786920000000,
+      "tag": "0011_quality",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786930000000,
+      "tag": "0012_deliveries",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786940000000,
+      "tag": "0013_billing",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786950000000,
+      "tag": "0014_quote_item_costing",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786960000000,
+      "tag": "0015_calculator_erp",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786970000000,
+      "tag": "0016_calculator_general",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786980000000,
+      "tag": "0017_work_order_materials",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786990000000,
+      "tag": "0018_purchase_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787000000000,
+      "tag": "0019_inspection_pending",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787010000000,
+      "tag": "0020_quote_agent_preview",
+      "breakpoints": true
     }
   ]
 }

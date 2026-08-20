@@ -75,7 +75,7 @@ export async function uploadOrderDocumentAction(formData: FormData) {
     const orderId = String(formData.get("orderId") ?? "");
     const file = formData.get("file");
     if (!orderId) {
-      return { ok: false as const, error: "El pedido es obligatorio." };
+      return { ok: false as const, error: "La orden de trabajo es obligatoria." };
     }
     if (!(file instanceof File) || file.size === 0) {
       return { ok: false as const, error: "Selecciona un archivo." };

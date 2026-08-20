@@ -57,8 +57,8 @@ export function ProductionTimePanel({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        El operador inicia y termina el tiempo de máquina. Se guarda inicio, fin y
-        duración en horas y minutos.
+        El operador inicia y termina el tiempo. Un clic para empezar, otro para
+        terminar.
       </p>
       {machineEntries.length === 0 ? (
         <p className="text-sm text-muted-foreground">Sin horas máquina.</p>
@@ -98,7 +98,7 @@ export function ProductionTimePanel({
         >
           <input type="hidden" name="productionOrderId" value={productionOrderId} />
           <Input name="notes" placeholder="Operación / nota" className="min-w-48" />
-          <Button type="submit">Iniciar horas máquina</Button>
+          <Button type="submit">Iniciar</Button>
         </form>
       ) : null}
       {error ? (

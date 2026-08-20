@@ -7,6 +7,7 @@ import {
   listActiveCustomersForSelect,
   listContactsForCustomer,
 } from "@/server/services/customers";
+import { listBranches } from "@/server/services/branches";
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -21,9 +22,10 @@ export default async function NewQuotePage({
   const params = await searchParams;
   const customerId = first(params.customerId);
   const customers = await listActiveCustomersForSelect();
+  const branches = await listBranches({ activeOnly: true });
   const contactsByCustomer: Record<
     string,
-    { id: string; name: string; isPrimary: boolean }[]
+    { id: string; name: string; isPrimary: boolean; title: string | null; department: string | null; phone: string | null }[]
   > = {};
   for (const customer of customers) {
     contactsByCustomer[customer.id] = await listContactsForCustomer(customer.id);
@@ -46,6 +48,7 @@ export default async function NewQuotePage({
         mode="create"
         customers={customers}
         contactsByCustomer={contactsByCustomer}
+        branches={branches}
         defaultValues={customerId ? { customerId } : undefined}
       />
     </div>

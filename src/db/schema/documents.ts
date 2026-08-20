@@ -8,6 +8,13 @@ export const documentEntityTypeEnum = pgEnum("document_entity_type", [
   "engineering_request",
   "project",
   "production_order",
+  "supplier",
+  "purchase_order",
+  "quality_inspection",
+  "ncr",
+  "delivery",
+  "invoice",
+  "quote_item",
 ]);
 
 export const documentStorageBackendEnum = pgEnum("document_storage_backend", [

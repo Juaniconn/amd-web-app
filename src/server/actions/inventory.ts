@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { AppError, toUserMessage } from "@/lib/errors";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
-import { requirePermission } from "@/lib/auth/session";
+import { requireAnyPermission, requirePermission } from "@/lib/auth/session";
 import {
   addOrderMaterialSchema,
   adjustStockSchema,
@@ -19,6 +19,7 @@ import {
   addOrderMaterial,
   adjustStock,
   consumeOrderMaterial,
+  consumeAllOrderMaterials,
   createMaterial,
   issueStock,
   receiveStock,
@@ -125,9 +126,12 @@ export async function adjustStockAction(formData: FormData) {
 
 export async function addOrderMaterialAction(formData: FormData) {
   try {
-    const { session } = await requirePermission(PERMISSION_IDS.inventoryReserve);
+    const { session } = await requireAnyPermission(
+      PERMISSION_IDS.inventoryReserve,
+      PERMISSION_IDS.ordersUpdate,
+    );
     const parsed = addOrderMaterialSchema.safeParse({
-      productionOrderId: formData.get("productionOrderId"),
+      orderId: formData.get("orderId"),
       materialId: formData.get("materialId"),
       quantity: formData.get("quantity"),
     });
@@ -143,7 +147,10 @@ export async function addOrderMaterialAction(formData: FormData) {
 
 export async function removeOrderMaterialAction(formData: FormData) {
   try {
-    const { session } = await requirePermission(PERMISSION_IDS.inventoryReserve);
+    const { session } = await requireAnyPermission(
+      PERMISSION_IDS.inventoryReserve,
+      PERMISSION_IDS.ordersUpdate,
+    );
     const parsed = removeOrderMaterialSchema.safeParse({
       id: formData.get("id"),
     });
@@ -159,20 +166,30 @@ export async function removeOrderMaterialAction(formData: FormData) {
 
 export async function reserveOrderMaterialsAction(formData: FormData) {
   try {
-    const { session } = await requirePermission(PERMISSION_IDS.inventoryReserve);
+    const { session } = await requireAnyPermission(
+      PERMISSION_IDS.inventoryReserve,
+      PERMISSION_IDS.ordersUpdate,
+    );
     const parsed = reserveOrderMaterialSchema.safeParse({
-      productionOrderId: formData.get("productionOrderId"),
+      orderId: formData.get("orderId"),
       lineId: formData.get("lineId") || undefined,
     });
     if (!parsed.success) {
       return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
     }
     const result = await reserveOrderMaterials(
-      parsed.data.productionOrderId,
+      parsed.data.orderId,
       actorFrom(session),
       parsed.data.lineId,
     );
-    return { ok: true as const, shortage: result.shortage };
+    return {
+      ok: true as const,
+      shortage: result.shortage,
+      covered: result.covered,
+      waitingApplied: result.waitingApplied,
+      releasedFromWait: result.releasedFromWait,
+      missing: result.missing,
+    };
   } catch (error) {
     return fail(error);
   }
@@ -189,6 +206,18 @@ export async function consumeOrderMaterialAction(formData: FormData) {
       return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
     }
     await consumeOrderMaterial(parsed.data, actorFrom(session));
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function consumeAllOrderMaterialsAction(formData: FormData) {
+  try {
+    const { session } = await requirePermission(PERMISSION_IDS.inventoryConsume);
+    const orderId = String(formData.get("orderId") ?? "").trim();
+    if (!orderId) return { ok: false as const, error: "Falta la orden de trabajo." };
+    await consumeAllOrderMaterials(orderId, actorFrom(session));
     return { ok: true as const };
   } catch (error) {
     return fail(error);

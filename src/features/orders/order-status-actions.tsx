@@ -82,8 +82,9 @@ export function OrderStatusActions({
       </div>
       {openOtCount > 0 ? (
         <p className="text-sm text-muted-foreground">
-          Hay {openOtCount} OT abierta{openOtCount === 1 ? "" : "s"}. Completar o
-          cancelar el pedido exige cerrarlas o cancelarlas primero.
+          Hay {openOtCount} número{openOtCount === 1 ? "" : "s"} de parte abierto
+          {openOtCount === 1 ? "" : "s"}. Completar o cancelar la orden de trabajo exige
+          cerrarlos o cancelarlos primero.
         </p>
       ) : null}
       {error ? (

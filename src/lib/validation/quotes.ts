@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  ADDRESSEE_MODES,
+  PAYMENT_TERMS,
+  TAX_PERCENTS,
+} from "@/lib/quotes/commercial";
+import { parseMoney } from "@/lib/quotes/money";
 import { QUOTE_STATUSES } from "@/lib/quotes/status";
 import {
   QUOTE_ENGINEERING_STATUSES,
@@ -17,6 +23,13 @@ export const QUOTE_CURRENCY_LABELS: Record<QuoteCurrency, string> = {
 };
 
 export const quoteStatusSchema = z.enum(QUOTE_STATUSES);
+export const paymentTermSchema = z.enum(PAYMENT_TERMS);
+export const addresseeModeSchema = z.enum(ADDRESSEE_MODES);
+export const taxPercentSchema = z.coerce
+  .number({ error: "IVA inválido" })
+  .refine((value) => (TAX_PERCENTS as readonly number[]).includes(value), {
+    message: "El IVA debe ser 0%, 8% o 16%",
+  });
 export const quoteCurrencySchema = z.enum(QUOTE_CURRENCIES);
 export const rfqTypeSchema = z.enum(RFQ_TYPES);
 export const quoteEngineeringTypeSchema = z.enum(QUOTE_ENGINEERING_TYPES);
@@ -32,7 +45,11 @@ const optionalText = (max: number) =>
 
 const moneyNumber = (label: string, max = 10_000_000) =>
   z.preprocess(
-    (value) => (value === "" || value === null || value === undefined ? undefined : value),
+    (value) => {
+      if (value === "" || value === null || value === undefined) return undefined;
+      if (typeof value === "string") return parseMoney(value);
+      return value;
+    },
     z.coerce
       .number({ error: `${label} es obligatorio` })
       .min(0, `${label} no puede ser negativo`)
@@ -41,7 +58,11 @@ const moneyNumber = (label: string, max = 10_000_000) =>
 
 const optionalMoneyNumber = (label: string, max = 10_000_000) =>
   z.preprocess(
-    (value) => (value === "" || value === null || value === undefined ? 0 : value),
+    (value) => {
+      if (value === "" || value === null || value === undefined) return 0;
+      if (typeof value === "string") return parseMoney(value);
+      return value;
+    },
     z.coerce
       .number({ error: `${label} inválido` })
       .min(0, `${label} no puede ser negativo`)
@@ -83,9 +104,12 @@ export const createQuoteSchema = z
   .object({
     customerId: z.string().trim().min(1, "El cliente es obligatorio"),
     contactId: optionalText(80),
+    branchId: z.string().trim().min(1, "La sucursal es obligatoria"),
+    addresseeMode: addresseeModeSchema.default("nombre"),
     issueDate: z.coerce.date().optional(),
     validUntil: z.coerce.date().optional().nullable(),
     currency: quoteCurrencySchema.default("mxn"),
+    paymentTerm: paymentTermSchema.default("net_30"),
     paymentTerms: optionalText(200),
     leadTime: optionalText(200),
     notes: optionalText(4000),
@@ -101,9 +125,12 @@ export const updateQuoteSchema = z
   .object({
     id: z.string().trim().min(1, "La cotización es obligatoria"),
     contactId: optionalText(80),
+    branchId: z.string().trim().min(1, "La sucursal es obligatoria"),
+    addresseeMode: addresseeModeSchema.default("nombre"),
     issueDate: z.coerce.date(),
     validUntil: z.coerce.date().optional().nullable(),
     currency: quoteCurrencySchema,
+    paymentTerm: paymentTermSchema,
     paymentTerms: optionalText(200),
     leadTime: optionalText(200),
     notes: optionalText(4000),
@@ -146,8 +173,10 @@ export const quoteItemFields = {
       value === "" || value === null || value === undefined ? undefined : value,
     z.coerce
       .number({ error: "Impuesto inválido" })
-      .min(0, "Impuesto no puede ser negativo")
-      .max(100, "Impuesto excede el máximo permitido")
+      .refine(
+        (value) => (TAX_PERCENTS as readonly number[]).includes(value),
+        "El IVA debe ser 0%, 8% o 16%",
+      )
       .optional(),
   ),
   estimatedCost: optionalMoneyNumber("Costo estimado"),
@@ -173,6 +202,50 @@ export const deleteQuoteItemSchema = z.object({
 export const deleteQuoteDocumentSchema = z.object({
   id: z.string().trim().min(1, "El archivo es obligatorio"),
   quoteId: z.string().trim().min(1, "La cotización es obligatoria"),
+});
+
+export const quoteItemDocumentSchema = z.object({
+  quoteId: z.string().trim().min(1, "La cotización es obligatoria"),
+  itemId: z.string().trim().min(1, "La partida es obligatoria"),
+});
+
+export const deleteQuoteItemDocumentSchema = quoteItemDocumentSchema.extend({
+  id: z.string().trim().min(1, "El archivo es obligatorio"),
+});
+
+export const attachEngineeringDocumentSchema = quoteItemDocumentSchema.extend({
+  documentId: z.string().trim().min(1, "El archivo es obligatorio"),
+});
+
+const optionalNumber = z.preprocess(
+  (value) => (value === "" || value === null || value === undefined ? undefined : value),
+  z.coerce.number().optional(),
+);
+
+export const createQuoteItemFromDrawingsSchema = z.object({
+  quoteId: z.string().trim().min(1, "La cotización es obligatoria"),
+  quantity: optionalNumber,
+});
+
+export const quoteAgentPreviewQtySchema = z.object({
+  quoteId: z.string().trim().min(1, "La cotización es obligatoria"),
+  itemId: z.string().trim().min(1, "La partida es obligatoria"),
+  quantity: z.coerce.number().min(1, "La cantidad mínima es 1"),
+});
+
+export const quoteItemCostingSchema = quoteItemDocumentSchema.extend({
+  quantity: optionalNumber,
+  unit_weight_lb: optionalNumber,
+  scrap_weight_lb: optionalNumber,
+  net_area_in2: optionalNumber,
+  cut_length_in: optionalNumber,
+  holes: optionalNumber,
+  slots: optionalNumber,
+  bends: optionalNumber,
+  hem_count: optionalNumber,
+  thickness_in: optionalNumber,
+  finish: z.string().optional(),
+  margin_pct: optionalNumber,
 });
 
 export type CreateQuoteInput = z.infer<typeof createQuoteSchema>;

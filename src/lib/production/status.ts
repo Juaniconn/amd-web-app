@@ -28,11 +28,11 @@ export const PRODUCTION_STATUS_LABELS: Record<ProductionStatus, string> = {
 
 const TRANSITIONS: Record<ProductionStatus, ProductionStatus[]> = {
   pendiente: ["liberada", "cancelada"],
-  liberada: ["programada", "cancelada"],
+  liberada: ["programada", "esperando_material", "cancelada"],
   programada: ["en_produccion", "esperando_material", "cancelada"],
   en_produccion: ["pausada", "esperando_material", "calidad", "cancelada"],
   pausada: ["en_produccion", "esperando_material", "cancelada"],
-  esperando_material: ["programada", "en_produccion", "cancelada"],
+  esperando_material: ["liberada", "programada", "en_produccion", "cancelada"],
   calidad: ["terminada", "en_produccion"],
   terminada: ["entregada"],
   entregada: [],
@@ -72,7 +72,7 @@ export function assertProductionTransition(
 ) {
   if (!canTransitionProduction(from, to)) {
     throw new Error(
-      `No se puede cambiar una OT de ${PRODUCTION_STATUS_LABELS[from]} a ${PRODUCTION_STATUS_LABELS[to]}.`,
+      `No se puede cambiar un número de parte de ${PRODUCTION_STATUS_LABELS[from]} a ${PRODUCTION_STATUS_LABELS[to]}.`,
     );
   }
 }

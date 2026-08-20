@@ -25,7 +25,7 @@ export function ProductionAssignPanel({
   machineId: string | null;
   operatorUserId: string | null;
   workCenters: { id: string; name: string }[];
-  machines: { id: string; name: string; workCenterId: string }[];
+  machines: { id: string; name: string; workCenterId: string; status?: string }[];
   users: { id: string; name: string }[];
   canAssignCenter: boolean;
   canAssignMachine: boolean;
@@ -70,6 +70,11 @@ export function ProductionAssignPanel({
       setError(result.error ?? "No se pudo asignar.");
       return;
     }
+    if (result.waitingMaterial) {
+      setError(
+        "Asignado, pero falta material reservado. El número de parte no se programa hasta cubrir la OT.",
+      );
+    }
     setCenter(String(formData.get("workCenterId") ?? ""));
     setMachine(String(formData.get("machineId") ?? ""));
     setOperator(String(formData.get("operatorUserId") ?? ""));
@@ -112,6 +117,7 @@ export function ProductionAssignPanel({
           {machineOptions.map((item) => (
             <option key={item.id} value={item.id}>
               {item.name}
+              {item.status && item.status !== "disponible" ? ` · ${item.status}` : ""}
             </option>
           ))}
         </select>
@@ -132,7 +138,7 @@ export function ProductionAssignPanel({
         </select>
       ) : null}
       <Button type="submit" variant="outline" disabled={pending}>
-        Asignar
+        Programar operador
       </Button>
       {error ? (
         <p className="w-full text-sm text-destructive" role="alert">

@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArchiveQuoteButton } from "@/features/quotes/archive-quote-button";
-import { QuoteDocuments } from "@/features/quotes/quote-documents";
 import { QuoteItemsPanel } from "@/features/quotes/quote-items-panel";
+import { GenerateEngineeringPartidasButton } from "@/features/quotes/quote-drawing-intake";
 import { QuoteStatusActions } from "@/features/quotes/quote-status-actions";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import { ENGINEERING_STATUS_LABELS, type EngineeringStatus } from "@/lib/engineering/status";
@@ -18,16 +18,12 @@ import {
   rfqBlocksEngineering,
   rfqLocksItemsUntilRelease,
 } from "@/lib/quotes/rfq";
+import { PAYMENT_TERM_LABELS, formatShippingAddress, type PaymentTerm } from "@/lib/quotes/commercial";
 import { QUOTE_STATUS_LABELS, canEditQuote, canEditQuoteItems } from "@/lib/quotes/status";
+import { displayMoney } from "@/lib/quotes/money";
+import { workOrderNumber } from "@/lib/production/ot-number";
 import { listQuoteActivity } from "@/server/services/activity";
 import { getQuoteById } from "@/server/services/quotes";
-
-function money(value: string, currency: string) {
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(Number(value));
-}
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -69,7 +65,7 @@ export default async function QuoteDetailPage({
     });
   const itemsLockedReason =
     editable && rfqLocksItemsUntilRelease(quote.rfqType) && !engineeringReleased
-      ? "Diseño + fabricación: las partidas se habilitan cuando Ingeniería libera el plano."
+      ? "Diseño + fabricación: las partidas se generan cuando Ingeniería libera el plano PDF."
       : undefined;
 
   return (
@@ -105,6 +101,14 @@ export default async function QuoteDetailPage({
             <ArchiveQuoteButton quoteId={quote.id} number={quote.number} />
           ) : null}
           {!quote.deletedAt ? (
+            <Link
+              href={`/quotes/${quote.id}/vista`}
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Vista
+            </Link>
+          ) : null}
+          {!quote.deletedAt ? (
             <a
               href={`/api/quotes/${quote.id}/pdf`}
               className={buttonVariants({ variant: "outline" })}
@@ -126,15 +130,15 @@ export default async function QuoteDetailPage({
 
       {quote.orderNumber ? (
         <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          Pedido creado:{" "}
+          Orden de trabajo:{" "}
           {quote.orderId ? (
             <Link href={`/orders/${quote.orderId}`} className="font-medium hover:underline">
-              {quote.orderNumber}
+              {workOrderNumber(quote.orderNumber)}
             </Link>
           ) : (
-            <span className="font-medium">{quote.orderNumber}</span>
+            <span className="font-medium">{workOrderNumber(quote.orderNumber)}</span>
           )}
-          . La OT se crea desde el pedido, no al convertir.
+          . Cada partida de fabricación ya tiene su número de parte.
         </p>
       ) : null}
 
@@ -144,14 +148,60 @@ export default async function QuoteDetailPage({
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Cliente" value={quote.customerName} />
-          <Field label="Contacto" value={quote.contactName} />
+          <Field
+            label="Sucursal"
+            value={
+              quote.branchName
+                ? `${quote.branchCode ?? ""} · ${quote.branchName}`.trim()
+                : null
+            }
+          />
+          <Field
+            label="Datos fiscales sucursal"
+            value={[quote.branchPhone, quote.branchEmail, quote.branchRfc]
+              .filter(Boolean)
+              .join(" · ")}
+          />
+          <Field
+            label="Contacto"
+            value={
+              quote.contactName
+                ? `${quote.contactName}${quote.contactPhone ? ` · ${quote.contactPhone}` : ""}`
+                : null
+            }
+          />
+          <Field
+            label="Destinatario"
+            value={
+              quote.addresseeMode === "departamento"
+                ? quote.contactDepartment || quote.contactTitle || quote.contactName
+                : quote.contactName
+            }
+          />
+          <Field
+            label="Dirección de envío"
+            value={formatShippingAddress({
+              shippingAddress: quote.shippingAddress,
+              shippingCity: quote.shippingCity,
+              shippingState: quote.shippingState,
+              shippingPostalCode: quote.shippingPostalCode,
+              shippingCountry: quote.shippingCountry,
+            })}
+          />
           <Field label="Moneda" value={quote.currency.toUpperCase()} />
           <Field label="Fecha" value={quote.issueDate.toLocaleDateString("es-MX")} />
           <Field
             label="Vigencia"
             value={quote.validUntil?.toLocaleDateString("es-MX") ?? null}
           />
-          <Field label="Condiciones de pago" value={quote.paymentTerms} />
+          <Field
+            label="Condiciones de pago"
+            value={
+              (quote.paymentTerm &&
+                PAYMENT_TERM_LABELS[quote.paymentTerm as PaymentTerm]) ||
+              quote.paymentTerms
+            }
+          />
           <Field label="Tiempo de entrega" value={quote.leadTime} />
           <Field label="Tipo de RFQ" value={RFQ_TYPE_LABELS[quote.rfqType]} />
           <Field
@@ -170,18 +220,9 @@ export default async function QuoteDetailPage({
             label="Estado ingeniería"
             value={QUOTE_ENGINEERING_STATUS_LABELS[quote.engineeringStatus]}
           />
-          <Field label="Subtotal" value={money(quote.subtotal, quote.currency)} />
-          <Field label="IVA" value={money(quote.taxTotal, quote.currency)} />
-          <Field label="Total" value={money(quote.total, quote.currency)} />
-          <Field label="Costo estimado" value={money(quote.estimatedCost, quote.currency)} />
-          <Field
-            label="Utilidad estimada"
-            value={money(quote.estimatedProfit, quote.currency)}
-          />
-          <Field
-            label="Margen"
-            value={quote.marginPercent ? `${quote.marginPercent}%` : null}
-          />
+          <Field label="Subtotal" value={displayMoney(quote.subtotal, quote.currency)} />
+          <Field label="IVA" value={displayMoney(quote.taxTotal, quote.currency)} />
+          <Field label="Total" value={displayMoney(quote.total, quote.currency)} />
         </CardContent>
       </Card>
 
@@ -203,8 +244,8 @@ export default async function QuoteDetailPage({
         <CardContent className="space-y-3 text-sm">
           {rfqBlocksEngineering(quote.rfqType) ? (
             <p className="text-muted-foreground">
-              Solo fabricación: ingeniería bloqueada. Sube el plano del cliente
-              en Archivos, cotiza las partidas y envía al cliente.
+              Solo fabricación: el cliente manda el plano por correo. Sube el PDF
+              abajo; el agente arma el preliminar de mercado.
             </p>
           ) : quote.engineering ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -222,14 +263,19 @@ export default async function QuoteDetailPage({
                 )}{" "}
                 · {ENGINEERING_STATUS_LABELS[quote.engineering.status as EngineeringStatus]}
               </p>
-              {canReadEngineering ? (
-                <Link
-                  href={`/engineering/${quote.engineering.id}`}
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
-                >
-                  Abrir ingeniería
-                </Link>
-              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                {canReadEngineering ? (
+                  <Link
+                    href={`/engineering/${quote.engineering.id}`}
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                  >
+                    Abrir ingeniería
+                  </Link>
+                ) : null}
+                {canWriteItems && engineeringReleased ? (
+                  <GenerateEngineeringPartidasButton quoteId={quote.id} />
+                ) : null}
+              </div>
             </div>
           ) : quote.requiresEngineering ? (
             <p className="text-muted-foreground">
@@ -247,6 +293,13 @@ export default async function QuoteDetailPage({
       <Card>
         <CardHeader>
           <CardTitle>Partidas</CardTitle>
+          <CardDescription>
+            {rfqBlocksEngineering(quote.rfqType)
+              ? "Sube PDF de planos (varios o un ZIP). El agente arma un preliminar de mercado; ajustas la cantidad y confirmas las partidas."
+              : engineeringReleased
+                ? "Al liberar ingeniería, los planos pasan a partidas y se puede armar el preliminar desde PDF."
+                : "Las partidas se generan cuando Ingeniería libera el plano PDF."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <QuoteItemsPanel
@@ -255,45 +308,10 @@ export default async function QuoteDetailPage({
             items={quote.items}
             canWrite={canWriteItems}
             lockedReason={itemsLockedReason}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Archivos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {quote.engineeringDocuments.length > 0 ? (
-            <div className="mb-4 space-y-2">
-              <p className="text-sm font-medium">Planos de ingeniería</p>
-              <p className="text-xs text-muted-foreground">
-                Archivos liberados o en proceso. Úsalos para cotizar las partidas.
-              </p>
-              <ul className="space-y-2">
-                {quote.engineeringDocuments.map((doc) => (
-                  <li
-                    key={doc.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm"
-                  >
-                    <a
-                      className="font-medium underline-offset-4 hover:underline"
-                      href={`/api/documents/${doc.id}`}
-                    >
-                      {doc.originalName}
-                    </a>
-                    <span className="text-xs text-muted-foreground">
-                      {(doc.sizeBytes / 1024).toFixed(1)} KB
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          <QuoteDocuments
-            quoteId={quote.id}
-            documents={quote.documents}
-            canWrite={editable}
+            engineeringDocuments={quote.engineeringDocuments}
+            rfqType={quote.rfqType}
+            engineeringReleased={engineeringReleased}
+            preview={quote.agentPreview ?? null}
           />
         </CardContent>
       </Card>

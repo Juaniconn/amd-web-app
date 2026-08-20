@@ -36,7 +36,7 @@ export default async function EditProjectPage({
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Editar {project.code}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            El cliente no se cambia. Las RFQ y pedidos se asocian en la ficha.
+            El cliente no se cambia. Las RFQ y órdenes de trabajo se asocian en la ficha.
           </p>
         </div>
         <Link href={`/projects/${project.id}`} className={buttonVariants({ variant: "outline" })}>

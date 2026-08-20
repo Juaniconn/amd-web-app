@@ -5,12 +5,11 @@ import postgres from "postgres";
 import { hashPassword } from "better-auth/crypto";
 import { accounts, permissions, rolePermissions, roles, userRoles, users } from "./schema";
 import { PERMISSIONS, ROLES } from "../lib/permissions/catalog";
-import { seedCrmDemo } from "./seed-crm";
-import { seedEngineeringDemo } from "./seed-engineering";
-import { seedInventoryDemo } from "./seed-inventory";
-import { seedProductionDemo } from "./seed-production";
-import { seedProjectsDemo } from "./seed-projects";
-import { seedQuotesDemo } from "./seed-quotes";
+import { seedInventoryCatalogs } from "./seed-inventory";
+import { seedProductionCatalogs } from "./seed-production";
+import { seedCalculatorCatalogs } from "./seed-calculator";
+import { seedBetaFlow } from "./seed-beta-flow";
+import { wipeOperationalData } from "./seed-wipe";
 
 config({ path: ".env.local" });
 config();
@@ -129,15 +128,14 @@ async function seed() {
       .where(eq(users.email, adminEmail))
       .limit(1);
 
-    await seedCrmDemo(db, admin ?? null);
-    await seedQuotesDemo(db, admin ?? null);
-    await seedEngineeringDemo(db, admin ?? null);
-    await seedProductionDemo(db, admin ?? null);
-    await seedInventoryDemo(db, admin ?? null);
-    await seedProjectsDemo(db, admin ?? null);
+    await wipeOperationalData(db);
+    await seedInventoryCatalogs(db);
+    await seedProductionCatalogs(db, admin ?? null);
+    await seedCalculatorCatalogs(db, admin ?? null);
+    await seedBetaFlow(db, admin ?? null);
 
     console.log(
-      "Foundation, CRM, quotes, engineering, production, inventory, orders and projects seed completed.",
+      "Foundation, plant catalogs and beta walkthrough seed completed. Official branches CJS/GDL/ELP come from migration 0009.",
     );
   } finally {
     await client.end({ timeout: 5 });

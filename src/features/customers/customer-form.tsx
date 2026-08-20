@@ -48,6 +48,12 @@ export function CustomerForm({
       city: "",
       state: "",
       country: "México",
+      shippingSameAsBilling: false,
+      shippingAddress: "",
+      shippingCity: "",
+      shippingState: "",
+      shippingPostalCode: "",
+      shippingCountry: "",
       type: "industrial",
       status: "activo",
       notes: "",
@@ -93,7 +99,7 @@ export function CustomerForm({
           ) : null}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="phone">Teléfono</Label>
+          <Label htmlFor="phone">Teléfono de la empresa</Label>
           <Input id="phone" {...form.register("phone")} />
         </div>
         <div className="space-y-2">
@@ -120,6 +126,32 @@ export function CustomerForm({
         <div className="space-y-2">
           <Label htmlFor="country">País</Label>
           <Input id="country" {...form.register("country")} />
+        </div>
+        <div className="space-y-2 md:col-span-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" {...form.register("shippingSameAsBilling")} />
+            La dirección de envío es la misma que la fiscal
+          </label>
+        </div>
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="shippingAddress">Dirección de envío</Label>
+          <Input id="shippingAddress" {...form.register("shippingAddress")} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="shippingCity">Ciudad de envío</Label>
+          <Input id="shippingCity" {...form.register("shippingCity")} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="shippingState">Estado de envío</Label>
+          <Input id="shippingState" {...form.register("shippingState")} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="shippingPostalCode">CP de envío</Label>
+          <Input id="shippingPostalCode" {...form.register("shippingPostalCode")} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="shippingCountry">País de envío</Label>
+          <Input id="shippingCountry" {...form.register("shippingCountry")} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="type">Tipo de cliente</Label>

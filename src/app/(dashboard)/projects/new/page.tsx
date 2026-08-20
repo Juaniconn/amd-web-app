@@ -19,7 +19,7 @@ export default async function NewProjectPage() {
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Nuevo proyecto</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Solo un agrupador. No crea pedidos, RFQ ni OT.
+            Solo un agrupador. No crea órdenes de trabajo, RFQ ni números de parte.
           </p>
         </div>
         <Link href="/projects" className={buttonVariants({ variant: "outline" })}>

@@ -1,8 +1,17 @@
 export const DEFAULT_TAX_PERCENT = 16;
 export const USD_TAX_PERCENT = 0;
+export const ALLOWED_TAX_PERCENTS = [0, 8, 16] as const;
 
 export function taxPercentForCurrency(currency: string): number {
   return currency.toLowerCase() === "usd" ? USD_TAX_PERCENT : DEFAULT_TAX_PERCENT;
+}
+
+export function normalizeTaxPercent(
+  value: number | null | undefined,
+  currency: string,
+): number {
+  if (value === 0 || value === 8 || value === 16) return value;
+  return taxPercentForCurrency(currency);
 }
 export const MONEY_SCALE = 2;
 
@@ -40,12 +49,31 @@ export function roundMoney(value: number, scale = MONEY_SCALE): number {
 
 export function parseMoney(value: string | number | null | undefined): number {
   if (value === null || value === undefined || value === "") return 0;
-  const n = typeof value === "number" ? value : Number(value);
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const cleaned = value.replace(/[^0-9.-]/g, "");
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
 
 export function formatMoney(value: number, scale = MONEY_SCALE): string {
   return roundMoney(value, scale).toFixed(scale);
+}
+
+export function inputMoney(value: string | number | null | undefined): string {
+  return formatMoney(parseMoney(value));
+}
+
+export function displayMoney(
+  value: string | number | null | undefined,
+  currency = "mxn",
+): string {
+  const code = (currency || "mxn").toUpperCase();
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: code,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(parseMoney(value));
 }
 
 export function calculateLineTotals(input: QuoteLineInput): QuoteLineTotals {

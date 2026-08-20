@@ -34,17 +34,18 @@ import {
   ORDER_STATUS_LABELS,
   type OrderStatus,
 } from "@/lib/orders/status";
-import { ACTIVE_PRODUCTION_STATUSES } from "@/lib/production/status";
+import { ACTIVE_PRODUCTION_STATUSES, type ProductionStatus } from "@/lib/production/status";
+import { isManufacturingItem } from "@/lib/quotes/items";
 import type { UpdateOrderInput } from "@/lib/validation/orders";
+import { resolvePageSize } from "@/lib/ui/pagination";
+import { workOrderNumber } from "@/lib/production/ot-number";
 import { recordActivity } from "@/server/services/activity";
 import type { Actor } from "@/server/services/customers";
-
-const PAGE_SIZE = 20;
 
 async function loadOrderRow(id: string) {
   const [row] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
   if (!row) {
-    throw new AppError("El pedido no existe.", "ORDER_NOT_FOUND", 404);
+    throw new AppError("La orden de trabajo no existe.", "ORDER_NOT_FOUND", 404);
   }
   return row;
 }
@@ -69,8 +70,10 @@ export async function listOrders(query: {
   customerId?: string;
   projectId?: string;
   page?: number;
+  pageSize?: number;
 }) {
   const page = Math.max(1, query.page ?? 1);
+  const pageSize = resolvePageSize(query.pageSize);
   const filters = [];
   if (query.status) filters.push(eq(orders.status, query.status));
   if (query.customerId) filters.push(eq(orders.customerId, query.customerId));
@@ -83,6 +86,12 @@ export async function listOrders(query: {
         ilike(customers.legalName, term),
         ilike(quotes.number, term),
         ilike(orders.notes, term),
+        sql`('OT-' || ${orders.number}) ilike ${term}`,
+        sql`exists (
+          select 1 from order_items
+          where order_items.order_id = ${orders.id}
+            and order_items.part_number ilike ${term}
+        )`,
       ),
     );
   }
@@ -107,6 +116,11 @@ export async function listOrders(query: {
     .select({
       id: orders.id,
       number: orders.number,
+      drawingCount: sql<number>`coalesce((
+        select count(*)::int from order_items
+        where order_items.order_id = ${orders.id}
+          and order_items.kind <> 'servicio_ingenieria'
+      ), 0)`,
       status: orders.status,
       origin: orders.origin,
       total: orders.total,
@@ -132,25 +146,137 @@ export async function listOrders(query: {
     .leftJoin(users, eq(orders.ownerUserId, users.id))
     .where(where)
     .orderBy(desc(orders.createdAt))
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  const total = totalRow?.value ?? 0;
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      drawingCount: Number(row.drawingCount ?? 0),
+      workOrderNumber: workOrderNumber(row.number),
+    })),
+    total,
+    page,
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
+export async function listWorkOrders(query: {
+  q?: string;
+  status?: ProductionStatus;
+  delayed?: boolean;
+  customerId?: string;
+  page?: number;
+  pageSize?: number;
+}) {
+  const page = Math.max(1, query.page ?? 1);
+  const pageSize = resolvePageSize(query.pageSize);
+  const filters = [];
+  if (query.status) filters.push(eq(productionOrders.status, query.status));
+  if (query.customerId) filters.push(eq(productionOrders.customerId, query.customerId));
+  if (query.q) {
+    const term = `%${query.q}%`;
+    filters.push(
+      or(
+        ilike(productionOrders.number, term),
+        ilike(productionOrders.partNumber, term),
+        ilike(orderItems.partNumber, term),
+        ilike(customers.legalName, term),
+        ilike(quotes.number, term),
+        ilike(orders.number, term),
+      )!,
+    );
+  }
+  if (query.delayed) {
+    filters.push(
+      and(
+        inArray(productionOrders.status, [...ACTIVE_PRODUCTION_STATUSES]),
+        lt(productionOrders.promisedDate, new Date()),
+      )!,
+    );
+  }
+
+  const where = filters.length > 0 ? and(...filters) : undefined;
+  const [totalRow] = await db
+    .select({ value: count() })
+    .from(productionOrders)
+    .innerJoin(customers, eq(productionOrders.customerId, customers.id))
+    .innerJoin(orders, eq(productionOrders.orderId, orders.id))
+    .innerJoin(quotes, eq(productionOrders.quoteId, quotes.id))
+    .leftJoin(orderItems, eq(orderItems.id, productionOrders.orderItemId))
+    .where(where);
+
+  const rows = await db
+    .select({
+      id: productionOrders.id,
+      number: productionOrders.number,
+      partNumber: sql<string | null>`coalesce(${productionOrders.partNumber}, ${orderItems.partNumber})`,
+      status: productionOrders.status,
+      origin: orders.origin,
+      total: sql<string>`coalesce(${orderItems.lineTotal}, ${orders.total})`,
+      currency: orders.currency,
+      promisedDate: productionOrders.promisedDate,
+      isDemo: productionOrders.isDemo,
+      customerId: productionOrders.customerId,
+      customerName: customers.legalName,
+      quoteId: productionOrders.quoteId,
+      quoteNumber: quotes.number,
+      rfqType: quotes.rfqType,
+      orderId: orders.id,
+      orderNumber: orders.number,
+    })
+    .from(productionOrders)
+    .innerJoin(customers, eq(productionOrders.customerId, customers.id))
+    .innerJoin(orders, eq(productionOrders.orderId, orders.id))
+    .innerJoin(quotes, eq(productionOrders.quoteId, quotes.id))
+    .leftJoin(orderItems, eq(orderItems.id, productionOrders.orderItemId))
+    .where(where)
+    .orderBy(desc(productionOrders.createdAt))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
 
   const total = totalRow?.value ?? 0;
   return {
     rows,
     total,
     page,
-    pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
   };
 }
 
+export async function resolveOrdersModuleId(id: string) {
+  const [ot] = await db
+    .select({
+      workOrderId: productionOrders.id,
+      orderId: productionOrders.orderId,
+    })
+    .from(productionOrders)
+    .where(eq(productionOrders.id, id))
+    .limit(1);
+  if (ot) return ot;
+  const [order] = await db
+    .select({ orderId: orders.id })
+    .from(orders)
+    .where(eq(orders.id, id))
+    .limit(1);
+  if (!order) return null;
+  return { workOrderId: null as string | null, orderId: order.orderId };
+}
+
 export async function listOrdersByCustomer(customerId: string) {
-  return db
+  const rows = await db
     .select({
       id: orders.id,
       number: orders.number,
+      drawingCount: sql<number>`coalesce((
+        select count(*)::int from order_items
+        where order_items.order_id = ${orders.id}
+          and order_items.kind <> 'servicio_ingenieria'
+      ), 0)`,
       status: orders.status,
-      total: orders.total,
       currency: orders.currency,
       promisedDate: orders.promisedDate,
       createdAt: orders.createdAt,
@@ -161,6 +287,11 @@ export async function listOrdersByCustomer(customerId: string) {
     .innerJoin(quotes, eq(orders.quoteId, quotes.id))
     .where(eq(orders.customerId, customerId))
     .orderBy(desc(orders.createdAt));
+  return rows.map((row) => ({
+    ...row,
+    drawingCount: Number(row.drawingCount ?? 0),
+    workOrderNumber: workOrderNumber(row.number),
+  }));
 }
 
 export async function getOrderById(id: string) {
@@ -242,6 +373,7 @@ export async function getOrderById(id: string) {
     productionOrders: ots,
     documents: files,
     openOtCount,
+    drawingCount: items.filter((item) => isManufacturingItem(item.kind)).length,
   };
 }
 
@@ -249,7 +381,7 @@ export async function updateOrder(input: UpdateOrderInput, actor: Actor) {
   const current = await loadOrderRow(input.id);
   if (!canEditOrder(current.status as OrderStatus)) {
     throw new AppError(
-      "Este pedido ya no se puede editar.",
+      "Esta orden de trabajo ya no se puede editar.",
       "ORDER_LOCKED",
       409,
     );
@@ -266,7 +398,7 @@ export async function updateOrder(input: UpdateOrderInput, actor: Actor) {
     }
     if (project.customerId !== current.customerId) {
       throw new AppError(
-        "El proyecto debe pertenecer al mismo cliente del pedido.",
+        "El proyecto debe pertenecer al mismo cliente de la orden de trabajo.",
         "PROJECT_CUSTOMER_MISMATCH",
         409,
       );
@@ -326,7 +458,7 @@ export async function changeOrderStatus(
   const from = current.status as OrderStatus;
   if (!canTransitionOrder(from, nextStatus)) {
     throw new AppError(
-      `No se puede cambiar un pedido de ${ORDER_STATUS_LABELS[from]} a ${ORDER_STATUS_LABELS[nextStatus]}.`,
+      `No se puede cambiar una orden de trabajo de ${ORDER_STATUS_LABELS[from]} a ${ORDER_STATUS_LABELS[nextStatus]}.`,
       "INVALID_TRANSITION",
       409,
     );
@@ -337,8 +469,8 @@ export async function changeOrderStatus(
     if (open > 0) {
       throw new AppError(
         nextStatus === "completado"
-          ? "No se puede completar el pedido mientras existan OT abiertas."
-          : "No se puede cancelar el pedido mientras existan OT abiertas.",
+          ? "No se puede completar la orden de trabajo mientras existan números de parte abiertos."
+          : "No se puede cancelar la orden de trabajo mientras existan números de parte abiertos.",
         "ORDER_HAS_OPEN_OT",
         409,
       );
@@ -392,7 +524,7 @@ export async function markOrderInProductionIfApproved(
 export function assertOrderEligibleForOt(status: OrderStatus) {
   if (!canIssueOtFromOrderStatus(status)) {
     throw new AppError(
-      "Solo un pedido aprobado o en producción puede generar OT.",
+      "Solo una orden de trabajo aprobada o en producción puede generar números de parte.",
       "ORDER_NOT_APPROVED",
       409,
     );

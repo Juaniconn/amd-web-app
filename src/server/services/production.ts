@@ -15,15 +15,19 @@ import {
 import { db } from "@/db";
 import {
   customers,
+  documents,
   downtimeReasons,
   engineeringRequests,
   machines,
+  materials,
   orderItems,
   orders,
   productionDowntime,
   productionOperations,
+  productionOrderMaterials,
   productionOrders,
   productionRouteSteps,
+  quoteItems,
   quotes,
   users,
   workCenters,
@@ -31,13 +35,18 @@ import {
 import { pickChangedFields } from "@/lib/audit/activity";
 import { canIssueOtFromOrderStatus, type OrderStatus } from "@/lib/orders/status";
 import { AppError } from "@/lib/errors";
+import { resolvePageSize } from "@/lib/ui/pagination";
 import type { EngineeringStatus } from "@/lib/engineering/status";
 import {
   productionMonitoring,
   type ProductionPriority,
+  type ProductionRouteStepKind,
 } from "@/lib/production/catalog";
 import { canCreateProductionOrder, type OrderOrigin } from "@/lib/production/gates";
 import { isManufacturingItem } from "@/lib/quotes/items";
+import type { QuoteItemCosting } from "@/lib/quotes/costing";
+import { formatQty } from "@/lib/inventory/catalog";
+import { nextOtNumberForPartida, otNumberForPartida } from "@/lib/production/ot-number";
 import type { RfqType } from "@/lib/quotes/rfq";
 import {
   assertProductionTransition,
@@ -61,12 +70,49 @@ import {
   releaseReservationsForOrder,
 } from "@/server/services/inventory";
 import { attachDocumentsToProductionOrder } from "@/server/services/documents";
-import { nextDocumentNumber } from "@/server/services/numbering";
 import { assertMachineBelongsToCenter } from "@/server/services/production-catalogs";
-
-export const PRODUCTION_PAGE_SIZE = 20;
+import { assertCanPhysicallyClose, ensureInspectionDraft } from "@/server/services/quality";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function uniqueOtNumberForPartida(
+  tx: Tx,
+  orderNumber: string,
+  position: number,
+) {
+  const base = otNumberForPartida(orderNumber, position);
+  const rows = await tx
+    .select({ number: productionOrders.number })
+    .from(productionOrders)
+    .where(ilike(productionOrders.number, `${base}%`));
+  return nextOtNumberForPartida(
+    orderNumber,
+    position,
+    rows.map((row) => row.number),
+  );
+}
+
+async function cloneDocumentsOntoOt(
+  tx: Tx,
+  otId: string,
+  sourceDocs: (typeof documents.$inferSelect)[],
+  actor: Actor,
+) {
+  for (const doc of sourceDocs) {
+    await tx.insert(documents).values({
+      id: crypto.randomUUID(),
+      entityType: "production_order",
+      entityId: otId,
+      originalName: doc.originalName,
+      mimeType: doc.mimeType,
+      sizeBytes: doc.sizeBytes,
+      checksumSha256: doc.checksumSha256,
+      storageBackend: doc.storageBackend,
+      objectKey: doc.objectKey,
+      uploadedBy: actor.userId,
+    });
+  }
+}
 
 async function loadOrderRow(id: string) {
   const [row] = await db
@@ -75,7 +121,7 @@ async function loadOrderRow(id: string) {
     .where(eq(productionOrders.id, id))
     .limit(1);
   if (!row) {
-    throw new AppError("La orden de trabajo no existe.", "OP_NOT_FOUND", 404);
+    throw new AppError("El número de parte no existe.", "OP_NOT_FOUND", 404);
   }
   return row;
 }
@@ -107,7 +153,7 @@ async function loadCommercialOrder(orderId: string) {
     .where(eq(orders.id, orderId))
     .limit(1);
   if (!row) {
-    throw new AppError("El pedido no existe.", "ORDER_NOT_FOUND", 404);
+    throw new AppError("La orden de trabajo no existe.", "ORDER_NOT_FOUND", 404);
   }
   return row;
 }
@@ -202,7 +248,7 @@ async function loadOrderItemForOt(orderId: string, orderItemId: string) {
     .where(and(eq(orderItems.id, orderItemId), eq(orderItems.orderId, orderId)))
     .limit(1);
   if (!item) {
-    throw new AppError("La partida no pertenece a este pedido.", "ORDER_ITEM_NOT_FOUND", 404);
+    throw new AppError("La partida no pertenece a esta orden de trabajo.", "ORDER_ITEM_NOT_FOUND", 404);
   }
   if (!isManufacturingItem(item.kind)) {
     throw new AppError(
@@ -247,7 +293,7 @@ export async function createProductionOrder(
   }
   if (!canIssueOtFromOrderStatus(commercial.status as OrderStatus)) {
     throw new AppError(
-      "Solo un pedido aprobado o en producción puede generar OT.",
+      "Solo una orden de trabajo aprobada o en producción puede generar números de parte.",
       "ORDER_NOT_APPROVED",
       409,
     );
@@ -267,8 +313,7 @@ export async function createProductionOrder(
   }
 
   const created = await db.transaction(async (tx) => {
-    const year = new Date().getFullYear();
-    const number = await nextDocumentNumber(tx, "production_orders", `OT-${year}-`);
+    const number = await uniqueOtNumberForPartida(tx, commercial.number, item.position);
     const id = crypto.randomUUID();
     await tx.insert(productionOrders).values({
       id,
@@ -297,6 +342,28 @@ export async function createProductionOrder(
     if (input.routeId) {
       await instantiateRoute(tx, id, input.routeId);
     }
+    const [quoteItem] = await tx
+      .select({ id: quoteItems.id })
+      .from(quoteItems)
+      .where(
+        and(
+          eq(quoteItems.quoteId, commercial.quoteId),
+          eq(quoteItems.position, item.position),
+        ),
+      )
+      .limit(1);
+    if (quoteItem) {
+      const itemDocs = await tx
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.entityType, "quote_item"),
+            eq(documents.entityId, quoteItem.id),
+          ),
+        );
+      await cloneDocumentsOntoOt(tx, id, itemDocs, actor);
+    }
     await attachDocumentsToProductionOrder(
       tx,
       id,
@@ -306,6 +373,7 @@ export async function createProductionOrder(
         quoteId: commercial.quoteId,
         orderId: commercial.id,
         engineeringRequestId: commercial.engineeringRequestId,
+        quoteItemIds: quoteItem ? [quoteItem.id] : [],
       },
     );
     if (input.machineId && input.operatorUserId) {
@@ -358,6 +426,160 @@ export async function createProductionOrder(
   return created;
 }
 
+export async function insertConvertedOrderWorkOrders(
+  tx: Tx,
+  input: {
+    orderId: string;
+    orderNumber: string;
+    customerId: string;
+    quoteId: string;
+    engineeringRequestId: string | null;
+    origin: string;
+    isDemo: boolean;
+    promisedDate: Date;
+    actor: Actor;
+    items: {
+      orderItemId: string;
+      quoteItemId: string;
+      position: number;
+      kind: string | null;
+      description: string;
+      partNumber: string | null;
+      quantity: string;
+      unit: string;
+    }[];
+  },
+) {
+  for (const item of input.items) {
+    if (!isManufacturingItem(item.kind)) continue;
+    const id = crypto.randomUUID();
+    const number = otNumberForPartida(input.orderNumber, item.position);
+    await tx.insert(productionOrders).values({
+      id,
+      number,
+      orderId: input.orderId,
+      orderItemId: item.orderItemId,
+      customerId: input.customerId,
+      quoteId: input.quoteId,
+      engineeringRequestId: input.engineeringRequestId,
+      origin: input.origin,
+      description: item.description,
+      partNumber: item.partNumber,
+      quantity: item.quantity,
+      unit: item.unit,
+      promisedDate: input.promisedDate,
+      isDemo: input.isDemo,
+      createdBy: input.actor.userId,
+      updatedBy: input.actor.userId,
+    });
+    const itemDocs = await tx
+      .select()
+      .from(documents)
+      .where(
+        and(
+          eq(documents.entityType, "quote_item"),
+          eq(documents.entityId, item.quoteItemId),
+        ),
+      );
+    const sourceDocs =
+      itemDocs.length > 0
+        ? itemDocs
+        : input.engineeringRequestId
+          ? await tx
+              .select()
+              .from(documents)
+              .where(
+                and(
+                  eq(documents.entityType, "engineering_request"),
+                  eq(documents.entityId, input.engineeringRequestId),
+                ),
+              )
+          : [];
+    await cloneDocumentsOntoOt(tx, id, sourceDocs, input.actor);
+    const [quoteItem] = await tx
+      .select({
+        costing: quoteItems.costing,
+        quantity: quoteItems.quantity,
+      })
+      .from(quoteItems)
+      .where(eq(quoteItems.id, item.quoteItemId))
+      .limit(1);
+    const costing = (quoteItem?.costing ?? null) as QuoteItemCosting | null;
+    if (costing?.processes && costing.processes.length > 0) {
+      const centers = await tx
+        .select({ id: workCenters.id, code: workCenters.code })
+        .from(workCenters);
+      const centerId = new Map(centers.map((center) => [center.code, center.id]));
+      await tx.insert(productionOperations).values(
+        costing.processes.map((step) => {
+          const kind: ProductionRouteStepKind =
+            step.workCenterCode === "calidad" ? "calidad" : "produccion";
+          return {
+            id: crypto.randomUUID(),
+            productionOrderId: id,
+            position: step.position,
+            kind,
+            workCenterId: step.workCenterCode
+              ? (centerId.get(step.workCenterCode) ?? null)
+              : null,
+            name: step.name,
+          };
+        }),
+      );
+    }
+    if (costing?.material_id) {
+      const already = await tx
+        .select({ id: productionOrderMaterials.id })
+        .from(productionOrderMaterials)
+        .where(
+          and(
+            eq(productionOrderMaterials.orderId, input.orderId),
+            eq(productionOrderMaterials.materialId, costing.material_id),
+          ),
+        )
+        .limit(1);
+      if (!already[0]) {
+        const [mat] = await tx
+          .select({ warehouseId: materials.warehouseId })
+          .from(materials)
+          .where(eq(materials.id, costing.material_id))
+          .limit(1);
+        if (mat) {
+          const qty = Number(item.quantity || 1);
+          const yieldN = Number(costing.pieces_per_stock || 0);
+          const required = yieldN > 0 ? Math.ceil(qty / yieldN) : 1;
+          await tx.insert(productionOrderMaterials).values({
+            id: crypto.randomUUID(),
+            orderId: input.orderId,
+            productionOrderId: id,
+            materialId: costing.material_id,
+            warehouseId: mat.warehouseId,
+            requiredQty: formatQty(required),
+            createdBy: input.actor.userId,
+            updatedBy: input.actor.userId,
+          });
+        }
+      }
+    }
+    await recordActivity(tx, {
+      actorUserId: input.actor.userId,
+      actorName: input.actor.name,
+      action: "created",
+      entityType: "production_order",
+      entityId: id,
+      entityLabel: number,
+      parentEntityType: "order",
+      parentEntityId: input.orderId,
+      newValue: {
+        number,
+        orderNumber: input.orderNumber,
+        origin: input.origin,
+        fromQuoteItem: item.quoteItemId,
+      },
+    });
+  }
+}
+
 export async function updateProductionOrder(
   input: UpdateProductionOrderInput,
   actor: Actor,
@@ -365,7 +587,7 @@ export async function updateProductionOrder(
   const row = await loadOrderRow(input.id);
   if (!canEditProduction(row.status as ProductionStatus)) {
     throw new AppError(
-      "No se puede editar una OT entregada o cancelada.",
+      "No se puede editar un número de parte entregado o cancelado.",
       "OP_LOCKED",
       409,
     );
@@ -379,6 +601,10 @@ export async function updateProductionOrder(
     promisedDate: row.promisedDate.toISOString(),
     priority: row.priority,
     notes: row.notes,
+    routeId: row.routeId,
+    workCenterId: row.workCenterId,
+    machineId: row.machineId,
+    operatorUserId: row.operatorUserId,
   };
   const next = {
     description: input.description,
@@ -388,7 +614,23 @@ export async function updateProductionOrder(
     promisedDate: input.promisedDate.toISOString(),
     priority: input.priority,
     notes: input.notes ?? null,
+    routeId: input.routeId ?? null,
+    workCenterId: input.workCenterId ?? null,
+    machineId: input.machineId ?? null,
+    operatorUserId: input.operatorUserId ?? null,
   };
+
+  if (input.machineId) {
+    const centerId = input.workCenterId ?? row.workCenterId;
+    if (!centerId) {
+      throw new AppError(
+        "Asigna un centro de trabajo antes de la máquina.",
+        "WORK_CENTER_REQUIRED",
+        409,
+      );
+    }
+    await assertMachineBelongsToCenter(input.machineId, centerId);
+  }
 
   await db
     .update(productionOrders)
@@ -400,6 +642,10 @@ export async function updateProductionOrder(
       promisedDate: input.promisedDate,
       priority: input.priority,
       notes: input.notes ?? null,
+      routeId: input.routeId ?? null,
+      workCenterId: input.workCenterId ?? null,
+      machineId: input.machineId ?? null,
+      operatorUserId: input.operatorUserId ?? null,
       updatedBy: actor.userId,
       updatedAt: new Date(),
     })
@@ -442,16 +688,27 @@ export async function assignProduction(
   }
 
   const now = new Date();
+  const nextCenterId = input.workCenterId ?? row.workCenterId;
   const nextMachineId = input.machineId ?? row.machineId;
   const nextOperatorId = input.operatorUserId ?? row.operatorUserId;
+  const assignmentComplete = Boolean(nextCenterId && nextMachineId && nextOperatorId);
+  const uncovered = assignmentComplete
+    ? await orderHasUncoveredMaterial(row.id)
+    : false;
+  const shouldProgram =
+    assignmentComplete &&
+    !uncovered &&
+    (row.status === "liberada" || row.status === "esperando_material");
 
   await db.transaction(async (tx) => {
     await tx
       .update(productionOrders)
       .set({
-        workCenterId: input.workCenterId ?? row.workCenterId,
+        workCenterId: nextCenterId,
         machineId: nextMachineId,
         operatorUserId: nextOperatorId,
+        status: shouldProgram ? "programada" : row.status,
+        scheduledAt: shouldProgram ? now : row.scheduledAt,
         updatedBy: actor.userId,
         updatedAt: now,
       })
@@ -484,11 +741,29 @@ export async function assignProduction(
       operatorUserId: row.operatorUserId,
     },
     newValue: {
-      workCenterId: input.workCenterId ?? row.workCenterId,
-      machineId: input.machineId ?? row.machineId,
-      operatorUserId: input.operatorUserId ?? row.operatorUserId,
+      workCenterId: nextCenterId,
+      machineId: nextMachineId,
+      operatorUserId: nextOperatorId,
+      status: shouldProgram ? "programada" : row.status,
     },
   });
+
+  if (shouldProgram) {
+    await recordActivity(db, {
+      actorUserId: actor.userId,
+      actorName: actor.name,
+      action: "scheduled",
+      entityType: "production_order",
+      entityId: row.id,
+      entityLabel: row.number,
+      parentEntityType: "order",
+      parentEntityId: row.orderId,
+      previousValue: { status: row.status },
+      newValue: { status: "programada" },
+    });
+  }
+
+  return { programmed: shouldProgram, waitingMaterial: uncovered };
 }
 
 export async function changeProductionStatus(
@@ -517,9 +792,12 @@ export async function changeProductionStatus(
     );
   }
 
-  if (status === "programada" && !row.workCenterId && !row.machineId) {
+  if (
+    (status === "programada" || status === "en_produccion") &&
+    (!row.workCenterId || !row.machineId || !row.operatorUserId)
+  ) {
     throw new AppError(
-      "Programa un centro de trabajo o una máquina antes de marcar la OT como Programada.",
+      "Asigna centro, máquina y operador antes de programar o iniciar el número de parte.",
       "SCHEDULE_INCOMPLETE",
       409,
     );
@@ -528,11 +806,15 @@ export async function changeProductionStatus(
   if (status === "programada" || status === "en_produccion") {
     if (await orderHasUncoveredMaterial(row.id)) {
       throw new AppError(
-        "Hay material requerido sin reservar. Completa la reserva o pasa la OT a Esperando Material.",
+        "Hay material requerido sin reservar. Complétalo en la orden de trabajo o espera a que el número de parte pase a Esperando Material.",
         "MATERIAL_SHORTAGE",
         409,
       );
     }
+  }
+
+  if (status === "terminada") {
+    await assertCanPhysicallyClose(row.id);
   }
 
   if (pauseReasonId) {
@@ -655,6 +937,10 @@ export async function changeProductionStatus(
       newValue: { status, pauseReasonId: pauseReasonId ?? null },
     });
   });
+
+  if (status === "calidad") {
+    await ensureInspectionDraft(row.id, actor);
+  }
 }
 
 export function requiredPermissionForStatus(to: ProductionStatus) {
@@ -665,16 +951,23 @@ export async function listProductionOrders(input: {
   q?: string;
   status?: ProductionStatus;
   delayed?: boolean;
+  operatorUserId?: string;
   page?: number;
+  pageSize?: number;
 }) {
   const page = Math.max(1, input.page ?? 1);
+  const pageSize = resolvePageSize(input.pageSize);
   const filters = [];
   if (input.status) filters.push(eq(productionOrders.status, input.status));
+  if (input.operatorUserId) {
+    filters.push(eq(productionOrders.operatorUserId, input.operatorUserId));
+  }
   if (input.q) {
     const term = `%${input.q}%`;
     filters.push(
       or(
         ilike(productionOrders.number, term),
+        ilike(productionOrders.partNumber, term),
         ilike(productionOrders.description, term),
         ilike(customers.legalName, term),
         ilike(orders.number, term),
@@ -707,11 +1000,12 @@ export async function listProductionOrders(input: {
     .where(where);
 
   const total = Number(totalRow.value);
-  const pageCount = Math.max(1, Math.ceil(total / PRODUCTION_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const rows = await db
     .select({
       id: productionOrders.id,
       number: productionOrders.number,
+      partNumber: productionOrders.partNumber,
       orderId: productionOrders.orderId,
       orderNumber: orders.number,
       customerId: productionOrders.customerId,
@@ -738,8 +1032,8 @@ export async function listProductionOrders(input: {
     .leftJoin(users, eq(productionOrders.operatorUserId, users.id))
     .where(where)
     .orderBy(asc(productionOrders.priority), asc(productionOrders.promisedDate))
-    .limit(PRODUCTION_PAGE_SIZE)
-    .offset((page - 1) * PRODUCTION_PAGE_SIZE);
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
 
   return {
     rows: rows.map((row) => ({
@@ -748,6 +1042,7 @@ export async function listProductionOrders(input: {
     })),
     total,
     page,
+    pageSize,
     pageCount,
   };
 }
@@ -848,6 +1143,7 @@ export async function listProductionByCustomer(customerId: string) {
     .select({
       id: productionOrders.id,
       number: productionOrders.number,
+      partNumber: productionOrders.partNumber,
       status: productionOrders.status,
       promisedDate: productionOrders.promisedDate,
       priority: productionOrders.priority,

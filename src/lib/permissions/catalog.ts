@@ -20,6 +20,8 @@ export const PERMISSION_IDS = {
   rolesWrite: "roles:write",
   customersRead: "customers:read",
   customersWrite: "customers:write",
+  branchesRead: "branches:read",
+  branchesWrite: "branches:write",
   quotesRead: "quotes:read",
   quotesWrite: "quotes:write",
   engineeringRead: "engineering:read",
@@ -38,6 +40,19 @@ export const PERMISSION_IDS = {
   productionAssignMachine: "production:assign_machine",
   productionAssignOperator: "production:assign_operator",
   qualityRelease: "quality:release",
+  qualityRead: "quality:read",
+  qualityInspect: "quality:inspect",
+  qualityNcr: "quality:ncr",
+  purchasingRead: "purchasing:read",
+  purchasingWrite: "purchasing:write",
+  purchasingApprove: "purchasing:approve",
+  purchasingReceive: "purchasing:receive",
+  deliveriesRead: "deliveries:read",
+  deliveriesWrite: "deliveries:write",
+  deliveriesConfirm: "deliveries:confirm",
+  billingRead: "billing:read",
+  billingWrite: "billing:write",
+  billingRegisterPayment: "billing:register_payment",
   inventoryRead: "inventory:read",
   inventoryWrite: "inventory:write",
   inventoryAdjust: "inventory:adjust",
@@ -120,21 +135,28 @@ export const ROLES: Record<
       PERMISSION_IDS.usersRead,
       PERMISSION_IDS.rolesRead,
       PERMISSION_IDS.customersRead,
+      PERMISSION_IDS.branchesRead,
+      PERMISSION_IDS.branchesWrite,
       PERMISSION_IDS.quotesRead,
       PERMISSION_IDS.engineeringRead,
       PERMISSION_IDS.ordersView,
       PERMISSION_IDS.projectsView,
       PERMISSION_IDS.productionView,
       PERMISSION_IDS.inventoryRead,
+      PERMISSION_IDS.purchasingRead,
+      PERMISSION_IDS.qualityRead,
+      PERMISSION_IDS.deliveriesRead,
+      PERMISSION_IDS.billingRead,
     ],
   },
   ventas: {
     name: "Ventas",
-    description: "Clientes, cotizaciones, pedidos y solicitudes de ingeniería.",
+    description: "Clientes, cotizaciones, órdenes de trabajo y solicitudes de ingeniería.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
       PERMISSION_IDS.customersRead,
       PERMISSION_IDS.customersWrite,
+      PERMISSION_IDS.branchesRead,
       PERMISSION_IDS.quotesRead,
       PERMISSION_IDS.quotesWrite,
       PERMISSION_IDS.engineeringRead,
@@ -144,6 +166,12 @@ export const ROLES: Record<
       ...PROJECTS_ALL,
       PERMISSION_IDS.productionView,
       PERMISSION_IDS.inventoryRead,
+      PERMISSION_IDS.inventoryReserve,
+      PERMISSION_IDS.deliveriesRead,
+      PERMISSION_IDS.deliveriesWrite,
+      PERMISSION_IDS.billingRead,
+      PERMISSION_IDS.billingWrite,
+      PERMISSION_IDS.billingRegisterPayment,
     ],
   },
   ingenieria: {
@@ -151,11 +179,13 @@ export const ROLES: Record<
     description: "Solicitudes de diseño, CAD, revisión, aprobación y liberación.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
+      PERMISSION_IDS.branchesRead,
       ...ENGINEERING_ALL,
       PERMISSION_IDS.ordersView,
       PERMISSION_IDS.projectsView,
       PERMISSION_IDS.productionView,
       PERMISSION_IDS.inventoryRead,
+      PERMISSION_IDS.qualityRead,
     ],
   },
   compras: {
@@ -163,9 +193,14 @@ export const ROLES: Record<
     description: "Proveedores, compras e inventario.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
+      PERMISSION_IDS.branchesRead,
       PERMISSION_IDS.ordersView,
       PERMISSION_IDS.projectsView,
       PERMISSION_IDS.inventoryRead,
+      PERMISSION_IDS.purchasingRead,
+      PERMISSION_IDS.purchasingWrite,
+      PERMISSION_IDS.purchasingApprove,
+      PERMISSION_IDS.purchasingReceive,
     ],
   },
   produccion: {
@@ -173,6 +208,7 @@ export const ROLES: Record<
     description: "Órdenes de trabajo (OT), máquinas, programación y cierre administrativo.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
+      PERMISSION_IDS.branchesRead,
       PERMISSION_IDS.engineeringRead,
       PERMISSION_IDS.ordersView,
       PERMISSION_IDS.projectsView,
@@ -180,6 +216,8 @@ export const ROLES: Record<
       PERMISSION_IDS.inventoryRead,
       PERMISSION_IDS.inventoryReserve,
       PERMISSION_IDS.inventoryConsume,
+      PERMISSION_IDS.qualityRead,
+      PERMISSION_IDS.deliveriesRead,
     ],
   },
   calidad: {
@@ -187,12 +225,17 @@ export const ROLES: Record<
     description: "Cierre físico de OT, retrabajos y consulta de planos vigentes.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
+      PERMISSION_IDS.branchesRead,
       PERMISSION_IDS.engineeringRead,
       PERMISSION_IDS.ordersView,
       PERMISSION_IDS.projectsView,
       PERMISSION_IDS.productionView,
       PERMISSION_IDS.qualityRelease,
+      PERMISSION_IDS.qualityRead,
+      PERMISSION_IDS.qualityInspect,
+      PERMISSION_IDS.qualityNcr,
       PERMISSION_IDS.inventoryRead,
+      PERMISSION_IDS.deliveriesRead,
     ],
   },
   almacen: {
@@ -200,9 +243,15 @@ export const ROLES: Record<
     description: "Inventario, entradas, salidas, ajustes y existencias. Consulta OT para reservar y entregar a piso.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
+      PERMISSION_IDS.branchesRead,
       PERMISSION_IDS.ordersView,
       PERMISSION_IDS.productionView,
       ...INVENTORY_ALL,
+      PERMISSION_IDS.purchasingRead,
+      PERMISSION_IDS.purchasingReceive,
+      PERMISSION_IDS.deliveriesRead,
+      PERMISSION_IDS.deliveriesWrite,
+      PERMISSION_IDS.deliveriesConfirm,
     ],
   },
 };
@@ -243,6 +292,14 @@ export const PERMISSIONS: Record<
     name: "Gestionar clientes",
     description: "Crear, editar y archivar clientes y contactos.",
   },
+  "branches:read": {
+    name: "Ver sucursales",
+    description: "Consultar plazas de AMD México y usarlas al cotizar.",
+  },
+  "branches:write": {
+    name: "Gestionar sucursales",
+    description: "Crear, editar, activar o desactivar sucursales.",
+  },
   "quotes:read": {
     name: "Ver cotizaciones",
     description: "Listar cotizaciones, partidas, costos y márgenes.",
@@ -250,7 +307,7 @@ export const PERMISSIONS: Record<
   "quotes:write": {
     name: "Gestionar cotizaciones",
     description:
-      "Crear y editar cotizaciones, partidas, archivos, estados y conversión a pedido.",
+      "Crear y editar cotizaciones, partidas, archivos, estados y conversión a orden de trabajo.",
   },
   "engineering:read": {
     name: "Ver ingeniería",
@@ -285,8 +342,8 @@ export const PERMISSIONS: Record<
     description: "Consultar órdenes de trabajo, máquinas, tiempos y KPIs de piso.",
   },
   "production:create": {
-    name: "Crear OT",
-    description: "Crear órdenes de trabajo ancladas a un pedido.",
+    name: "Crear número de parte",
+    description: "Crear números de parte anclados a una orden de trabajo.",
   },
   "production:update": {
     name: "Editar OT",
@@ -294,7 +351,7 @@ export const PERMISSIONS: Record<
   },
   "production:cancel": {
     name: "Cancelar OT",
-    description: "Cancelar una orden de trabajo. No borra el pedido ni la RFQ.",
+    description: "Cancelar un número de parte. No borra la orden de trabajo ni la RFQ.",
   },
   "production:close": {
     name: "Cerrar OT",
@@ -315,6 +372,58 @@ export const PERMISSIONS: Record<
   "quality:release": {
     name: "Liberar calidad",
     description: "Cierre físico del producto. Pasa la OT de Calidad a Terminada.",
+  },
+  "quality:read": {
+    name: "Ver calidad",
+    description: "Consultar inspecciones y NCR.",
+  },
+  "quality:inspect": {
+    name: "Registrar inspección",
+    description: "Capturar inspección de primera pieza, proceso o final.",
+  },
+  "quality:ncr": {
+    name: "Gestionar NCR",
+    description: "Abrir y cerrar no conformidades.",
+  },
+  "purchasing:read": {
+    name: "Ver compras",
+    description: "Consultar proveedores, OC y recepciones.",
+  },
+  "purchasing:write": {
+    name: "Gestionar compras",
+    description: "Crear proveedores y órdenes de compra.",
+  },
+  "purchasing:approve": {
+    name: "Aprobar compras",
+    description: "Aprobar OC urgentes y enviar al proveedor.",
+  },
+  "purchasing:receive": {
+    name: "Recibir compras",
+    description: "Registrar recepción de OC y generar entrada de inventario.",
+  },
+  "deliveries:read": {
+    name: "Ver entregas",
+    description: "Consultar guías y estado logístico.",
+  },
+  "deliveries:write": {
+    name: "Gestionar entregas",
+    description: "Crear entregas y capturar guía.",
+  },
+  "deliveries:confirm": {
+    name: "Confirmar entrega",
+    description: "Marcar entrega realizada o incidencia.",
+  },
+  "billing:read": {
+    name: "Ver facturación",
+    description: "Consultar facturas operativas y CxC.",
+  },
+  "billing:write": {
+    name: "Emitir facturas",
+    description: "Crear facturas operativas desde una orden de trabajo. No es CFDI.",
+  },
+  "billing:register_payment": {
+    name: "Registrar pagos",
+    description: "Capturar cobros contra factura operativa.",
   },
   "inventory:read": {
     name: "Ver inventario",
@@ -337,24 +446,25 @@ export const PERMISSIONS: Record<
     description: "Registrar consumo de producción contra una reserva de OT.",
   },
   "orders:view": {
-    name: "Ver pedidos",
-    description: "Listar pedidos, abrir ficha y ver trazabilidad comercial.",
+    name: "Ver órdenes de trabajo",
+    description: "Listar órdenes de trabajo, abrir ficha y ver trazabilidad comercial.",
   },
   "orders:create": {
-    name: "Crear pedidos",
-    description: "Convertir una RFQ aprobada en pedido oficial.",
+    name: "Crear órdenes de trabajo",
+    description: "Convertir una RFQ aprobada en orden de trabajo oficial.",
   },
   "orders:update": {
-    name: "Editar pedidos",
-    description: "Actualizar responsable, fecha prometida, notas, proyecto y estado operativo.",
+    name: "Editar órdenes de trabajo",
+    description:
+      "Actualizar responsable, fecha prometida, notas, proyecto, estado operativo y material de la OT.",
   },
   "orders:cancel": {
-    name: "Cancelar pedidos",
-    description: "Cancelar un pedido sin borrar historial ni la RFQ.",
+    name: "Cancelar órdenes de trabajo",
+    description: "Cancelar una orden de trabajo sin borrar historial ni la RFQ.",
   },
   "orders:approve": {
-    name: "Aprobar pedidos",
-    description: "Aprobar comercialmente un pedido pendiente.",
+    name: "Aprobar órdenes de trabajo",
+    description: "Aprobar comercialmente una orden de trabajo pendiente.",
   },
   "projects:view": {
     name: "Ver proyectos",
@@ -366,7 +476,7 @@ export const PERMISSIONS: Record<
   },
   "projects:update": {
     name: "Editar proyectos",
-    description: "Editar datos del proyecto y asociar RFQ o pedidos.",
+    description: "Editar datos del proyecto y asociar RFQ u órdenes de trabajo.",
   },
   "projects:close": {
     name: "Cerrar proyectos",
@@ -374,7 +484,7 @@ export const PERMISSIONS: Record<
   },
   "projects:cancel": {
     name: "Cancelar proyectos",
-    description: "Cancelar un proyecto agrupador. No borra pedidos ni OT.",
+    description: "Cancelar un proyecto agrupador. No borra órdenes de trabajo ni RFQ.",
   },
 };
 

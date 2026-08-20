@@ -16,11 +16,8 @@ import {
 } from "@/components/ui/table";
 import { requirePermission } from "@/lib/auth/session";
 import { ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/orders/status";
+import { workOrderNumber } from "@/lib/production/ot-number";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
-import {
-  PRODUCTION_STATUS_LABELS,
-  type ProductionStatus,
-} from "@/lib/production/status";
 import {
   canEditProject,
   PROJECT_STATUS_LABELS,
@@ -60,7 +57,6 @@ export default async function ProjectDetailPage({
   const editable = canUpdate && canEditProject(project.status as ProjectStatus);
   const canReadQuotes = access.permissions.includes(PERMISSION_IDS.quotesRead);
   const canReadOrders = access.permissions.includes(PERMISSION_IDS.ordersView);
-  const canReadProduction = access.permissions.includes(PERMISSION_IDS.productionView);
   const attachableQuotes = editable ? await listAttachableQuotes(project.id) : [];
   const attachableOrders = editable ? await listAttachableOrders(project.id) : [];
 
@@ -203,16 +199,16 @@ export default async function ProjectDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Pedidos asociados</CardTitle>
+          <CardTitle>Órdenes de Trabajo asociadas</CardTitle>
         </CardHeader>
         <CardContent>
           {project.orders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sin pedidos ligados.</p>
+            <p className="text-sm text-muted-foreground">Sin órdenes de trabajo ligadas.</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Pedido</TableHead>
+                  <TableHead>OT</TableHead>
                   <TableHead>Estado</TableHead>
                   {editable ? <TableHead className="text-right"> </TableHead> : null}
                 </TableRow>
@@ -223,7 +219,7 @@ export default async function ProjectDetailPage({
                     <TableCell>
                       {canReadOrders ? (
                         <Link href={`/orders/${order.id}`} className="font-medium hover:underline">
-                          {order.number}
+                          {workOrderNumber(order.number)}
                         </Link>
                       ) : (
                         order.number
@@ -241,48 +237,6 @@ export default async function ProjectDetailPage({
                         />
                       </TableCell>
                     ) : null}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>OT asociadas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {project.productionOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Las OT se listan a través de los pedidos. No se crean desde el proyecto.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>OT</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Prometida</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {project.productionOrders.map((ot) => (
-                  <TableRow key={ot.id}>
-                    <TableCell>
-                      {canReadProduction ? (
-                        <Link href={`/production/${ot.id}`} className="font-medium hover:underline">
-                          {ot.number}
-                        </Link>
-                      ) : (
-                        ot.number
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {PRODUCTION_STATUS_LABELS[ot.status as ProductionStatus]}
-                    </TableCell>
-                    <TableCell>{ot.promisedDate.toLocaleDateString("es-MX")}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

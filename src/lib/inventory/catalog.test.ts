@@ -30,7 +30,9 @@ describe("inventory quantities", () => {
 
   it("formats display without trailing zeros", () => {
     expect(displayQty("12.0000")).toBe("12");
+    expect(displayQty("24.0000")).toBe("24");
     expect(displayQty(formatQty("1.5"))).toBe("1.5");
+    expect(displayQty(null)).toBe("");
   });
 
   it("compares shortage the way BUSINESS_SPEC §22 describes", () => {

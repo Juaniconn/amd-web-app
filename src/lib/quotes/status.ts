@@ -22,7 +22,7 @@ export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
   aprobada: "Aprobada",
   rechazada: "Rechazada",
   expirada: "Expirada",
-  convertida: "Convertida en pedido",
+  convertida: "Convertida en OT",
 };
 
 const TRANSITIONS: Record<QuoteStatus, QuoteStatus[]> = {

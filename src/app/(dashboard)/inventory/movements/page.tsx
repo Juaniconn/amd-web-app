@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { EmptyTable, TableCard, TablePager } from "@/components/layout/data-table";
+import { PageHeader } from "@/components/layout/page-header";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Table,
@@ -12,6 +14,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { displayQty } from "@/lib/inventory/catalog";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import { listMovements } from "@/server/services/inventory";
+import { parsePage, parsePageSize } from "@/lib/ui/pagination";
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -23,37 +26,33 @@ export default async function InventoryMovementsPage({
   searchParams: Promise<{
     materialId?: string | string[];
     page?: string | string[];
+    perPage?: string | string[];
   }>;
 }) {
   await requirePermission(PERMISSION_IDS.inventoryRead);
   const params = await searchParams;
   const materialId = first(params.materialId);
-  const page = Number(first(params.page) ?? "1") || 1;
-  const result = await listMovements({ materialId, page });
+  const page = parsePage(first(params.page));
+  const pageSize = parsePageSize(first(params.perPage));
+  const result = await listMovements({ materialId, page, pageSize });
 
-  function pageHref(nextPage: number) {
-    const next = new URLSearchParams();
-    if (materialId) next.set("materialId", materialId);
-    next.set("page", String(nextPage));
-    return `/inventory/movements?${next.toString()}`;
-  }
+  const query = new URLSearchParams();
+  if (materialId) query.set("materialId", materialId);
+  query.set("perPage", String(pageSize));
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Movimientos</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Auditoría de existencias. No se borran; un error se corrige con el
-            movimiento inverso.
-          </p>
-        </div>
-        <Link href="/inventory" className={buttonVariants({ variant: "outline" })}>
-          Volver
-        </Link>
-      </div>
+      <PageHeader
+        title="Movimientos"
+        description="Auditoría de existencias. Un error se corrige con el movimiento inverso."
+        actions={
+          <Link href="/inventory" className={buttonVariants({ variant: "outline" })}>
+            Inventario
+          </Link>
+        }
+      />
 
-      <div className="overflow-x-auto rounded-lg border">
+      <TableCard>
         <Table>
           <TableHeader>
             <TableRow>
@@ -67,11 +66,13 @@ export default async function InventoryMovementsPage({
           </TableHeader>
           <TableBody>
             {result.rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
-                  Sin movimientos.
-                </TableCell>
-              </TableRow>
+              <EmptyTable
+                colSpan={6}
+                title="Aún no hay movimientos."
+                description="Las recepciones, reservas y consumos quedan registrados aquí."
+                href="/inventory"
+                actionLabel="Ver inventario"
+              />
             ) : (
               result.rows.map((row) => (
                 <TableRow key={row.id}>
@@ -106,26 +107,17 @@ export default async function InventoryMovementsPage({
             )}
           </TableBody>
         </Table>
-      </div>
+      </TableCard>
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <p>
-          {result.total} registro{result.total === 1 ? "" : "s"} · página {result.page}{" "}
-          de {result.pageCount}
-        </p>
-        <div className="flex gap-2">
-          {result.page > 1 ? (
-            <Link href={pageHref(result.page - 1)} className={buttonVariants({ variant: "outline" })}>
-              Anterior
-            </Link>
-          ) : null}
-          {result.page < result.pageCount ? (
-            <Link href={pageHref(result.page + 1)} className={buttonVariants({ variant: "outline" })}>
-              Siguiente
-            </Link>
-          ) : null}
-        </div>
-      </div>
+      <TablePager
+        total={result.total}
+        page={result.page}
+        pageCount={result.pageCount}
+        label={result.total === 1 ? "movimiento" : "movimientos"}
+        path="/inventory/movements"
+        query={query}
+        pageSize={pageSize}
+      />
     </div>
   );
 }

@@ -1,4 +1,8 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PAYMENT_TERM_LABELS, resolveAddressee, type AddresseeMode, type PaymentTerm } from "@/lib/quotes/commercial";
+import { displayMoney } from "@/lib/quotes/money";
+import { displayQty } from "@/lib/inventory/catalog";
+import { formatBranchAddress } from "@/lib/branches/catalog";
 import { QUOTE_STATUS_LABELS, type QuoteStatus } from "@/lib/quotes/status";
 import { RFQ_TYPE_LABELS, type RfqType } from "@/lib/quotes/rfq";
 
@@ -21,9 +25,14 @@ export type QuotePdfInput = {
   customerName: string;
   customerCode: string | null;
   contactName: string | null;
+  contactPhone: string | null;
+  contactTitle: string | null;
+  contactDepartment: string | null;
+  addresseeMode: AddresseeMode | string | null;
   currency: string;
   issueDate: Date;
   validUntil: Date | null;
+  paymentTerm: PaymentTerm | string | null;
   paymentTerms: string | null;
   leadTime: string | null;
   notes: string | null;
@@ -31,15 +40,22 @@ export type QuotePdfInput = {
   taxTotal: string;
   total: string;
   items: PdfItem[];
+  branchName: string | null;
+  branchCode: string | null;
+  branchAddress: string | null;
+  branchCity: string | null;
+  branchState: string | null;
+  branchCountry: string | null;
+  branchPostalCode: string | null;
+  branchPhone: string | null;
+  branchEmail: string | null;
+  branchRfc: string | null;
+  shippingAddress: string | null;
+  shippingCity: string | null;
+  shippingState: string | null;
+  shippingPostalCode: string | null;
+  shippingCountry: string | null;
 };
-
-function money(value: string, currency: string) {
-  const amount = Number(value ?? 0);
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(Number.isFinite(amount) ? amount : 0);
-}
 
 function dateEs(value: Date) {
   return value.toLocaleDateString("es-MX");
@@ -80,8 +96,26 @@ export async function generateQuotePdf(quote: QuotePdfInput): Promise<Uint8Array
     });
   }
 
-  text("AMD Mexico", margin, 16, { bold: true });
-  y -= 18;
+  text(quote.branchName || "AMD Mexico", margin, 16, { bold: true });
+  y -= 16;
+  const branchLine = formatBranchAddress({
+    address: quote.branchAddress,
+    city: quote.branchCity,
+    state: quote.branchState,
+    postalCode: quote.branchPostalCode,
+    country: quote.branchCountry,
+  });
+  if (branchLine) {
+    text(branchLine, margin, 9, { color: muted });
+    y -= 12;
+  }
+  const branchContact = [quote.branchPhone, quote.branchEmail, quote.branchRfc]
+    .filter(Boolean)
+    .join("  ·  ");
+  if (branchContact) {
+    text(branchContact, margin, 9, { color: muted });
+    y -= 12;
+  }
   text("Cotizacion", margin, 11, { color: muted });
   y -= 28;
 
@@ -95,12 +129,35 @@ export async function generateQuotePdf(quote: QuotePdfInput): Promise<Uint8Array
   );
   y -= 24;
 
+  const addressee = resolveAddressee({
+    mode: quote.addresseeMode,
+    name: quote.contactName,
+    department: quote.contactDepartment,
+    title: quote.contactTitle,
+    phone: quote.contactPhone,
+  });
+  const paymentLabel =
+    (quote.paymentTerm &&
+      PAYMENT_TERM_LABELS[quote.paymentTerm as PaymentTerm]) ||
+    quote.paymentTerms ||
+    "—";
+  const shipping = [
+    quote.shippingAddress,
+    [quote.shippingCity, quote.shippingState].filter(Boolean).join(", "),
+    quote.shippingPostalCode,
+    quote.shippingCountry,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   const fields: [string, string][] = [
     ["Cliente", quote.customerCode ? `${quote.customerName} (${quote.customerCode})` : quote.customerName],
-    ["Contacto", quote.contactName || "—"],
+    ["Destinatario", addressee.line || quote.contactName || "—"],
+    ["Tel. contacto", addressee.phone || "—"],
+    ["Envio", shipping || "—"],
     ["Fecha", dateEs(quote.issueDate)],
     ["Vigencia", quote.validUntil ? dateEs(quote.validUntil) : "—"],
-    ["Pago", quote.paymentTerms || "—"],
+    ["Pago", paymentLabel],
     ["Entrega", quote.leadTime || "—"],
   ];
   for (const [label, value] of fields) {
@@ -140,22 +197,22 @@ export async function generateQuotePdf(quote: QuotePdfInput): Promise<Uint8Array
     text(String(item.position), margin, 9);
     text(title, margin + 20, 9);
     y -= 12;
-    text(`${item.quantity} ${item.unit}`, 360, 9);
-    text(money(item.unitPrice, quote.currency), 420, 9);
-    text(money(item.lineTotal, quote.currency), 510, 9);
+    text(`${displayQty(item.quantity)} ${item.unit}`, 360, 9);
+    text(displayMoney(item.unitPrice, quote.currency), 420, 9);
+    text(displayMoney(item.lineTotal, quote.currency), 510, 9);
     y -= 16;
   }
 
   y -= 8;
   ensureSpace(70);
   text("Subtotal", 400, 10, { color: muted });
-  text(money(quote.subtotal, quote.currency), 490, 10);
+  text(displayMoney(quote.subtotal, quote.currency), 490, 10);
   y -= lineHeight;
   text("IVA", 400, 10, { color: muted });
-  text(money(quote.taxTotal, quote.currency), 490, 10);
+  text(displayMoney(quote.taxTotal, quote.currency), 490, 10);
   y -= lineHeight;
   text("Total", 400, 12, { bold: true });
-  text(money(quote.total, quote.currency), 490, 12, { bold: true });
+  text(displayMoney(quote.total, quote.currency), 490, 12, { bold: true });
   y -= 24;
 
   if (quote.notes) {

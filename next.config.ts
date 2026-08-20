@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["pdf-parse", "dxf-parser", "@cursor/sdk", "jszip"],
   allowedDevOrigins: [
     "192.168.*.*",
     "10.*.*.*",

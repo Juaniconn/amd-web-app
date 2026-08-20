@@ -3,11 +3,15 @@ import "server-only";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  branches,
   inventoryBalances,
   inventoryMovements,
   materials,
+  orders,
   productionOrderMaterials,
   productionOrders,
+  supplierMaterials,
+  suppliers,
   unitsOfMeasure,
   warehouses,
 } from "@/db/schema";
@@ -27,7 +31,11 @@ import {
   type InventoryMovementType,
   type MaterialCategory,
 } from "@/lib/inventory/catalog";
-import { TERMINAL_PRODUCTION_STATUSES } from "@/lib/production/status";
+import {
+  ACTIVE_PRODUCTION_STATUSES,
+  CLOSED_PRODUCTION_STATUSES,
+  TERMINAL_PRODUCTION_STATUSES,
+} from "@/lib/production/status";
 import type {
   AddOrderMaterialInput,
   AdjustStockInput,
@@ -39,11 +47,10 @@ import type {
 } from "@/lib/validation/inventory";
 import { recordActivity } from "@/server/services/activity";
 import { nextDocumentNumber } from "@/server/services/numbering";
+import { resolvePageSize } from "@/lib/ui/pagination";
 
 type Actor = { userId: string; name: string };
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-const PAGE_SIZE = 20;
 
 function yearPrefix(prefix: string) {
   return `${prefix}${new Date().getFullYear()}-`;
@@ -83,9 +90,12 @@ export async function listMaterials(input: {
   critical?: boolean;
   active?: boolean;
   lowStock?: boolean;
+  calculator?: boolean;
   page?: number;
+  pageSize?: number;
 }) {
   const page = Math.max(1, input.page ?? 1);
+  const pageSize = resolvePageSize(input.pageSize);
   const filters = [];
   if (input.q) {
     const term = `%${input.q}%`;
@@ -94,6 +104,7 @@ export async function listMaterials(input: {
   if (input.category) filters.push(eq(materials.category, input.category));
   if (input.critical) filters.push(eq(materials.isCritical, true));
   if (input.active !== undefined) filters.push(eq(materials.active, input.active));
+  if (input.calculator) filters.push(eq(materials.usedInCalculator, true));
 
   const where = filters.length ? and(...filters) : undefined;
 
@@ -112,16 +123,23 @@ export async function listMaterials(input: {
       active: materials.active,
       minStock: materials.minStock,
       isDemo: materials.isDemo,
+      usedInCalculator: materials.usedInCalculator,
+      grade: materials.grade,
+      costPerKg: materials.costPerKg,
+      supplierId: materials.supplierId,
       unitCode: unitsOfMeasure.code,
       unitName: unitsOfMeasure.name,
       warehouseId: warehouses.id,
       warehouseName: warehouses.name,
+      branchId: materials.branchId,
+      branchName: branches.name,
       onHand: sql<string>`coalesce(${inventoryBalances.onHand}, '0')`,
       reserved: sql<string>`coalesce(${inventoryBalances.reserved}, '0')`,
     })
     .from(materials)
     .innerJoin(unitsOfMeasure, eq(unitsOfMeasure.id, materials.unitId))
     .innerJoin(warehouses, eq(warehouses.id, materials.warehouseId))
+    .leftJoin(branches, eq(branches.id, materials.branchId))
     .leftJoin(
       inventoryBalances,
       and(
@@ -131,8 +149,8 @@ export async function listMaterials(input: {
     )
     .where(where)
     .orderBy(materials.code)
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
 
   let mapped = rows.map((row) => {
     const available = availableQty(row.onHand, row.reserved);
@@ -157,7 +175,8 @@ export async function listMaterials(input: {
     rows: mapped,
     total,
     page,
-    pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
   };
 }
 
@@ -175,6 +194,18 @@ export async function getMaterialById(id: string) {
       minStock: materials.minStock,
       notes: materials.notes,
       isDemo: materials.isDemo,
+      usedInCalculator: materials.usedInCalculator,
+      grade: materials.grade,
+      thicknessIn: materials.thicknessIn,
+      costPerKg: materials.costPerKg,
+      sheetWidthIn: materials.sheetWidthIn,
+      sheetLengthIn: materials.sheetLengthIn,
+      densityGCm3: materials.densityGCm3,
+      supplierId: materials.supplierId,
+      supplierName: suppliers.legalName,
+      supplierMaterialId: materials.supplierMaterialId,
+      branchId: materials.branchId,
+      branchName: branches.name,
       unitCode: unitsOfMeasure.code,
       unitName: unitsOfMeasure.name,
       integerOnly: unitsOfMeasure.integerOnly,
@@ -185,6 +216,8 @@ export async function getMaterialById(id: string) {
     .from(materials)
     .innerJoin(unitsOfMeasure, eq(unitsOfMeasure.id, materials.unitId))
     .innerJoin(warehouses, eq(warehouses.id, materials.warehouseId))
+    .leftJoin(branches, eq(branches.id, materials.branchId))
+    .leftJoin(suppliers, eq(suppliers.id, materials.supplierId))
     .leftJoin(
       inventoryBalances,
       and(
@@ -206,20 +239,67 @@ export async function createMaterial(input: CreateMaterialInput, actor: Actor) {
     input.warehouseId ?? DEFAULT_WAREHOUSE_BY_CATEGORY[input.category];
   await loadWarehouse(warehouseId);
 
+  let copied = {
+    description: input.description,
+    grade: input.grade ?? null,
+    thicknessIn: input.thicknessIn ?? null,
+    costPerKg: input.costPerKg ?? null,
+    sheetWidthIn: input.sheetWidthIn ?? null,
+    sheetLengthIn: input.sheetLengthIn ?? null,
+    densityGCm3: input.densityGCm3 ?? null,
+    supplierId: input.supplierId ?? null,
+    supplierMaterialId: input.supplierMaterialId ?? null,
+    usedInCalculator: Boolean(input.supplierMaterialId || input.usedInCalculator),
+    notes: input.notes ?? null,
+  };
+  if (input.supplierMaterialId) {
+    const [partida] = await db
+      .select()
+      .from(supplierMaterials)
+      .where(eq(supplierMaterials.id, input.supplierMaterialId))
+      .limit(1);
+    if (!partida) {
+      throw new AppError("El material del proveedor no existe.", "SUPPLIER_MATERIAL_NOT_FOUND", 404);
+    }
+    copied = {
+      description: input.description || partida.description,
+      grade: input.grade ?? partida.grade,
+      thicknessIn: input.thicknessIn ?? partida.thicknessIn,
+      costPerKg: input.costPerKg ?? partida.costPerKg,
+      sheetWidthIn: input.sheetWidthIn ?? partida.sheetWidthIn,
+      sheetLengthIn: input.sheetLengthIn ?? partida.sheetLengthIn,
+      densityGCm3: input.densityGCm3 ?? partida.densityGCm3,
+      supplierId: input.supplierId ?? partida.supplierId,
+      supplierMaterialId: partida.id,
+      usedInCalculator: true,
+      notes: input.notes ?? partida.notes,
+    };
+  }
+
   return db.transaction(async (tx) => {
     const code = await nextDocumentNumber(tx, "materials", yearPrefix("MAT-"));
     const id = crypto.randomUUID();
     await tx.insert(materials).values({
       id,
       code,
-      description: input.description,
+      description: copied.description,
       category: input.category,
       unitId: unit.id,
       warehouseId,
+      branchId: input.branchId ?? null,
       isCritical: input.isCritical,
       active: input.active,
       minStock: input.minStock ? formatQty(input.minStock) : null,
-      notes: input.notes ?? null,
+      notes: copied.notes,
+      grade: copied.grade,
+      thicknessIn: copied.thicknessIn,
+      costPerKg: copied.costPerKg,
+      sheetWidthIn: copied.sheetWidthIn,
+      sheetLengthIn: copied.sheetLengthIn,
+      densityGCm3: copied.densityGCm3,
+      supplierId: copied.supplierId,
+      supplierMaterialId: copied.supplierMaterialId,
+      usedInCalculator: copied.usedInCalculator,
       createdBy: actor.userId,
       updatedBy: actor.userId,
     });
@@ -257,6 +337,16 @@ export async function updateMaterial(input: UpdateMaterialInput, actor: Actor) {
         active: input.active,
         minStock: input.minStock ? formatQty(input.minStock) : null,
         notes: input.notes ?? null,
+        grade: input.grade ?? null,
+        thicknessIn: input.thicknessIn ?? null,
+        costPerKg: input.costPerKg ?? null,
+        sheetWidthIn: input.sheetWidthIn ?? null,
+        sheetLengthIn: input.sheetLengthIn ?? null,
+        densityGCm3: input.densityGCm3 ?? null,
+        supplierId: input.supplierId ?? null,
+        supplierMaterialId: input.supplierMaterialId ?? existing.supplierMaterialId,
+        branchId: input.branchId ?? existing.branchId,
+        usedInCalculator: Boolean(input.supplierMaterialId || input.usedInCalculator),
         updatedBy: actor.userId,
         updatedAt: new Date(),
       })
@@ -294,6 +384,27 @@ export async function receiveStock(input: StockMovementInput, actor: Actor) {
     onHandDelta: formatQty(input.quantity),
     reservedDelta: "0",
     actor,
+  });
+}
+
+export async function receivePurchaseStock(
+  input: StockMovementInput & {
+    purchaseOrderId: string;
+    purchaseReceiptId: string;
+  },
+  actor: Actor,
+) {
+  return applyManualMovement({
+    type: "entrada",
+    materialId: input.materialId,
+    warehouseId: input.warehouseId,
+    quantity: input.quantity,
+    reason: input.reason,
+    onHandDelta: formatQty(input.quantity),
+    reservedDelta: "0",
+    actor,
+    purchaseOrderId: input.purchaseOrderId,
+    purchaseReceiptId: input.purchaseReceiptId,
   });
 }
 
@@ -336,6 +447,8 @@ async function applyManualMovement(input: {
   onHandDelta: string;
   reservedDelta: string;
   actor: Actor;
+  purchaseOrderId?: string;
+  purchaseReceiptId?: string;
 }) {
   const material = await loadMaterial(input.materialId);
   if (!material.active && input.type !== "ajuste") {
@@ -359,6 +472,8 @@ async function applyManualMovement(input: {
       reason: input.reason ?? null,
       actor: input.actor,
       isDemo: material.isDemo,
+      purchaseOrderId: input.purchaseOrderId,
+      purchaseReceiptId: input.purchaseReceiptId,
     });
   });
 }
@@ -368,8 +483,10 @@ export async function listMovements(input: {
   productionOrderId?: string;
   type?: InventoryMovementType;
   page?: number;
+  pageSize?: number;
 }) {
   const page = Math.max(1, input.page ?? 1);
+  const pageSize = resolvePageSize(input.pageSize);
   const filters = [];
   if (input.materialId) filters.push(eq(inventoryMovements.materialId, input.materialId));
   if (input.productionOrderId) {
@@ -411,8 +528,8 @@ export async function listMovements(input: {
     )
     .where(where)
     .orderBy(desc(inventoryMovements.createdAt))
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
 
   const total = Number(countRow?.value ?? 0);
   return {
@@ -422,7 +539,8 @@ export async function listMovements(input: {
     })),
     total,
     page,
-    pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
   };
 }
 
@@ -432,6 +550,7 @@ export async function listActiveMaterialsForSelect() {
       id: materials.id,
       code: materials.code,
       description: materials.description,
+      supplierId: materials.supplierId,
       unitCode: unitsOfMeasure.code,
       category: materials.category,
       active: materials.active,
@@ -442,10 +561,91 @@ export async function listActiveMaterialsForSelect() {
     .orderBy(materials.code);
 }
 
-export async function listOrderMaterials(productionOrderId: string) {
+let workOrderMaterialsSchemaReady = false;
+
+function schemaRowCount(result: unknown) {
+  if (Array.isArray(result)) return result.length;
+  if (result && typeof result === "object" && "length" in result) {
+    return Number((result as { length: number }).length) || 0;
+  }
+  return 0;
+}
+
+function isIgnorableSchemaError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /already exists|duplicate|undefined_object|does not exist|unique index/i.test(
+    message,
+  );
+}
+
+async function trySchemaSql(statement: string) {
+  try {
+    await db.execute(sql.raw(statement));
+  } catch (error) {
+    if (!isIgnorableSchemaError(error)) throw error;
+  }
+}
+
+async function applyWorkOrderMaterialsSchema() {
+  await trySchemaSql(`
+    ALTER TABLE production_order_materials
+    ADD COLUMN IF NOT EXISTS order_id text
+  `);
+  await trySchemaSql(`
+    UPDATE production_order_materials pom
+    SET order_id = po.order_id
+    FROM production_orders po
+    WHERE po.id = pom.production_order_id
+      AND pom.order_id IS NULL
+  `);
+  await trySchemaSql(`
+    ALTER TABLE production_order_materials
+    ALTER COLUMN production_order_id DROP NOT NULL
+  `);
+  await trySchemaSql(`
+    ALTER TABLE production_order_materials
+    ADD CONSTRAINT production_order_materials_order_id_orders_id_fk
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE cascade
+  `);
+  await trySchemaSql(`
+    CREATE INDEX IF NOT EXISTS production_order_materials_order_idx
+    ON production_order_materials (order_id)
+  `);
+  await trySchemaSql(`
+    DROP INDEX IF EXISTS production_order_materials_ot_material_uidx
+  `);
+  await trySchemaSql(`
+    CREATE UNIQUE INDEX IF NOT EXISTS production_order_materials_order_material_uidx
+    ON production_order_materials (order_id, material_id)
+  `);
+  await trySchemaSql(`
+    ALTER TABLE production_order_materials
+    ALTER COLUMN order_id SET NOT NULL
+  `);
+}
+
+export async function ensureWorkOrderMaterialsSchema() {
+  if (workOrderMaterialsSchemaReady) return;
+  const existing = await db.execute(sql.raw(`
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'production_order_materials'
+      AND column_name = 'order_id'
+    LIMIT 1
+  `));
+  if (schemaRowCount(existing) === 0) {
+    await applyWorkOrderMaterialsSchema();
+  }
+  workOrderMaterialsSchemaReady = true;
+}
+
+export async function listWorkOrderMaterials(orderId: string) {
+  await ensureWorkOrderMaterialsSchema();
   const rows = await db
     .select({
       id: productionOrderMaterials.id,
+      orderId: productionOrderMaterials.orderId,
       productionOrderId: productionOrderMaterials.productionOrderId,
       materialId: productionOrderMaterials.materialId,
       warehouseId: productionOrderMaterials.warehouseId,
@@ -471,7 +671,7 @@ export async function listOrderMaterials(productionOrderId: string) {
         eq(inventoryBalances.warehouseId, productionOrderMaterials.warehouseId),
       ),
     )
-    .where(eq(productionOrderMaterials.productionOrderId, productionOrderId))
+    .where(eq(productionOrderMaterials.orderId, orderId))
     .orderBy(materials.code);
 
   return rows.map((row) => {
@@ -490,9 +690,15 @@ export async function listOrderMaterials(productionOrderId: string) {
   });
 }
 
+export async function listOrderMaterials(productionOrderId: string) {
+  const order = await loadProductionOrder(productionOrderId);
+  return listWorkOrderMaterials(order.orderId);
+}
+
 export async function addOrderMaterial(input: AddOrderMaterialInput, actor: Actor) {
-  const order = await loadProductionOrder(input.productionOrderId);
-  assertOrderAcceptsReservation(order.status);
+  await ensureWorkOrderMaterialsSchema();
+  const workOrder = await loadWorkOrder(input.orderId);
+  assertWorkOrderAcceptsReservation(workOrder.status);
   const material = await loadMaterial(input.materialId);
   if (!material.active) {
     throw new AppError(
@@ -502,6 +708,7 @@ export async function addOrderMaterial(input: AddOrderMaterialInput, actor: Acto
     );
   }
   assertQuantityForUnit(input.quantity, material.integerOnly);
+  const holderPartId = await firstActivePartId(workOrder.id);
 
   await db.transaction(async (tx) => {
     const duplicate = await tx
@@ -509,21 +716,22 @@ export async function addOrderMaterial(input: AddOrderMaterialInput, actor: Acto
       .from(productionOrderMaterials)
       .where(
         and(
-          eq(productionOrderMaterials.productionOrderId, order.id),
+          eq(productionOrderMaterials.orderId, workOrder.id),
           eq(productionOrderMaterials.materialId, material.id),
         ),
       )
       .limit(1);
     if (duplicate[0]) {
       throw new AppError(
-        "Ese material ya está en la OT.",
+        "Ese material ya está en la orden de trabajo.",
         "MATERIAL_ALREADY_ON_OT",
         409,
       );
     }
     await tx.insert(productionOrderMaterials).values({
       id: crypto.randomUUID(),
-      productionOrderId: order.id,
+      orderId: workOrder.id,
+      productionOrderId: holderPartId,
       materialId: material.id,
       warehouseId: material.warehouseId,
       requiredQty: formatQty(input.quantity),
@@ -534,11 +742,11 @@ export async function addOrderMaterial(input: AddOrderMaterialInput, actor: Acto
       actorUserId: actor.userId,
       actorName: actor.name,
       action: "updated",
-      entityType: "production_order",
-      entityId: order.id,
-      entityLabel: `${order.number} · material ${material.code}`,
-      parentEntityType: "production_order",
-      parentEntityId: order.id,
+      entityType: "order",
+      entityId: workOrder.id,
+      entityLabel: `${workOrder.number} · material ${material.code}`,
+      parentEntityType: "order",
+      parentEntityId: workOrder.id,
       newValue: { materialId: material.id, requiredQty: formatQty(input.quantity) },
     });
   });
@@ -553,8 +761,8 @@ export async function removeOrderMaterial(lineId: string, actor: Actor) {
       409,
     );
   }
-  const order = await loadProductionOrder(line.productionOrderId);
-  assertOrderAcceptsReservation(order.status);
+  const workOrder = await loadWorkOrder(line.orderId);
+  assertWorkOrderAcceptsReservation(workOrder.status);
 
   await db.transaction(async (tx) => {
     await tx
@@ -564,36 +772,36 @@ export async function removeOrderMaterial(lineId: string, actor: Actor) {
       actorUserId: actor.userId,
       actorName: actor.name,
       action: "updated",
-      entityType: "production_order",
-      entityId: order.id,
-      entityLabel: `${order.number} · se quitó ${line.materialCode}`,
-      parentEntityType: "production_order",
-      parentEntityId: order.id,
+      entityType: "order",
+      entityId: workOrder.id,
+      entityLabel: `${workOrder.number} · se quitó ${line.materialCode}`,
+      parentEntityType: "order",
+      parentEntityId: workOrder.id,
     });
   });
 }
 
 export async function reserveOrderMaterials(
-  productionOrderId: string,
+  orderId: string,
   actor: Actor,
   lineId?: string,
 ) {
-  const order = await loadProductionOrder(productionOrderId);
-  assertOrderAcceptsReservation(order.status);
+  const workOrder = await loadWorkOrder(orderId);
+  assertWorkOrderAcceptsReservation(workOrder.status);
 
   return db.transaction(async (tx) => {
-    const lines = await listOrderMaterials(productionOrderId);
+    const lines = await listWorkOrderMaterials(orderId);
     const targets = lineId ? lines.filter((line) => line.id === lineId) : lines;
     if (targets.length === 0) {
       throw new AppError(
-        "La OT no tiene material requerido para reservar.",
+        "La orden de trabajo no tiene material requerido para reservar.",
         "NO_MATERIAL_LINES",
         409,
       );
     }
 
     let reservedAny = false;
-    let shortage = false;
+    const extraReserved = new Map<string, string>();
 
     for (const line of targets) {
       const needed = subQty(line.requiredQty, line.reservedQty);
@@ -603,11 +811,10 @@ export async function reserveOrderMaterials(
       const disponible = availableQty(balance.onHand, balance.reserved);
       const toReserve = minQty(needed, disponible);
       if (!qtyGt(toReserve, 0)) {
-        shortage = true;
         continue;
       }
       reservedAny = true;
-      if (qtyGt(needed, toReserve)) shortage = true;
+      extraReserved.set(line.id, toReserve);
 
       await applyBalanceAndMovement(tx, {
         material,
@@ -616,11 +823,11 @@ export async function reserveOrderMaterials(
         quantity: toReserve,
         onHandDelta: "0",
         reservedDelta: toReserve,
-        reason: `Reserva OT ${order.number}`,
+        reason: `Reserva OT ${workOrder.number}`,
         actor,
-        productionOrderId: order.id,
+        productionOrderId: line.productionOrderId ?? undefined,
         productionOrderMaterialId: line.id,
-        isDemo: order.isDemo || material.isDemo,
+        isDemo: workOrder.isDemo || material.isDemo,
       });
 
       await tx
@@ -633,15 +840,32 @@ export async function reserveOrderMaterials(
         .where(eq(productionOrderMaterials.id, line.id));
     }
 
-    if (!reservedAny && shortage) {
-      throw new AppError(
-        "No hay disponible para reservar. La OT puede pasar a Esperando Material.",
-        "NO_AVAILABLE_STOCK",
-        409,
-      );
-    }
+    const missing = lines
+      .map((line) => {
+        const reservedQty = addQty(line.reservedQty, extraReserved.get(line.id) ?? "0");
+        const remaining = qtyGt(line.requiredQty, reservedQty)
+          ? subQty(line.requiredQty, reservedQty)
+          : "0";
+        return {
+          code: line.materialCode,
+          description: line.materialDescription,
+          shortage: remaining,
+          available: line.available,
+          unitCode: line.unitCode,
+        };
+      })
+      .filter((line) => qtyGt(line.shortage, 0));
+    const shortage = missing.length > 0;
+    const statusSync = await syncPartMaterialStatus(tx, workOrder.id, actor, shortage);
 
-    return { shortage, reservedAny };
+    return {
+      shortage,
+      reservedAny,
+      covered: !shortage,
+      waitingApplied: statusSync.waitingApplied,
+      releasedFromWait: statusSync.releasedFromWait,
+      missing,
+    };
   });
 }
 
@@ -650,10 +874,10 @@ export async function consumeOrderMaterial(
   actor: Actor,
 ) {
   const line = await loadOrderMaterialLine(input.lineId);
-  const order = await loadProductionOrder(line.productionOrderId);
-  if (order.status === "cancelada" || order.status === "entregada") {
+  const workOrder = await loadWorkOrder(line.orderId);
+  if (workOrder.status === "cancelado" || workOrder.status === "completado") {
     throw new AppError(
-      "No se puede consumir material de una OT cerrada o cancelada.",
+      "No se puede consumir material de una orden de trabajo cerrada o cancelada.",
       "OT_CLOSED",
       409,
     );
@@ -677,11 +901,11 @@ export async function consumeOrderMaterial(
       quantity: formatQty(input.quantity),
       onHandDelta: formatQty(-parseQty(input.quantity)),
       reservedDelta: formatQty(-parseQty(input.quantity)),
-      reason: `Consumo OT ${order.number}`,
+      reason: `Consumo OT ${workOrder.number}`,
       actor,
-      productionOrderId: order.id,
+      productionOrderId: line.productionOrderId ?? undefined,
       productionOrderMaterialId: line.id,
-      isDemo: order.isDemo || material.isDemo,
+      isDemo: workOrder.isDemo || material.isDemo,
     });
     await tx
       .update(productionOrderMaterials)
@@ -694,13 +918,39 @@ export async function consumeOrderMaterial(
   });
 }
 
+export async function consumeAllOrderMaterials(orderId: string, actor: Actor) {
+  const lines = await listWorkOrderMaterials(orderId);
+  for (const line of lines) {
+    const remaining = Number(line.consumable || 0);
+    if (remaining <= 0) continue;
+    await consumeOrderMaterial(
+      { lineId: line.id, quantity: formatQty(remaining) },
+      actor,
+    );
+  }
+}
+
 export async function releaseReservationsForOrder(
   tx: Tx,
   productionOrderId: string,
   actor: Actor,
 ) {
-  const order = await loadProductionOrder(productionOrderId);
-  const lines = await listOrderMaterials(productionOrderId);
+  const part = await loadProductionOrder(productionOrderId);
+  const siblings = await tx
+    .select({ id: productionOrders.id, status: productionOrders.status })
+    .from(productionOrders)
+    .where(eq(productionOrders.orderId, part.orderId));
+  const otherActive = siblings.some(
+    (row) =>
+      row.id !== productionOrderId &&
+      ACTIVE_PRODUCTION_STATUSES.includes(
+        row.status as (typeof ACTIVE_PRODUCTION_STATUSES)[number],
+      ),
+  );
+  if (otherActive) return;
+
+  const workOrder = await loadWorkOrder(part.orderId);
+  const lines = await listWorkOrderMaterials(part.orderId);
   for (const line of lines) {
     const leftover = subQty(line.reservedQty, line.consumedQty);
     if (!qtyGt(leftover, 0)) continue;
@@ -712,11 +962,11 @@ export async function releaseReservationsForOrder(
       quantity: leftover,
       onHandDelta: "0",
       reservedDelta: formatQty(-parseQty(leftover)),
-      reason: `Liberación por cancelación OT ${order.number}`,
+      reason: `Liberación por cancelación OT ${workOrder.number}`,
       actor,
-      productionOrderId: order.id,
+      productionOrderId: part.id,
       productionOrderMaterialId: line.id,
-      isDemo: order.isDemo || material.isDemo,
+      isDemo: workOrder.isDemo || material.isDemo,
     });
     await tx
       .update(productionOrderMaterials)
@@ -734,8 +984,23 @@ export async function receiveFinishedGoodsForOrder(
   productionOrderId: string,
   actor: Actor,
 ) {
-  const order = await loadProductionOrder(productionOrderId);
-  const lines = await listOrderMaterials(productionOrderId);
+  const part = await loadProductionOrder(productionOrderId);
+  const siblings = await tx
+    .select({ id: productionOrders.id, status: productionOrders.status })
+    .from(productionOrders)
+    .where(eq(productionOrders.orderId, part.orderId));
+  const othersOpen = siblings.some(
+    (row) =>
+      row.id !== productionOrderId &&
+      !CLOSED_PRODUCTION_STATUSES.includes(
+        row.status as (typeof CLOSED_PRODUCTION_STATUSES)[number],
+      ) &&
+      row.status !== "cancelada",
+  );
+  if (othersOpen) return;
+
+  const workOrder = await loadWorkOrder(part.orderId);
+  const lines = await listWorkOrderMaterials(part.orderId);
   const ptLines = lines.filter((line) => line.category === "producto_terminado");
   for (const line of ptLines) {
     const alreadyIn = line.requiredQty;
@@ -747,19 +1012,24 @@ export async function receiveFinishedGoodsForOrder(
       quantity: alreadyIn,
       onHandDelta: alreadyIn,
       reservedDelta: "0",
-      reason: `Entrada PT por cierre físico OT ${order.number}`,
+      reason: `Entrada PT por cierre físico OT ${workOrder.number}`,
       actor,
-      productionOrderId: order.id,
+      productionOrderId: part.id,
       productionOrderMaterialId: line.id,
-      isDemo: order.isDemo || material.isDemo,
+      isDemo: workOrder.isDemo || material.isDemo,
     });
   }
 }
 
-export async function orderHasUncoveredMaterial(productionOrderId: string) {
-  const lines = await listOrderMaterials(productionOrderId);
+export async function workOrderHasUncoveredMaterial(orderId: string) {
+  const lines = await listWorkOrderMaterials(orderId);
   if (lines.length === 0) return false;
   return lines.some((line) => qtyGt(line.shortage, 0));
+}
+
+export async function orderHasUncoveredMaterial(productionOrderId: string) {
+  const part = await loadProductionOrder(productionOrderId);
+  return workOrderHasUncoveredMaterial(part.orderId);
 }
 
 async function applyBalanceAndMovement(
@@ -775,6 +1045,8 @@ async function applyBalanceAndMovement(
     actor: Actor;
     productionOrderId?: string;
     productionOrderMaterialId?: string;
+    purchaseOrderId?: string;
+    purchaseReceiptId?: string;
     isDemo: boolean;
   },
 ) {
@@ -824,6 +1096,8 @@ async function applyBalanceAndMovement(
     reason: input.reason,
     productionOrderId: input.productionOrderId ?? null,
     productionOrderMaterialId: input.productionOrderMaterialId ?? null,
+    purchaseOrderId: input.purchaseOrderId ?? null,
+    purchaseReceiptId: input.purchaseReceiptId ?? null,
     isDemo: input.isDemo,
     createdBy: input.actor.userId,
   });
@@ -933,6 +1207,7 @@ async function loadProductionOrder(id: string) {
     .select({
       id: productionOrders.id,
       number: productionOrders.number,
+      orderId: productionOrders.orderId,
       status: productionOrders.status,
       quantity: productionOrders.quantity,
       isDemo: productionOrders.isDemo,
@@ -941,15 +1216,124 @@ async function loadProductionOrder(id: string) {
     .where(eq(productionOrders.id, id))
     .limit(1);
   if (!row) {
-    throw new AppError("La OT no existe.", "OP_NOT_FOUND", 404);
+    throw new AppError("El número de parte no existe.", "OP_NOT_FOUND", 404);
   }
   return row;
+}
+
+async function loadWorkOrder(id: string) {
+  const [row] = await db
+    .select({
+      id: orders.id,
+      number: orders.number,
+      status: orders.status,
+      isDemo: orders.isDemo,
+    })
+    .from(orders)
+    .where(eq(orders.id, id))
+    .limit(1);
+  if (!row) {
+    throw new AppError("La orden de trabajo no existe.", "ORDER_NOT_FOUND", 404);
+  }
+  return row;
+}
+
+async function firstActivePartId(orderId: string) {
+  const [row] = await db
+    .select({ id: productionOrders.id })
+    .from(productionOrders)
+    .where(eq(productionOrders.orderId, orderId))
+    .limit(1);
+  return row?.id ?? null;
+}
+
+export async function applyWorkOrderMaterialWait(orderId: string, actor: Actor) {
+  return db.transaction((tx) => syncPartMaterialStatus(tx, orderId, actor, true));
+}
+
+async function syncPartMaterialStatus(
+  tx: Tx,
+  orderId: string,
+  actor: Actor,
+  shortage: boolean,
+) {
+  const parts = await tx
+    .select({
+      id: productionOrders.id,
+      number: productionOrders.number,
+      status: productionOrders.status,
+    })
+    .from(productionOrders)
+    .where(eq(productionOrders.orderId, orderId));
+
+  let waitingApplied = false;
+  let releasedFromWait = false;
+  const now = new Date();
+
+  for (const part of parts) {
+    if (
+      TERMINAL_PRODUCTION_STATUSES.includes(
+        part.status as (typeof TERMINAL_PRODUCTION_STATUSES)[number],
+      )
+    ) {
+      continue;
+    }
+    if (shortage && part.status === "liberada") {
+      await tx
+        .update(productionOrders)
+        .set({
+          status: "esperando_material",
+          updatedBy: actor.userId,
+          updatedAt: now,
+        })
+        .where(eq(productionOrders.id, part.id));
+      await recordActivity(tx, {
+        actorUserId: actor.userId,
+        actorName: actor.name,
+        action: "status_changed",
+        entityType: "production_order",
+        entityId: part.id,
+        entityLabel: part.number,
+        parentEntityType: "order",
+        parentEntityId: orderId,
+        previousValue: { status: "liberada" },
+        newValue: { status: "esperando_material" },
+      });
+      waitingApplied = true;
+    }
+    if (!shortage && part.status === "esperando_material") {
+      await tx
+        .update(productionOrders)
+        .set({
+          status: "liberada",
+          updatedBy: actor.userId,
+          updatedAt: now,
+        })
+        .where(eq(productionOrders.id, part.id));
+      await recordActivity(tx, {
+        actorUserId: actor.userId,
+        actorName: actor.name,
+        action: "status_changed",
+        entityType: "production_order",
+        entityId: part.id,
+        entityLabel: part.number,
+        parentEntityType: "order",
+        parentEntityId: orderId,
+        previousValue: { status: "esperando_material" },
+        newValue: { status: "liberada" },
+      });
+      releasedFromWait = true;
+    }
+  }
+
+  return { waitingApplied, releasedFromWait };
 }
 
 async function loadOrderMaterialLine(id: string) {
   const [row] = await db
     .select({
       id: productionOrderMaterials.id,
+      orderId: productionOrderMaterials.orderId,
       productionOrderId: productionOrderMaterials.productionOrderId,
       materialId: productionOrderMaterials.materialId,
       warehouseId: productionOrderMaterials.warehouseId,
@@ -968,10 +1352,10 @@ async function loadOrderMaterialLine(id: string) {
   return row;
 }
 
-function assertOrderAcceptsReservation(status: string) {
-  if (TERMINAL_PRODUCTION_STATUSES.includes(status as (typeof TERMINAL_PRODUCTION_STATUSES)[number])) {
+function assertWorkOrderAcceptsReservation(status: string) {
+  if (status === "cancelado" || status === "completado") {
     throw new AppError(
-      "No se puede reservar material contra una OT entregada o cancelada.",
+      "No se puede reservar material contra una orden de trabajo cerrada o cancelada.",
       "OT_TERMINAL",
       409,
     );

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { CustomerFilters } from "@/features/customers/customer-filters";
+import { EmptyTable, TableCard, TablePager } from "@/components/layout/data-table";
+import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -19,6 +21,7 @@ import {
   customerTypeSchema,
 } from "@/lib/validation/customers";
 import { listCustomers } from "@/server/services/customers";
+import { parsePage, parsePageSize } from "@/lib/ui/pagination";
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -32,6 +35,7 @@ export default async function CustomersPage({
     status?: string | string[];
     type?: string | string[];
     page?: string | string[];
+    perPage?: string | string[];
   }>;
 }) {
   const { access } = await requirePermission(PERMISSION_IDS.customersRead);
@@ -39,56 +43,54 @@ export default async function CustomersPage({
   const q = first(params.q)?.trim() || undefined;
   const statusParsed = customerStatusSchema.safeParse(first(params.status));
   const typeParsed = customerTypeSchema.safeParse(first(params.type));
-  const page = Number(first(params.page) ?? "1") || 1;
+  const page = parsePage(first(params.page));
+  const pageSize = parsePageSize(first(params.perPage));
   const canWrite = access.permissions.includes(PERMISSION_IDS.customersWrite);
+  const filtered = Boolean(q || statusParsed.success || typeParsed.success);
 
   const result = await listCustomers({
     q,
     status: statusParsed.success ? statusParsed.data : undefined,
     type: typeParsed.success ? typeParsed.data : undefined,
     page,
+    pageSize,
   });
 
   const query = new URLSearchParams();
   if (q) query.set("q", q);
   if (statusParsed.success) query.set("status", statusParsed.data);
   if (typeParsed.success) query.set("type", typeParsed.data);
-
-  function pageHref(nextPage: number) {
-    const next = new URLSearchParams(query);
-    next.set("page", String(nextPage));
-    return `/customers?${next.toString()}`;
-  }
+  query.set("perPage", String(pageSize));
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Clientes</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            CRM de AMD Operations. Los registros DEMO no son clientes reales.
-          </p>
-        </div>
-        {canWrite ? (
-          <Link href="/customers/new" className={buttonVariants()}>
-            Nuevo cliente
-          </Link>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Clientes"
+        description="Empresas, contactos y datos de envío para cotizar y entregar."
+        actions={
+          canWrite ? (
+            <Link href="/customers/new" className={buttonVariants()}>
+              Nuevo cliente
+            </Link>
+          ) : null
+        }
+      />
 
       <CustomerFilters
         q={q}
         status={statusParsed.success ? statusParsed.data : undefined}
         type={typeParsed.success ? typeParsed.data : undefined}
+        perPage={pageSize}
       />
 
-      <div className="rounded-lg border bg-card">
+      <TableCard>
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Código</TableHead>
               <TableHead>Empresa</TableHead>
               <TableHead>RFC</TableHead>
+              <TableHead>Teléfono</TableHead>
               <TableHead>Contacto principal</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Estado</TableHead>
@@ -96,11 +98,17 @@ export default async function CustomersPage({
           </TableHeader>
           <TableBody>
             {result.rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                  No hay clientes con esos filtros.
-                </TableCell>
-              </TableRow>
+              <EmptyTable
+                colSpan={7}
+                title={filtered ? "No hay clientes con esos filtros." : "Aún no hay clientes."}
+                description={
+                  filtered
+                    ? "Prueba otra búsqueda o limpia los filtros."
+                    : "Captura la empresa y el contacto de compras para cotizar."
+                }
+                href={!filtered && canWrite ? "/customers/new" : undefined}
+                actionLabel="Nuevo cliente"
+              />
             ) : (
               result.rows.map((customer) => (
                 <TableRow key={customer.id}>
@@ -124,6 +132,7 @@ export default async function CustomersPage({
                     </div>
                   </TableCell>
                   <TableCell>{customer.rfc ?? "—"}</TableCell>
+                  <TableCell>{customer.phone ?? "—"}</TableCell>
                   <TableCell>
                     {customer.primaryContactName ? (
                       <div>
@@ -153,32 +162,17 @@ export default async function CustomersPage({
             )}
           </TableBody>
         </Table>
-      </div>
+      </TableCard>
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <p>
-          {result.total} cliente{result.total === 1 ? "" : "s"} · página{" "}
-          {result.page} de {result.pageCount}
-        </p>
-        <div className="flex gap-2">
-          {result.page > 1 ? (
-            <Link
-              href={pageHref(result.page - 1)}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              Anterior
-            </Link>
-          ) : null}
-          {result.page < result.pageCount ? (
-            <Link
-              href={pageHref(result.page + 1)}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              Siguiente
-            </Link>
-          ) : null}
-        </div>
-      </div>
+      <TablePager
+        total={result.total}
+        page={result.page}
+        pageCount={result.pageCount}
+        label={result.total === 1 ? "cliente" : "clientes"}
+        path="/customers"
+        query={query}
+        pageSize={pageSize}
+      />
     </div>
   );
 }

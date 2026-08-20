@@ -45,6 +45,14 @@ export const customers = pgTable(
     city: text("city"),
     state: text("state"),
     country: text("country").default("México").notNull(),
+    shippingSameAsBilling: boolean("shipping_same_as_billing")
+      .default(false)
+      .notNull(),
+    shippingAddress: text("shipping_address"),
+    shippingCity: text("shipping_city"),
+    shippingState: text("shipping_state"),
+    shippingPostalCode: text("shipping_postal_code"),
+    shippingCountry: text("shipping_country"),
     type: customerTypeEnum("type").notNull(),
     status: customerStatusEnum("status").notNull().default("activo"),
     notes: text("notes"),

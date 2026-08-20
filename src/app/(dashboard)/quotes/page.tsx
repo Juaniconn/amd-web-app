@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { QuoteFilters } from "@/features/quotes/quote-filters";
+import { EmptyTable, TableCard, TablePager } from "@/components/layout/data-table";
+import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { KpiCard } from "@/components/dashboard/kpi-card";
 import {
   Table,
   TableBody,
@@ -20,23 +21,17 @@ import {
   type RfqType,
 } from "@/lib/quotes/rfq";
 import { QUOTE_STATUS_LABELS, type QuoteStatus } from "@/lib/quotes/status";
+import { displayMoney } from "@/lib/quotes/money";
 import {
   quoteEngineeringStatusSchema,
   quoteStatusSchema,
   rfqTypeSchema,
 } from "@/lib/validation/quotes";
-import { getQuoteEngineeringStats } from "@/server/services/engineering";
 import { listQuotes } from "@/server/services/quotes";
+import { parsePage, parsePageSize } from "@/lib/ui/pagination";
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function money(value: string, currency: string) {
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(Number(value));
 }
 
 function statusVariant(status: QuoteStatus) {
@@ -54,6 +49,7 @@ export default async function QuotesPage({
     rfqType?: string | string[];
     engineeringStatus?: string | string[];
     page?: string | string[];
+    perPage?: string | string[];
   }>;
 }) {
   const { access } = await requirePermission(PERMISSION_IDS.quotesRead);
@@ -64,9 +60,12 @@ export default async function QuotesPage({
   const engineeringParsed = quoteEngineeringStatusSchema.safeParse(
     first(params.engineeringStatus),
   );
-  const page = Number(first(params.page) ?? "1") || 1;
+  const page = parsePage(first(params.page));
+  const pageSize = parsePageSize(first(params.perPage));
   const canWrite = access.permissions.includes(PERMISSION_IDS.quotesWrite);
-  const stats = await getQuoteEngineeringStats();
+  const filtered = Boolean(
+    q || statusParsed.success || rfqTypeParsed.success || engineeringParsed.success,
+  );
 
   const result = await listQuotes({
     q,
@@ -74,6 +73,7 @@ export default async function QuotesPage({
     rfqType: rfqTypeParsed.success ? rfqTypeParsed.data : undefined,
     engineeringStatus: engineeringParsed.success ? engineeringParsed.data : undefined,
     page,
+    pageSize,
   });
 
   const query = new URLSearchParams();
@@ -83,60 +83,31 @@ export default async function QuotesPage({
   if (engineeringParsed.success) {
     query.set("engineeringStatus", engineeringParsed.data);
   }
-
-  function pageHref(nextPage: number) {
-    const next = new URLSearchParams(query);
-    next.set("page", String(nextPage));
-    return `/quotes?${next.toString()}`;
-  }
+  query.set("perPage", String(pageSize));
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Cotizaciones</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            RFQ y cotizaciones de AMD Operations. Los registros DEMO no son ventas reales.
-          </p>
-        </div>
-        {canWrite ? (
-          <Link href="/quotes/new" className={buttonVariants()}>
-            Nueva cotización
-          </Link>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Cotizaciones"
+        description="RFQ y cotizaciones. Al aprobarse se convierten en orden de trabajo."
+        actions={
+          canWrite ? (
+            <Link href="/quotes/new" className={buttonVariants()}>
+              Nueva cotización
+            </Link>
+          ) : null
+        }
+      />
 
       <QuoteFilters
         q={q}
         status={statusParsed.success ? statusParsed.data : undefined}
         rfqType={rfqTypeParsed.success ? rfqTypeParsed.data : undefined}
         engineeringStatus={engineeringParsed.success ? engineeringParsed.data : undefined}
+        perPage={pageSize}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label="Requieren ingeniería"
-          value={String(stats.requiringEngineering)}
-          hint="RFQ con diseño o validación"
-        />
-        <KpiCard
-          label="Ingeniería pendiente"
-          value={String(stats.engineeringPending)}
-          hint="Solicitud aún no asignada"
-        />
-        <KpiCard
-          label="Ingeniería en proceso"
-          value={String(stats.engineeringInProcess)}
-          hint="Diseño o revisión en curso"
-        />
-        <KpiCard
-          label="Ingeniería liberada"
-          value={String(stats.engineeringReleased)}
-          hint="Listas para cotización final / pedido"
-        />
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border">
+      <TableCard>
         <Table>
           <TableHeader>
             <TableRow>
@@ -147,16 +118,23 @@ export default async function QuotesPage({
               <TableHead>Ingeniería</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead className="text-right">Total</TableHead>
-              <TableHead className="text-right">Margen</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {result.rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-muted-foreground">
-                  No hay cotizaciones con esos filtros.
-                </TableCell>
-              </TableRow>
+              <EmptyTable
+                colSpan={7}
+                title={
+                  filtered ? "No hay cotizaciones con esos filtros." : "Aún no hay cotizaciones."
+                }
+                description={
+                  filtered
+                    ? "Prueba otro estado o limpia los filtros."
+                    : "Crea una RFQ desde un cliente para empezar a cotizar."
+                }
+                href={!filtered && canWrite ? "/quotes/new" : undefined}
+                actionLabel="Nueva cotización"
+              />
             ) : (
               result.rows.map((row) => (
                 <TableRow key={row.id}>
@@ -175,9 +153,7 @@ export default async function QuotesPage({
                       {row.customerName}
                     </Link>
                   </TableCell>
-                  <TableCell>
-                    {RFQ_TYPE_LABELS[row.rfqType as RfqType]}
-                  </TableCell>
+                  <TableCell>{RFQ_TYPE_LABELS[row.rfqType as RfqType]}</TableCell>
                   <TableCell>
                     <Badge variant={statusVariant(row.status)}>{QUOTE_STATUS_LABELS[row.status]}</Badge>
                   </TableCell>
@@ -187,35 +163,23 @@ export default async function QuotesPage({
                     </Badge>
                   </TableCell>
                   <TableCell>{row.issueDate.toLocaleDateString("es-MX")}</TableCell>
-                  <TableCell className="text-right">{money(row.total, row.currency)}</TableCell>
-                  <TableCell className="text-right">
-                    {row.marginPercent ? `${row.marginPercent}%` : "—"}
-                  </TableCell>
+                  <TableCell className="text-right">{displayMoney(row.total, row.currency)}</TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
-      </div>
+      </TableCard>
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <p>
-          {result.total} registro{result.total === 1 ? "" : "s"} · página {result.page} de{" "}
-          {result.pageCount}
-        </p>
-        <div className="flex gap-2">
-          {result.page > 1 ? (
-            <Link href={pageHref(result.page - 1)} className={buttonVariants({ variant: "outline" })}>
-              Anterior
-            </Link>
-          ) : null}
-          {result.page < result.pageCount ? (
-            <Link href={pageHref(result.page + 1)} className={buttonVariants({ variant: "outline" })}>
-              Siguiente
-            </Link>
-          ) : null}
-        </div>
-      </div>
+      <TablePager
+        total={result.total}
+        page={result.page}
+        pageCount={result.pageCount}
+        label={result.total === 1 ? "cotización" : "cotizaciones"}
+        path="/quotes"
+        query={query}
+        pageSize={pageSize}
+      />
     </div>
   );
 }

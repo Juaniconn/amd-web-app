@@ -132,8 +132,12 @@ export async function assignProductionAction(formData: FormData) {
     }
     const permission = permissionsNeeded[0] ?? PERMISSION_IDS.productionSchedule;
     const { session } = await requirePermission(permission);
-    await assignProduction(parsed.data, actorFrom(session));
-    return { ok: true as const };
+    const result = await assignProduction(parsed.data, actorFrom(session));
+    return {
+      ok: true as const,
+      programmed: result.programmed,
+      waitingMaterial: result.waitingMaterial,
+    };
   } catch (error) {
     return fail(error);
   }

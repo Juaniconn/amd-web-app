@@ -9,6 +9,14 @@ import {
   productionOrders,
   projects,
   quotes,
+  suppliers,
+  purchaseOrders,
+  purchaseReceipts,
+  purchaseRequests,
+  qualityInspections,
+  ncrs,
+  deliveries,
+  invoices,
 } from "@/db/schema";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -26,6 +34,14 @@ const TABLES = {
   },
   materials: { table: materials, column: materials.code },
   projects: { table: projects, column: projects.code },
+  suppliers: { table: suppliers, column: suppliers.code },
+  purchase_requests: { table: purchaseRequests, column: purchaseRequests.number },
+  purchase_orders: { table: purchaseOrders, column: purchaseOrders.number },
+  purchase_receipts: { table: purchaseReceipts, column: purchaseReceipts.number },
+  quality_inspections: { table: qualityInspections, column: qualityInspections.number },
+  ncrs: { table: ncrs, column: ncrs.number },
+  deliveries: { table: deliveries, column: deliveries.number },
+  invoices: { table: invoices, column: invoices.number },
 } as const;
 
 export async function nextDocumentNumber(

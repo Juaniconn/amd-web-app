@@ -12,13 +12,16 @@ export function EngineeringFilters({
   q,
   status,
   overdue,
+  perPage,
 }: {
   q?: string;
   status?: string;
   overdue?: boolean;
+  perPage?: number;
 }) {
   return (
-    <form method="get" className="flex flex-wrap items-end gap-3">
+    <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border bg-card px-4 py-3">
+      {perPage ? <input type="hidden" name="perPage" value={perPage} /> : null}
       <div className="min-w-56 flex-1 space-y-1">
         <label htmlFor="q" className="text-xs font-medium text-muted-foreground">
           Buscar

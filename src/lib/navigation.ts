@@ -42,10 +42,10 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     href: "/orders",
-    label: "Pedidos",
+    label: "Órdenes de Trabajo",
     enabled: true,
     permission: PERMISSION_IDS.ordersView,
-    phase: "Pedidos",
+    phase: "Órdenes de Trabajo",
   },
   {
     href: "/projects",
@@ -68,8 +68,20 @@ export const NAV_ITEMS: NavItem[] = [
     permission: PERMISSION_IDS.inventoryRead,
     phase: "Fase 6",
   },
-  { href: "/purchasing", label: "Compras", enabled: false, phase: "Fase 7" },
-  { href: "/suppliers", label: "Proveedores", enabled: false, phase: "Fase 7" },
+  {
+    href: "/purchasing",
+    label: "Compras",
+    enabled: true,
+    permission: PERMISSION_IDS.purchasingRead,
+    phase: "Fase 7",
+  },
+  {
+    href: "/suppliers",
+    label: "Proveedores",
+    enabled: true,
+    permission: PERMISSION_IDS.purchasingRead,
+    phase: "Fase 7",
+  },
   {
     href: "/machines",
     label: "Máquinas",
@@ -77,9 +89,27 @@ export const NAV_ITEMS: NavItem[] = [
     permission: PERMISSION_IDS.productionView,
     phase: "Fase 5",
   },
-  { href: "/quality", label: "Calidad", enabled: false, phase: "Fase 8" },
-  { href: "/deliveries", label: "Entregas", enabled: false, phase: "Fase 8" },
-  { href: "/reports", label: "Reportes", enabled: false, phase: "Fase 9" },
+  {
+    href: "/quality",
+    label: "Calidad",
+    enabled: true,
+    permission: PERMISSION_IDS.qualityRead,
+    phase: "Fase 8",
+  },
+  {
+    href: "/deliveries",
+    label: "Entregas",
+    enabled: true,
+    permission: PERMISSION_IDS.deliveriesRead,
+    phase: "Fase 9",
+  },
+  {
+    href: "/billing",
+    label: "Facturación",
+    enabled: true,
+    permission: PERMISSION_IDS.billingRead,
+    phase: "Fase 10",
+  },
 ];
 
 export const SETTINGS_NAV_ITEMS: NavItem[] = [
@@ -96,5 +126,19 @@ export const SETTINGS_NAV_ITEMS: NavItem[] = [
     enabled: true,
     permission: PERMISSION_IDS.rolesRead,
     phase: "Fase 1",
+  },
+  {
+    href: "/settings/branches",
+    label: "Sucursales",
+    enabled: true,
+    permission: PERMISSION_IDS.branchesRead,
+    phase: "Sucursales",
+  },
+  {
+    href: "/settings/calculator",
+    label: "Calculadora",
+    enabled: true,
+    permission: PERMISSION_IDS.quotesRead,
+    phase: "Fase 3",
   },
 ];

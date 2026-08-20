@@ -12,11 +12,11 @@ const optionalText = (max: number) =>
     .transform((value) => (value && value.length > 0 ? value : undefined));
 
 export const orderIdSchema = z.object({
-  id: z.string().trim().min(1, "El pedido es obligatorio"),
+  id: z.string().trim().min(1, "La orden de trabajo es obligatoria"),
 });
 
 export const updateOrderSchema = z.object({
-  id: z.string().trim().min(1, "El pedido es obligatorio"),
+  id: z.string().trim().min(1, "La orden de trabajo es obligatoria"),
   ownerUserId: optionalText(80),
   promisedDate: z.coerce.date().optional().nullable(),
   notes: optionalText(4000),
@@ -24,12 +24,12 @@ export const updateOrderSchema = z.object({
 });
 
 export const changeOrderStatusSchema = z.object({
-  id: z.string().trim().min(1, "El pedido es obligatorio"),
+  id: z.string().trim().min(1, "La orden de trabajo es obligatoria"),
   status: orderStatusSchema,
 });
 
 export const attachOrderProjectSchema = z.object({
-  id: z.string().trim().min(1, "El pedido es obligatorio"),
+  id: z.string().trim().min(1, "La orden de trabajo es obligatoria"),
   projectId: z.string().trim().min(1, "El proyecto es obligatorio"),
 });
 

@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -50,6 +51,12 @@ export const machineStatusEnum = pgEnum("machine_status", [
   "ocupada",
   "mantenimiento",
   "fuera_de_servicio",
+]);
+
+export const machineKindEnum = pgEnum("machine_kind", [
+  "laser",
+  "press_brake",
+  "otro",
 ]);
 
 export const productionRouteStepKindEnum = pgEnum("production_route_step_kind", [
@@ -106,6 +113,11 @@ export const machines = pgTable(
       .notNull()
       .default("8"),
     capacity: text("capacity"),
+    kind: machineKindEnum("kind").notNull().default("otro"),
+    hourlyCost: numeric("hourly_cost", { precision: 14, scale: 4 }),
+    bendLengthMm: numeric("bend_length_mm", { precision: 14, scale: 4 }),
+    tonnageTon: numeric("tonnage_ton", { precision: 14, scale: 4 }),
+    calculatorSpecs: jsonb("calculator_specs").$type<Record<string, number | null>>(),
     notes: text("notes"),
     status: machineStatusEnum("status").notNull().default("disponible"),
     active: boolean("active").notNull().default(true),
@@ -124,6 +136,7 @@ export const machines = pgTable(
     index("machines_work_center_id_idx").on(table.workCenterId),
     index("machines_active_idx").on(table.active),
     index("machines_status_idx").on(table.status),
+    index("machines_kind_idx").on(table.kind),
   ],
 );
 

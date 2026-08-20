@@ -3,6 +3,7 @@ import { ProductionForm } from "@/features/production/production-form";
 import { buttonVariants } from "@/components/ui/button";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
+import { inputQty } from "@/lib/inventory/catalog";
 import { isManufacturingItem } from "@/lib/quotes/items";
 import {
   listOrderItems,
@@ -47,9 +48,9 @@ export default async function NewProductionPage({
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Nueva orden de trabajo</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Nuevo número de parte</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Una partida de pieza = una OT. El servicio de ingeniería no genera
+            Una partida de pieza = un número de parte. El servicio de ingeniería no genera
             piso. Diseño solamente y origen RFQ + Ingeniería sin Liberado están
             bloqueados.
           </p>
@@ -60,8 +61,8 @@ export default async function NewProductionPage({
       </div>
       {orders.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No hay pedidos elegibles. Convierte una RFQ a pedido. Las RFQ de diseño
-          solamente no generan OT.
+          No hay órdenes de trabajo elegibles. Convierte una RFQ a orden de trabajo. Las RFQ de
+          diseño solamente no generan números de parte.
         </p>
       ) : (
         <ProductionForm
@@ -86,7 +87,7 @@ export default async function NewProductionPage({
                     selectedItem?.description ?? `Fabricación ${selected.number}.`,
                   partNumber: selectedItem?.partNumber ?? "",
                   quantity: selectedItem
-                    ? String(Number(selectedItem.quantity))
+                    ? inputQty(selectedItem.quantity)
                     : "1",
                   unit: selectedItem?.unit ?? "pza",
                 }

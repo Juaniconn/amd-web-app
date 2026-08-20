@@ -20,8 +20,19 @@ const TITLES: Record<string, string> = {
   "/customers/new": "Nuevo cliente",
   "/quotes": "Cotizaciones",
   "/quotes/new": "Nueva cotización",
+  "/purchasing": "Compras",
+  "/purchasing/new": "Nueva OC",
+  "/suppliers": "Proveedores",
+  "/suppliers/new": "Nuevo proveedor",
+  "/quality": "Calidad",
+  "/deliveries": "Entregas",
+  "/deliveries/new": "Nueva entrega",
+  "/billing": "Facturación",
+  "/billing/new": "Nueva factura",
   "/settings/users": "Usuarios",
   "/settings/roles": "Roles",
+  "/settings/branches": "Sucursales",
+  "/settings/calculator": "Calculadora",
 };
 
 export function AppShell({
@@ -38,9 +49,19 @@ export function AppShell({
       ? "Cliente"
       : pathname.startsWith("/quotes")
         ? "Cotización"
-        : pathname.startsWith("/settings")
-          ? "Configuración"
-          : "AMD Operations");
+        : pathname.startsWith("/purchasing")
+          ? "Orden de compra"
+          : pathname.startsWith("/suppliers")
+            ? "Proveedor"
+            : pathname.startsWith("/quality")
+              ? "Calidad"
+              : pathname.startsWith("/deliveries")
+                ? "Entrega"
+                : pathname.startsWith("/billing")
+                  ? "Factura"
+                  : pathname.startsWith("/settings")
+                    ? "Configuración"
+                    : "AMD Operations");
 
   return (
     <div className="flex min-h-full bg-background">

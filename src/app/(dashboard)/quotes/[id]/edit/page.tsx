@@ -9,6 +9,7 @@ import {
   listActiveCustomersForSelect,
   listContactsForCustomer,
 } from "@/server/services/customers";
+import { listBranches } from "@/server/services/branches";
 import { getQuoteById } from "@/server/services/quotes";
 
 export default async function EditQuotePage({
@@ -24,9 +25,10 @@ export default async function EditQuotePage({
   }
 
   const customers = await listActiveCustomersForSelect();
+  const branches = await listBranches({ activeOnly: true });
   const contactsByCustomer: Record<
     string,
-    { id: string; name: string; isPrimary: boolean }[]
+    { id: string; name: string; isPrimary: boolean; title: string | null; department: string | null; phone: string | null }[]
   > = {};
   for (const customer of customers) {
     contactsByCustomer[customer.id] = await listContactsForCustomer(customer.id);
@@ -51,13 +53,16 @@ export default async function EditQuotePage({
         quoteId={quote.id}
         customers={customers}
         contactsByCustomer={contactsByCustomer}
+        branches={branches}
         defaultValues={{
           customerId: quote.customerId,
           contactId: quote.contactId ?? "",
+          branchId: quote.branchId ?? "",
+          addresseeMode: quote.addresseeMode ?? "nombre",
           issueDate: quote.issueDate.toISOString().slice(0, 10),
           validUntil: quote.validUntil ? quote.validUntil.toISOString().slice(0, 10) : "",
           currency: quote.currency,
-          paymentTerms: quote.paymentTerms ?? "",
+          paymentTerm: quote.paymentTerm ?? "net_30",
           leadTime: quote.leadTime ?? "",
           notes: quote.notes ?? "",
           rfqType: quote.rfqType,

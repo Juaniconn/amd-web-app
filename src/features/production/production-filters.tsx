@@ -12,13 +12,18 @@ export function ProductionFilters({
   q,
   status,
   delayed,
+  mine,
+  perPage,
 }: {
   q?: string;
   status?: string;
   delayed?: boolean;
+  mine?: boolean;
+  perPage?: number;
 }) {
   return (
-    <form method="get" className="flex flex-wrap items-end gap-3">
+    <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border bg-card px-4 py-3">
+      {perPage ? <input type="hidden" name="perPage" value={perPage} /> : null}
       <div className="min-w-56 flex-1 space-y-1">
         <label htmlFor="q" className="text-xs font-medium text-muted-foreground">
           Buscar
@@ -27,7 +32,7 @@ export function ProductionFilters({
           id="q"
           name="q"
           defaultValue={q}
-          placeholder="OT, pedido, RFQ, cliente o descripción"
+          placeholder="Número de parte, OT, RFQ, cliente o descripción"
         />
       </div>
       <div className="space-y-1">
@@ -53,6 +58,10 @@ export function ProductionFilters({
       <label className="flex items-center gap-2 pb-1 text-sm">
         <input type="checkbox" name="delayed" value="1" defaultChecked={delayed} />
         Solo retrasadas
+      </label>
+      <label className="flex items-center gap-2 pb-1 text-sm">
+        <input type="checkbox" name="mine" value="1" defaultChecked={mine} />
+        Mis números de parte
       </label>
       <Button type="submit" variant="outline">
         Filtrar

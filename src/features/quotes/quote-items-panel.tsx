@@ -14,6 +14,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TAX_PERCENTS } from "@/lib/quotes/commercial";
+import { MoneyInput } from "@/components/ui/money-input";
+import { displayQty, inputQty } from "@/lib/inventory/catalog";
+import { displayMoney, inputMoney } from "@/lib/quotes/money";
+import type { QuoteItemCosting } from "@/lib/quotes/costing";
+import type { QuoteAgentPreview } from "@/lib/quotes/market-preview";
+import { QuoteDrawingIntake } from "@/features/quotes/quote-drawing-intake";
+import { QuoteItemCostingPanel } from "@/features/quotes/quote-item-costing";
+import { rfqBlocksEngineering, type RfqType } from "@/lib/quotes/rfq";
 import {
   addQuoteItemAction,
   deleteQuoteItemAction,
@@ -22,6 +31,7 @@ import {
 
 type QuoteItem = {
   id: string;
+  position?: number;
   kind?: string;
   description: string;
   partNumber: string | null;
@@ -37,15 +47,9 @@ type QuoteItem = {
   lineEstimatedCost: string;
   lineProfit: string;
   lineMarginPercent: string | null;
+  costing?: QuoteItemCosting | null;
+  documents?: { id: string; originalName: string; sizeBytes: number }[];
 };
-
-function money(value: string | null, currency: string) {
-  const amount = Number(value ?? 0);
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(Number.isFinite(amount) ? amount : 0);
-}
 
 function DecimalInput({
   id,
@@ -75,6 +79,32 @@ function DecimalInput({
   );
 }
 
+function MoneyField({
+  id,
+  name,
+  currency,
+  defaultValue,
+  required,
+}: {
+  id: string;
+  name: string;
+  currency: string;
+  defaultValue?: string;
+  required?: boolean;
+}) {
+  const [value, setValue] = useState(defaultValue ? inputMoney(defaultValue) : "");
+  return (
+    <MoneyInput
+      id={id}
+      name={name}
+      currency={currency}
+      value={value}
+      onChange={setValue}
+      required={required}
+    />
+  );
+}
+
 function ItemFields({
   item,
   currency,
@@ -93,8 +123,11 @@ function ItemFields({
     | "estimatedCost"
   >;
 }) {
-  const usd = currency.toLowerCase() === "usd";
-  const taxDefault = usd ? "0" : item?.taxPercent;
+  const taxValue = item?.taxPercent
+    ? String(Number(item.taxPercent))
+    : currency.toLowerCase() === "usd"
+      ? "0"
+      : "16";
   return (
     <>
       {item?.kind ? <input type="hidden" name="kind" value={item.kind} /> : null}
@@ -118,12 +151,15 @@ function ItemFields({
       </div>
       <div className="space-y-1">
         <Label htmlFor="quantity">Cantidad</Label>
-        <DecimalInput
+        <Input
           id="quantity"
           name="quantity"
+          type="number"
+          min="1"
+          step="1"
           required
           placeholder="Ej. 13"
-          defaultValue={item?.quantity}
+          defaultValue={item ? inputQty(item.quantity) : ""}
         />
       </div>
       <div className="space-y-1">
@@ -132,12 +168,11 @@ function ItemFields({
       </div>
       <div className="space-y-1">
         <Label htmlFor="unitPrice">Precio unitario</Label>
-        <DecimalInput
+        <MoneyField
           id="unitPrice"
           name="unitPrice"
-          required
-          placeholder="Escribe el precio"
-          defaultValue={item?.unitPrice}
+          currency={currency}
+          defaultValue={item?.unitPrice ?? "0"}
         />
       </div>
       <div className="space-y-1">
@@ -146,35 +181,25 @@ function ItemFields({
           id="discountPercent"
           name="discountPercent"
           placeholder="0"
-          defaultValue={item?.discountPercent}
+          defaultValue={item ? String(Number(item.discountPercent) || 0) : ""}
         />
       </div>
       <div className="space-y-1">
         <Label htmlFor="taxPercent">IVA %</Label>
-        {usd ? (
-          <>
-            <input type="hidden" name="taxPercent" value="0" />
-            <Input id="taxPercent" value="0" disabled />
-            <p className="text-xs text-muted-foreground">USD no cobra IVA.</p>
-          </>
-        ) : (
-          <DecimalInput
-            id="taxPercent"
-            name="taxPercent"
-            placeholder="16"
-            defaultValue={taxDefault}
-          />
-        )}
+        <select
+          id="taxPercent"
+          name="taxPercent"
+          className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
+          defaultValue={taxValue}
+        >
+          {TAX_PERCENTS.map((percent) => (
+            <option key={percent} value={percent}>
+              {percent}%
+            </option>
+          ))}
+        </select>
       </div>
-      <div className="space-y-1">
-        <Label htmlFor="estimatedCost">Costo est.</Label>
-        <DecimalInput
-          id="estimatedCost"
-          name="estimatedCost"
-          placeholder="0"
-          defaultValue={item?.estimatedCost}
-        />
-      </div>
+      <input type="hidden" name="estimatedCost" value="0" />
     </>
   );
 }
@@ -185,19 +210,29 @@ export function QuoteItemsPanel({
   items,
   canWrite,
   lockedReason,
+  engineeringDocuments = [],
+  rfqType = "solo_fabricacion",
+  engineeringReleased = false,
+  preview = null,
 }: {
   quoteId: string;
   currency: string;
   items: QuoteItem[];
   canWrite: boolean;
   lockedReason?: string;
+  engineeringDocuments?: { id: string; originalName: string; sizeBytes: number }[];
+  rfqType?: RfqType | string;
+  engineeringReleased?: boolean;
+  preview?: QuoteAgentPreview | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [filesItemId, setFilesItemId] = useState<string | null>(null);
   const editingItem = items.find((item) => item.id === editingId);
+  const filesItem = items.find((item) => item.id === filesItemId);
 
   async function run(
     action: (formData: FormData) => Promise<{ ok: boolean; error?: string }>,
@@ -226,22 +261,46 @@ export function QuoteItemsPanel({
       {lockedReason ? (
         <p className="text-sm text-muted-foreground">{lockedReason}</p>
       ) : null}
+      {canWrite && rfqBlocksEngineering(rfqType as RfqType) ? (
+        <QuoteDrawingIntake
+          quoteId={quoteId}
+          canWrite={canWrite}
+          variant="solo_fabricacion"
+          currency={currency}
+          preview={preview}
+        />
+      ) : null}
+      {canWrite && !rfqBlocksEngineering(rfqType as RfqType) && engineeringReleased ? (
+        <QuoteDrawingIntake
+          quoteId={quoteId}
+          canWrite={canWrite}
+          variant="ingenieria"
+          currency={currency}
+          preview={preview}
+        />
+      ) : null}
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Aún no hay partidas. Agrega piezas, cantidades y precios.
+          {rfqBlocksEngineering(rfqType as RfqType)
+            ? "Aún no hay partidas. Sube PDF (o un ZIP) y pulsa Calcular preliminar."
+            : lockedReason
+              ? "Las partidas se generan solas cuando Ingeniería libera el plano."
+              : "Aún no hay partidas."}
         </p>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>#</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Descripción</TableHead>
               <TableHead>N° parte</TableHead>
+              <TableHead>Material</TableHead>
+              <TableHead>Proveedor</TableHead>
               <TableHead className="text-right">Cant.</TableHead>
               <TableHead className="text-right">P. unit.</TableHead>
               <TableHead className="text-right">Subtotal</TableHead>
-              <TableHead className="text-right">Costo</TableHead>
-              <TableHead className="text-right">Margen</TableHead>
+              <TableHead>Archivos</TableHead>
               {canWrite ? <TableHead /> : null}
             </TableRow>
           </TableHeader>
@@ -249,31 +308,53 @@ export function QuoteItemsPanel({
             {items.map((item) => (
               <TableRow
                 key={item.id}
-                className={editingId === item.id ? "bg-muted/40" : undefined}
+                className={
+                  editingId === item.id || filesItemId === item.id ? "bg-muted/40" : undefined
+                }
               >
+                <TableCell>{item.position ?? "—"}</TableCell>
                 <TableCell>
                   {item.kind === "servicio_ingenieria" ? "Servicio ING" : "Pieza"}
                 </TableCell>
                 <TableCell className="font-medium">{item.description}</TableCell>
                 <TableCell>{item.partNumber ?? "—"}</TableCell>
+                <TableCell>
+                  {item.costing?.material_code ?? item.costing?.material ?? "—"}
+                </TableCell>
+                <TableCell>{item.costing?.supplier_name ?? "—"}</TableCell>
                 <TableCell className="text-right">
-                  {Number(item.quantity)} {item.unit}
+                  {displayQty(item.quantity)} {item.unit}
                 </TableCell>
                 <TableCell className="text-right">
-                  {money(item.unitPrice, currency)}
+                  {displayMoney(item.unitPrice, currency)}
                 </TableCell>
                 <TableCell className="text-right">
-                  {money(item.lineSubtotal, currency)}
+                  {displayMoney(item.lineSubtotal, currency)}
                 </TableCell>
-                <TableCell className="text-right">
-                  {money(item.lineEstimatedCost, currency)}
-                </TableCell>
-                <TableCell className="text-right">
-                  {item.lineMarginPercent ? `${item.lineMarginPercent}%` : "—"}
+                <TableCell>
+                  {item.kind === "servicio_ingenieria"
+                    ? "—"
+                    : `${item.documents?.length ?? 0} archivo(s)`}
                 </TableCell>
                 {canWrite ? (
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      {item.kind !== "servicio_ingenieria" ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={pending}
+                          onClick={() => {
+                            setAdding(false);
+                            setEditingId(null);
+                            setError(null);
+                            setFilesItemId(item.id);
+                          }}
+                        >
+                          {canWrite ? "Editar archivos" : "Ver archivos"}
+                        </Button>
+                      ) : null}
                       <Button
                         type="button"
                         variant="ghost"
@@ -281,6 +362,7 @@ export function QuoteItemsPanel({
                         disabled={pending}
                         onClick={() => {
                           setAdding(false);
+                          setFilesItemId(null);
                           setError(null);
                           setEditingId(item.id);
                         }}
@@ -291,6 +373,7 @@ export function QuoteItemsPanel({
                         action={(formData) =>
                           run(deleteQuoteItemAction, formData, () => {
                             if (editingId === item.id) setEditingId(null);
+                            if (filesItemId === item.id) setFilesItemId(null);
                           })
                         }
                       >
@@ -313,6 +396,55 @@ export function QuoteItemsPanel({
           </TableBody>
         </Table>
       )}
+
+      {items.some((item) => (item.costing?.processes?.length ?? 0) > 0) ? (
+        <div className="space-y-3 rounded-lg border p-4">
+          <div>
+            <p className="text-sm font-medium">Procesos</p>
+            <p className="text-xs text-muted-foreground">
+              Se arman al leer el PDF. El operador los verá en el número de
+              parte.
+            </p>
+          </div>
+          <ol className="space-y-3">
+            {items
+              .filter((item) => item.kind !== "servicio_ingenieria")
+              .map((item) => (
+                <li key={item.id}>
+                  <p className="text-sm font-medium">
+                    {item.partNumber || item.description}
+                    {item.costing?.pieces_per_stock
+                      ? ` · ${item.costing.pieces_per_stock} pza / hoja`
+                      : ""}
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                    {(item.costing?.processes ?? []).map((step) => (
+                      <li key={`${item.id}-${step.position}`}>
+                        {step.position}. {step.name}
+                        {step.notes ? ` — ${step.notes}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+          </ol>
+        </div>
+      ) : null}
+
+      {filesItem && filesItem.kind !== "servicio_ingenieria" ? (
+        <QuoteItemCostingPanel
+          quoteId={quoteId}
+          itemId={filesItem.id}
+          currency={currency}
+          quantity={filesItem.quantity}
+          costing={filesItem.costing ?? null}
+          documents={filesItem.documents ?? []}
+          engineeringDocuments={engineeringDocuments}
+          canWrite={canWrite}
+          title={`#${filesItem.position ?? ""} ${filesItem.partNumber || filesItem.description}`}
+          onCancel={() => setFilesItemId(null)}
+        />
+      ) : null}
 
       {canWrite && adding ? (
         <form
@@ -340,31 +472,33 @@ export function QuoteItemsPanel({
       ) : null}
 
       {canWrite && editingItem ? (
-        <form
-          key={editingItem.id}
-          className="grid gap-3 rounded-lg border p-4 md:grid-cols-4"
-          action={(formData) =>
-            run(updateQuoteItemAction, formData, closeForms)
-          }
-        >
-          <input type="hidden" name="id" value={editingItem.id} />
-          <input type="hidden" name="quoteId" value={quoteId} />
-          <p className="text-sm font-medium md:col-span-4">Editar partida</p>
-          <ItemFields currency={currency} item={editingItem} />
-          <div className="flex items-end gap-2 md:col-span-4">
-            <Button type="submit" disabled={pending}>
-              Guardar cambios
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={closeForms}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </form>
+        <>
+          <form
+            key={editingItem.id}
+            className="grid gap-3 rounded-lg border p-4 md:grid-cols-4"
+            action={(formData) =>
+              run(updateQuoteItemAction, formData, closeForms)
+            }
+          >
+            <input type="hidden" name="id" value={editingItem.id} />
+            <input type="hidden" name="quoteId" value={quoteId} />
+            <p className="text-sm font-medium md:col-span-4">Editar partida</p>
+            <ItemFields currency={currency} item={editingItem} />
+            <div className="flex items-end gap-2 md:col-span-4">
+              <Button type="submit" disabled={pending}>
+                Guardar cambios
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={closeForms}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </>
       ) : null}
 
       {canWrite && !adding && !editingId ? (

@@ -50,6 +50,7 @@ export default async function MaterialDetailPage({
             </Badge>
             {material.isCritical ? <Badge>Crítico</Badge> : null}
             {material.isDemo ? <Badge variant="outline">DEMO</Badge> : null}
+            {material.usedInCalculator ? <Badge variant="outline">Calculadora</Badge> : null}
             {!material.active ? <Badge variant="outline">Inactivo</Badge> : null}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{material.description}</p>
@@ -74,6 +75,7 @@ export default async function MaterialDetailPage({
           <CardTitle>Existencias</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Sucursal" value={material.branchName} />
           <Field label="Almacén" value={material.warehouseName} />
           <Field
             label="Existencia"
@@ -94,6 +96,29 @@ export default async function MaterialDetailPage({
           <Field label="Observaciones" value={material.notes} />
         </CardContent>
       </Card>
+
+      {material.grade || material.supplierId ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Proveedor</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="Proveedor" value={material.supplierName} />
+            <Field label="Grado" value={material.grade} />
+            <Field label="Espesor in" value={material.thicknessIn} />
+            <Field label="MXN / kg" value={material.costPerKg} />
+            <Field
+              label="Hoja"
+              value={
+                material.sheetWidthIn && material.sheetLengthIn
+                  ? `${material.sheetWidthIn} × ${material.sheetLengthIn} in`
+                  : null
+              }
+            />
+            <Field label="Densidad g/cm³" value={material.densityGCm3} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

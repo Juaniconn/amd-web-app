@@ -3,7 +3,7 @@ import "server-only";
 import path from "node:path";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
-import { documents, engineeringRequests, orders, projects, quotes } from "@/db/schema";
+import { documents, engineeringRequests, orders, projects, quoteItems, quotes } from "@/db/schema";
 import { AppError } from "@/lib/errors";
 import {
   ENGINEERING_ALLOWED_EXTENSIONS,
@@ -33,6 +33,9 @@ const ALLOWED_EXTENSIONS = new Set([
   "dwg",
   "step",
   "stp",
+  "iges",
+  "igs",
+  "fcstd",
   "stl",
   "png",
   "jpg",
@@ -52,6 +55,9 @@ const MIME_BY_EXT: Record<string, string> = {
   dwg: "application/acad",
   step: "application/step",
   stp: "application/step",
+  iges: "model/iges",
+  igs: "model/iges",
+  fcstd: "application/x-freecad",
   stl: "model/stl",
   png: "image/png",
   jpg: "image/jpeg",
@@ -211,6 +217,200 @@ export async function listQuoteDocuments(quoteId: string) {
     .from(documents)
     .where(and(eq(documents.entityType, "quote"), eq(documents.entityId, quoteId)))
     .orderBy(desc(documents.createdAt));
+}
+
+export async function listQuoteItemDocuments(quoteItemId: string) {
+  return db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.entityType, "quote_item"),
+        eq(documents.entityId, quoteItemId),
+      ),
+    )
+    .orderBy(desc(documents.createdAt));
+}
+
+export async function uploadQuoteItemDocument(
+  quoteId: string,
+  quoteItemId: string,
+  file: { originalName: string; bytes: Buffer },
+  actor: Actor,
+) {
+  const [quote] = await db
+    .select()
+    .from(quotes)
+    .where(eq(quotes.id, quoteId))
+    .limit(1);
+  if (!quote || quote.deletedAt) {
+    throw new AppError("La cotización no existe.", "QUOTE_NOT_FOUND", 404);
+  }
+  if (!canEditQuote(quote.status as QuoteStatus)) {
+    throw new AppError(
+      "No se pueden adjuntar archivos en este estado.",
+      "QUOTE_LOCKED",
+      409,
+    );
+  }
+  const [item] = await db
+    .select({ id: quoteItems.id })
+    .from(quoteItems)
+    .where(and(eq(quoteItems.id, quoteItemId), eq(quoteItems.quoteId, quoteId)))
+    .limit(1);
+  if (!item) {
+    throw new AppError("La partida no existe.", "QUOTE_ITEM_NOT_FOUND", 404);
+  }
+
+  const meta = assertAllowedDocument(file.originalName, file.bytes.byteLength);
+  const storage = getStorage();
+  const objectKey = documentObjectKey("quote_item", quoteItemId, file.originalName);
+  const stored = await storage.put(objectKey, file.bytes);
+  const id = crypto.randomUUID();
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(documents).values({
+        id,
+        entityType: "quote_item",
+        entityId: quoteItemId,
+        originalName: file.originalName,
+        mimeType: meta.mimeType,
+        sizeBytes: stored.sizeBytes,
+        checksumSha256: stored.checksumSha256,
+        storageBackend: stored.backend,
+        objectKey: stored.objectKey,
+        uploadedBy: actor.userId,
+      });
+      await recordActivity(tx, {
+        actorUserId: actor.userId,
+        actorName: actor.name,
+        action: "created",
+        entityType: "document",
+        entityId: id,
+        entityLabel: file.originalName,
+        parentEntityType: "quote_item",
+        parentEntityId: quoteItemId,
+      });
+    });
+  } catch (error) {
+    await storage.remove(objectKey);
+    throw error;
+  }
+
+  return { id };
+}
+
+export async function deleteQuoteItemDocument(
+  id: string,
+  quoteId: string,
+  quoteItemId: string,
+  actor: Actor,
+) {
+  const [quote] = await db
+    .select()
+    .from(quotes)
+    .where(eq(quotes.id, quoteId))
+    .limit(1);
+  if (!quote || quote.deletedAt) {
+    throw new AppError("La cotización no existe.", "QUOTE_NOT_FOUND", 404);
+  }
+  if (!canEditQuote(quote.status as QuoteStatus)) {
+    throw new AppError(
+      "No se pueden eliminar archivos en este estado.",
+      "QUOTE_LOCKED",
+      409,
+    );
+  }
+  const [doc] = await db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.id, id),
+        eq(documents.entityType, "quote_item"),
+        eq(documents.entityId, quoteItemId),
+      ),
+    )
+    .limit(1);
+  if (!doc) {
+    throw new AppError("El archivo no existe.", "DOCUMENT_NOT_FOUND", 404);
+  }
+  await db.transaction(async (tx) => {
+    await tx.delete(documents).where(eq(documents.id, id));
+    await recordActivity(tx, {
+      actorUserId: actor.userId,
+      actorName: actor.name,
+      action: "deleted",
+      entityType: "document",
+      entityId: id,
+      entityLabel: doc.originalName,
+      parentEntityType: "quote_item",
+      parentEntityId: quoteItemId,
+    });
+  });
+  return { id };
+}
+
+export async function attachEngineeringDocumentToQuoteItem(
+  quoteId: string,
+  quoteItemId: string,
+  documentId: string,
+  actor: Actor,
+) {
+  const [quote] = await db
+    .select()
+    .from(quotes)
+    .where(eq(quotes.id, quoteId))
+    .limit(1);
+  if (!quote || quote.deletedAt) {
+    throw new AppError("La cotización no existe.", "QUOTE_NOT_FOUND", 404);
+  }
+  if (!canEditQuote(quote.status as QuoteStatus)) {
+    throw new AppError(
+      "No se pueden adjuntar archivos en este estado.",
+      "QUOTE_LOCKED",
+      409,
+    );
+  }
+  const [item] = await db
+    .select({ id: quoteItems.id })
+    .from(quoteItems)
+    .where(and(eq(quoteItems.id, quoteItemId), eq(quoteItems.quoteId, quoteId)))
+    .limit(1);
+  if (!item) {
+    throw new AppError("La partida no existe.", "QUOTE_ITEM_NOT_FOUND", 404);
+  }
+  const [doc] = await db.select().from(documents).where(eq(documents.id, documentId)).limit(1);
+  if (!doc || doc.entityType !== "engineering_request") {
+    throw new AppError("El archivo de ingeniería no existe.", "DOCUMENT_NOT_FOUND", 404);
+  }
+  const [request] = await db
+    .select({ id: engineeringRequests.id, quoteId: engineeringRequests.quoteId })
+    .from(engineeringRequests)
+    .where(eq(engineeringRequests.id, doc.entityId))
+    .limit(1);
+  if (!request || request.quoteId !== quoteId) {
+    throw new AppError(
+      "El archivo no pertenece a la ingeniería de esta cotización.",
+      "DOCUMENT_NOT_LINKED",
+      409,
+    );
+  }
+  const id = crypto.randomUUID();
+  await db.insert(documents).values({
+    id,
+    entityType: "quote_item",
+    entityId: quoteItemId,
+    originalName: doc.originalName,
+    mimeType: doc.mimeType,
+    sizeBytes: doc.sizeBytes,
+    checksumSha256: doc.checksumSha256,
+    storageBackend: doc.storageBackend,
+    objectKey: doc.objectKey,
+    uploadedBy: actor.userId,
+  });
+  return { id };
 }
 
 function assertAllowedEngineeringDocument(originalName: string, sizeBytes: number) {
@@ -566,6 +766,21 @@ export async function listAvailableOtDocuments(orderId: string) {
       ),
     );
   }
+  const quoteItemRows = await db
+    .select({ id: quoteItems.id })
+    .from(quoteItems)
+    .where(eq(quoteItems.quoteId, order.quoteId));
+  if (quoteItemRows.length > 0) {
+    filters.push(
+      and(
+        eq(documents.entityType, "quote_item"),
+        inArray(
+          documents.entityId,
+          quoteItemRows.map((row) => row.id),
+        ),
+      ),
+    );
+  }
 
   const rows = await db
     .select()
@@ -582,8 +797,10 @@ export async function listAvailableOtDocuments(orderId: string) {
       row.entityType === "engineering_request"
         ? "Ingeniería"
         : row.entityType === "order"
-          ? "Pedido"
-          : "Cotización",
+          ? "Orden de trabajo"
+          : row.entityType === "quote_item"
+            ? "Partida"
+            : "Cotización",
   }));
 }
 
@@ -609,6 +826,7 @@ export async function attachDocumentsToProductionOrder(
     quoteId: string;
     orderId: string;
     engineeringRequestId: string | null;
+    quoteItemIds?: string[];
   },
 ) {
   if (sourceIds.length === 0) return;
@@ -620,12 +838,24 @@ export async function attachDocumentsToProductionOrder(
   if (rows.length !== uniqueIds.length) {
     throw new AppError("Uno de los archivos no existe.", "DOCUMENT_NOT_FOUND", 404);
   }
+  const already = await tx
+    .select({ objectKey: documents.objectKey })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.entityType, "production_order"),
+        eq(documents.entityId, productionOrderId),
+      ),
+    );
+  const objectKeys = new Set(already.map((row) => row.objectKey));
+  const quoteItemIds = new Set(allowed.quoteItemIds ?? []);
   for (const doc of rows) {
     const allowedSource =
       (doc.entityType === "quote" && doc.entityId === allowed.quoteId) ||
       (doc.entityType === "order" && doc.entityId === allowed.orderId) ||
       (doc.entityType === "engineering_request" &&
-        doc.entityId === allowed.engineeringRequestId);
+        doc.entityId === allowed.engineeringRequestId) ||
+      (doc.entityType === "quote_item" && quoteItemIds.has(doc.entityId));
     if (!allowedSource) {
       throw new AppError(
         "El archivo no pertenece a este pedido.",
@@ -633,6 +863,8 @@ export async function attachDocumentsToProductionOrder(
         409,
       );
     }
+    if (objectKeys.has(doc.objectKey)) continue;
+    objectKeys.add(doc.objectKey);
     await tx.insert(documents).values({
       id: crypto.randomUUID(),
       entityType: "production_order",

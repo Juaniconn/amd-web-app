@@ -40,6 +40,35 @@ const optionalMinStock = z
     "El stock mínimo no puede ser negativo",
   );
 
+const optionalNumeric = z
+  .union([z.string(), z.number()])
+  .optional()
+  .transform((value) => {
+    if (value === undefined || value === null || String(value).trim() === "") {
+      return undefined;
+    }
+    return String(value).trim();
+  })
+  .refine(
+    (value) =>
+      value === undefined ||
+      (Number.isFinite(Number(value)) && Number(value) >= 0),
+    "El número no puede ser negativo",
+  );
+
+const calculatorFields = {
+  grade: optionalText(40),
+  thicknessIn: optionalNumeric,
+  costPerKg: optionalNumeric,
+  sheetWidthIn: optionalNumeric,
+  sheetLengthIn: optionalNumeric,
+  densityGCm3: optionalNumeric,
+  supplierId: optionalText(80),
+  supplierMaterialId: optionalText(80),
+  branchId: optionalText(80),
+  usedInCalculator: z.coerce.boolean().optional().default(false),
+};
+
 export const createMaterialSchema = z.object({
   description: z.string().trim().min(2, "La descripción es obligatoria").max(200),
   category: materialCategorySchema,
@@ -49,6 +78,7 @@ export const createMaterialSchema = z.object({
   active: z.coerce.boolean(),
   minStock: optionalMinStock,
   notes: optionalText(2000),
+  ...calculatorFields,
 });
 
 export const updateMaterialSchema = z.object({
@@ -58,6 +88,8 @@ export const updateMaterialSchema = z.object({
   active: z.coerce.boolean(),
   minStock: optionalMinStock,
   notes: optionalText(2000),
+  warehouseId: z.string().trim().min(1).optional(),
+  ...calculatorFields,
 });
 
 export const stockMovementSchema = z.object({
@@ -85,7 +117,7 @@ export const issueStockSchema = stockMovementSchema.extend({
 });
 
 export const addOrderMaterialSchema = z.object({
-  productionOrderId: z.string().trim().min(1, "La OT es obligatoria"),
+  orderId: z.string().trim().min(1, "La orden de trabajo es obligatoria"),
   materialId: z.string().trim().min(1, "El material es obligatorio"),
   quantity: quantitySchema,
 });
@@ -95,7 +127,7 @@ export const removeOrderMaterialSchema = z.object({
 });
 
 export const reserveOrderMaterialSchema = z.object({
-  productionOrderId: z.string().trim().min(1, "La OT es obligatoria"),
+  orderId: z.string().trim().min(1, "La orden de trabajo es obligatoria"),
   lineId: z.string().trim().min(1).optional(),
 });
 

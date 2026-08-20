@@ -9,6 +9,7 @@ import {
   getMachineById,
   listWorkCenters,
 } from "@/server/services/production-catalogs";
+import { inputQty } from "@/lib/inventory/catalog";
 import type { MachineStatus } from "@/lib/production/catalog";
 
 function toDateInput(value?: Date | null) {
@@ -44,8 +45,13 @@ export default async function EditMachinePage({
       </div>
       <MachineForm
         machineId={machine.id}
-        workCenters={workCenters.map((center) => ({ id: center.id, name: center.name }))}
+        workCenters={workCenters.map((center) => ({
+          id: center.id,
+          name: center.name,
+          code: center.code,
+        }))}
         users={users}
+        defaultSpecs={machine.calculatorSpecs}
         defaultValues={{
           name: machine.name,
           brand: machine.brand ?? "",
@@ -53,8 +59,11 @@ export default async function EditMachinePage({
           year: machine.year ? String(machine.year) : "",
           workCenterId: machine.workCenterId,
           responsibleUserId: machine.responsibleUserId ?? "",
-          hoursPerShift: machine.hoursPerShift,
+          hoursPerShift: inputQty(machine.hoursPerShift),
           capacity: machine.capacity ?? "",
+          hourlyCost: machine.hourlyCost ?? "",
+          bendLengthMm: machine.bendLengthMm ?? "",
+          tonnageTon: machine.tonnageTon ?? "",
           notes: machine.notes ?? "",
           status: machine.status as MachineStatus,
           active: machine.active,

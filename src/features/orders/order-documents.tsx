@@ -47,7 +47,7 @@ export function OrderDocuments({
     <div className="space-y-4">
       {documents.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Sin archivos propios del pedido. Los planos vigentes viven en la RFQ o
+          Sin archivos propios de la orden de trabajo. Los planos vigentes viven en la RFQ o
           en Ingeniería Liberada.
         </p>
       ) : (

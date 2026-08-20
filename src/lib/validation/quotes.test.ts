@@ -5,8 +5,9 @@ describe("quote validation", () => {
   it("accepts a valid RFQ payload", () => {
     const result = createQuoteSchema.safeParse({
       customerId: "demo-customer-001",
+      branchId: "amd-branch-cjs",
       currency: "mxn",
-      paymentTerms: "30 días",
+      paymentTerm: "net_30",
       notes: "Placas CNC",
     });
     expect(result.success).toBe(true);
@@ -15,6 +16,7 @@ describe("quote validation", () => {
   it("requires engineering type when the RFQ needs design", () => {
     const result = createQuoteSchema.safeParse({
       customerId: "demo-customer-001",
+      branchId: "amd-branch-cjs",
       currency: "mxn",
       rfqType: "diseno_fabricacion",
       requiresEngineering: true,
@@ -31,6 +33,23 @@ describe("quote validation", () => {
       currency: "mxn",
     });
     expect(result.success).toBe(false);
+  });
+
+  it("accepts currency-formatted prices", () => {
+    const result = addQuoteItemSchema.safeParse({
+      quoteId: "demo-quote-001",
+      description: "Placa aluminio",
+      quantity: "24",
+      unitPrice: "$1,850.00",
+      taxPercent: 16,
+      estimatedCost: "$42.00",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.quantity).toBe(24);
+      expect(result.data.unitPrice).toBe(1850);
+      expect(result.data.estimatedCost).toBe(42);
+    }
   });
 
   it("accepts a priced line item", () => {
@@ -65,6 +84,18 @@ describe("quote validation", () => {
       quantity: 1,
       unitPrice: -1,
       taxPercent: 16,
+      estimatedCost: 0,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects IVA outside 0, 8 or 16", () => {
+    const result = addQuoteItemSchema.safeParse({
+      quoteId: "demo-quote-001",
+      description: "Placa aluminio",
+      quantity: 1,
+      unitPrice: 10,
+      taxPercent: 4,
       estimatedCost: 0,
     });
     expect(result.success).toBe(false);

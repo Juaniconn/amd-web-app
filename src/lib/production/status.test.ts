@@ -15,6 +15,11 @@ describe("production status machine", () => {
     expect(canTransitionProduction("terminada", "entregada")).toBe(true);
   });
 
+  it("can wait for material from released and return", () => {
+    expect(canTransitionProduction("liberada", "esperando_material")).toBe(true);
+    expect(canTransitionProduction("esperando_material", "liberada")).toBe(true);
+  });
+
   it("requires downtime reason to pause", () => {
     expect(canTransitionProduction("en_produccion", "pausada")).toBe(true);
     expect(requiresDowntimeReason("pausada")).toBe(true);

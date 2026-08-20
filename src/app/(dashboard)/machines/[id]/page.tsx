@@ -9,6 +9,12 @@ import {
   type MachineStatus,
 } from "@/lib/production/catalog";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
+import { displayQty } from "@/lib/inventory/catalog";
+import { displayMoney } from "@/lib/quotes/money";
+import {
+  calculatorFieldsForCenter,
+  type MachineCalculatorSpecs,
+} from "@/lib/quotes/center-calculator";
 import { getMachineById } from "@/server/services/production-catalogs";
 
 function Field({ label, value }: { label: string; value?: string | null }) {
@@ -22,6 +28,25 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
+function specDisplay(
+  machine: {
+    hourlyCost: string | null;
+    bendLengthMm: string | null;
+    tonnageTon: string | null;
+    calculatorSpecs: MachineCalculatorSpecs | Record<string, number | null> | null;
+  },
+  key: string,
+) {
+  if (key === "hourlyCost") {
+    return machine.hourlyCost ? displayMoney(machine.hourlyCost, "mxn") : null;
+  }
+  if (key === "bendLengthMm") return machine.bendLengthMm;
+  if (key === "tonnageTon") return machine.tonnageTon;
+  const specs = machine.calculatorSpecs ?? {};
+  const value = specs[key as keyof typeof specs];
+  return value == null ? null : String(value);
+}
+
 export default async function MachineDetailPage({
   params,
 }: {
@@ -32,6 +57,7 @@ export default async function MachineDetailPage({
   const machine = await getMachineById(id);
   if (!machine) notFound();
   const canUpdate = access.permissions.includes(PERMISSION_IDS.productionUpdate);
+  const calculatorFields = calculatorFieldsForCenter(machine.workCenterCode);
 
   return (
     <div className="space-y-6">
@@ -69,7 +95,7 @@ export default async function MachineDetailPage({
           <Field label="Modelo" value={machine.model} />
           <Field label="Año" value={machine.year ? String(machine.year) : null} />
           <Field label="Centro" value={machine.workCenterName} />
-          <Field label="Horas / turno" value={machine.hoursPerShift} />
+          <Field label="Horas / turno" value={displayQty(machine.hoursPerShift)} />
           <Field label="Capacidad" value={machine.capacity} />
           <Field
             label="Fecha alta"
@@ -83,6 +109,22 @@ export default async function MachineDetailPage({
           <Field label="Observaciones" value={machine.notes} />
         </CardContent>
       </Card>
+      {calculatorFields.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Calculadora · {machine.workCenterName}</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {calculatorFields.map((field) => (
+              <Field
+                key={field.key}
+                label={field.label}
+                value={specDisplay(machine, field.key)}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

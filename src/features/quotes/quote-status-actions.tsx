@@ -79,14 +79,21 @@ export function QuoteStatusActions({
           disabled={pending || (requiresEngineering && engineeringStatus !== "liberada")}
           onClick={() => run(convertQuoteToOrderAction)}
         >
-          Convertir en pedido
+          Convertir en orden de trabajo
         </Button>
+      ) : null}
+      {canTransitionQuote(status, "convertida") &&
+      !(requiresEngineering && engineeringStatus !== "liberada") ? (
+        <p className="w-full text-sm text-muted-foreground">
+          Al convertir se crea la orden de trabajo y un número de parte por cada partida de
+          fabricación. El número de plano queda como ID de cada partida.
+        </p>
       ) : null}
       {canTransitionQuote(status, "convertida") &&
       requiresEngineering &&
       engineeringStatus !== "liberada" ? (
         <p className="w-full text-sm text-muted-foreground">
-          Esta RFQ requiere ingeniería liberada antes de convertir a pedido.
+          Esta RFQ requiere ingeniería liberada antes de convertir a orden de trabajo.
         </p>
       ) : null}
       <Button

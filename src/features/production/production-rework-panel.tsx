@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createReworkAction } from "@/server/actions/production";
+import { displayQty } from "@/lib/inventory/catalog";
 
 export function ProductionReworkPanel({
   productionOrderId,
@@ -37,8 +38,7 @@ export function ProductionReworkPanel({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Como en la OT de planta: scrap y retrabajo por cantidad. El tiempo se
-        registra en Horas máquina.
+        Cantidad de retrabajo y scrap. El tiempo va en Horas máquina, a la izquierda.
       </p>
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">Sin scrap ni retrabajo.</p>
@@ -47,8 +47,8 @@ export function ProductionReworkPanel({
           {rows.map((row) => (
             <li key={row.id} className="rounded-lg border px-3 py-2">
               <p>
-                {row.partNumber ?? "Parte"} · Retrabajo {row.quantity} · Scrap{" "}
-                {row.scrapQuantity}
+                {row.partNumber ?? "Parte"} · Retrabajo {displayQty(row.quantity)} · Scrap{" "}
+                {displayQty(row.scrapQuantity)}
               </p>
               {row.notes ? (
                 <p className="text-muted-foreground">{row.notes}</p>
@@ -63,14 +63,16 @@ export function ProductionReworkPanel({
           <Input name="partNumber" placeholder="N° parte" />
           <Input
             name="quantity"
-            type="text"
-            inputMode="decimal"
+            type="number"
+            min="0"
+            step="1"
             placeholder="Retrabajo (pza)"
           />
           <Input
             name="scrapQuantity"
-            type="text"
-            inputMode="decimal"
+            type="number"
+            min="0"
+            step="1"
             placeholder="Scrap (pza)"
           />
           <Input name="notes" placeholder="Nota" className="sm:col-span-3" />

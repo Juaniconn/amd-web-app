@@ -26,3 +26,12 @@ export async function requirePermission(permission: PermissionId) {
   }
   return { session, access };
 }
+
+export async function requireAnyPermission(...permissions: PermissionId[]) {
+  const session = await requireSession();
+  const access = await getUserAccess(session.user.id);
+  if (!permissions.some((permission) => access.permissions.includes(permission))) {
+    redirect("/dashboard");
+  }
+  return { session, access };
+}

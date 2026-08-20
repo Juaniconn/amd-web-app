@@ -15,9 +15,15 @@ function canSee(permission: PermissionId | undefined, permissions: PermissionId[
 
 export function AppSidebar({ pathname, permissions }: AppSidebarProps) {
   return (
-    <aside className="hidden w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">
+    <aside
+      className="hidden w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex"
+      suppressHydrationWarning
+    >
       <div className="border-b border-sidebar-border px-5 py-5">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-sidebar-foreground/60">
+        <p
+          className="text-xs font-medium uppercase tracking-widest text-sidebar-foreground/60"
+          suppressHydrationWarning
+        >
           AMD México
         </p>
         <p className="mt-1 text-lg font-semibold tracking-tight">Operations</p>

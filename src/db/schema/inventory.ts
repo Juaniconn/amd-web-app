@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { users } from "./auth";
 import { productionOrders } from "./production";
+import { orders } from "./quotes";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -85,9 +86,19 @@ export const materials = pgTable(
     warehouseId: text("warehouse_id")
       .notNull()
       .references(() => warehouses.id, { onDelete: "restrict" }),
+    branchId: text("branch_id"),
+    supplierMaterialId: text("supplier_material_id"),
     isCritical: boolean("is_critical").notNull().default(false),
     active: boolean("active").notNull().default(true),
     minStock: numeric("min_stock", { precision: 14, scale: 4 }),
+    grade: text("grade"),
+    thicknessIn: numeric("thickness_in", { precision: 10, scale: 4 }),
+    costPerKg: numeric("cost_per_kg", { precision: 14, scale: 4 }),
+    sheetWidthIn: numeric("sheet_width_in", { precision: 10, scale: 4 }),
+    sheetLengthIn: numeric("sheet_length_in", { precision: 10, scale: 4 }),
+    densityGCm3: numeric("density_g_cm3", { precision: 10, scale: 4 }),
+    supplierId: text("supplier_id"),
+    usedInCalculator: boolean("used_in_calculator").notNull().default(false),
     notes: text("notes"),
     isDemo: boolean("is_demo").notNull().default(false),
     createdBy: text("created_by").references(() => users.id, {
@@ -104,6 +115,8 @@ export const materials = pgTable(
     index("materials_active_idx").on(table.active),
     index("materials_critical_idx").on(table.isCritical),
     index("materials_warehouse_id_idx").on(table.warehouseId),
+    index("materials_branch_id_idx").on(table.branchId),
+    index("materials_used_in_calculator_idx").on(table.usedInCalculator),
   ],
 );
 
@@ -144,9 +157,13 @@ export const productionOrderMaterials = pgTable(
   "production_order_materials",
   {
     id: text("id").primaryKey(),
-    productionOrderId: text("production_order_id")
+    orderId: text("order_id")
       .notNull()
-      .references(() => productionOrders.id, { onDelete: "cascade" }),
+      .references(() => orders.id, { onDelete: "cascade" }),
+    productionOrderId: text("production_order_id").references(
+      () => productionOrders.id,
+      { onDelete: "set null" },
+    ),
     materialId: text("material_id")
       .notNull()
       .references(() => materials.id, { onDelete: "restrict" }),
@@ -169,10 +186,11 @@ export const productionOrderMaterials = pgTable(
     ...timestamps,
   },
   (table) => [
-    uniqueIndex("production_order_materials_ot_material_uidx").on(
-      table.productionOrderId,
+    uniqueIndex("production_order_materials_order_material_uidx").on(
+      table.orderId,
       table.materialId,
     ),
+    index("production_order_materials_order_idx").on(table.orderId),
     index("production_order_materials_ot_idx").on(table.productionOrderId),
     index("production_order_materials_material_idx").on(table.materialId),
   ],
@@ -205,6 +223,8 @@ export const inventoryMovements = pgTable(
       () => productionOrderMaterials.id,
       { onDelete: "set null" },
     ),
+    purchaseOrderId: text("purchase_order_id"),
+    purchaseReceiptId: text("purchase_receipt_id"),
     isDemo: boolean("is_demo").notNull().default(false),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
@@ -265,6 +285,10 @@ export const productionOrderMaterialsRelations = relations(
     productionOrder: one(productionOrders, {
       fields: [productionOrderMaterials.productionOrderId],
       references: [productionOrders.id],
+    }),
+    order: one(orders, {
+      fields: [productionOrderMaterials.orderId],
+      references: [orders.id],
     }),
     material: one(materials, {
       fields: [productionOrderMaterials.materialId],

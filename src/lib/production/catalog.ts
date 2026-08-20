@@ -60,6 +60,15 @@ export const MACHINE_STATUS_LABELS: Record<MachineStatus, string> = {
   fuera_de_servicio: "Fuera de servicio",
 };
 
+export const MACHINE_KINDS = ["laser", "press_brake", "otro"] as const;
+export type MachineKind = (typeof MACHINE_KINDS)[number];
+
+export const MACHINE_KIND_LABELS: Record<MachineKind, string> = {
+  laser: "Láser",
+  press_brake: "Dobladora",
+  otro: "Otro",
+};
+
 export const PRODUCTION_ROUTE_STEP_KINDS = [
   "ingenieria",
   "produccion",

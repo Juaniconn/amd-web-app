@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   calculateLineTotals,
   calculateQuoteTotals,
+  displayMoney,
   formatMoney,
+  inputMoney,
+  parseMoney,
   roundMoney,
   taxPercentForCurrency,
 } from "./money";
@@ -11,6 +14,14 @@ describe("quote money", () => {
   it("rounds to two decimal places", () => {
     expect(roundMoney(10.126)).toBe(10.13);
     expect(formatMoney(10)).toBe("10.00");
+  });
+
+  it("displays currency with two decimals and parses typed money", () => {
+    expect(displayMoney("31504", "mxn")).toMatch(/31,504\.00/);
+    expect(displayMoney(1850, "mxn")).toMatch(/1,850\.00/);
+    expect(parseMoney("MX$31,504.00")).toBe(31504);
+    expect(parseMoney("$31,504.00")).toBe(31504);
+    expect(inputMoney("1850.0000")).toBe("1850.00");
   });
 
   it("calculates a priced line with IVA 16% and margin", () => {

@@ -79,6 +79,12 @@ const customerFields = {
     .max(80)
     .optional()
     .transform((value) => (value && value.length > 0 ? value : "México")),
+  shippingSameAsBilling: z.boolean().default(false),
+  shippingAddress: optionalText(300),
+  shippingCity: optionalText(120),
+  shippingState: optionalText(120),
+  shippingPostalCode: optionalText(20),
+  shippingCountry: optionalText(80),
   type: customerTypeSchema,
   status: customerStatusSchema,
   notes: optionalText(4000),

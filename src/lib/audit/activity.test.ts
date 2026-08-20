@@ -65,7 +65,7 @@ describe("activitySummary", () => {
         entityType: "order",
         entityLabel: "AMD-2026-00001",
       }),
-    ).toBe("Ana Ventas aprobó el pedido AMD-2026-00001.");
+    ).toBe("Ana Ventas aprobó la orden de trabajo AMD-2026-00001.");
   });
 
   it("describes a project creation", () => {
@@ -88,7 +88,31 @@ describe("activitySummary", () => {
         entityLabel: "COT-2026-00004 → AMD-2026-00001",
       }),
     ).toBe(
-      "Ana Ventas convirtió la cotización COT-2026-00004 → AMD-2026-00001 en pedido.",
+      "Ana Ventas convirtió la cotización COT-2026-00004 → AMD-2026-00001 en orden de trabajo.",
+    );
+  });
+
+  it("describes a purchase order creation", () => {
+    expect(
+      activitySummary({
+        actorName: "Compras AMD",
+        action: "created",
+        entityType: "purchase_order",
+        entityLabel: "OC-2026-00001 · Acero del Norte",
+      }),
+    ).toBe("Compras AMD creó la orden de compra OC-2026-00001 · Acero del Norte.");
+  });
+
+  it("describes an inspection", () => {
+    expect(
+      activitySummary({
+        actorName: "Calidad",
+        action: "created",
+        entityType: "quality_inspection",
+        entityLabel: "INSP-2026-00001 · OT-2026-00001 · Final · Aprobado",
+      }),
+    ).toBe(
+      "Calidad registró la inspección INSP-2026-00001 · OT-2026-00001 · Final · Aprobado.",
     );
   });
 });

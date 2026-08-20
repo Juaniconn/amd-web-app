@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { OrderDocuments } from "@/features/orders/order-documents";
 import { OrderStatusActions } from "@/features/orders/order-status-actions";
 import { OrderTraceability } from "@/features/orders/order-traceability";
+import { ProductionMaterialsPanel } from "@/features/inventory/production-materials-panel";
+import { SendToDeliveryButton } from "@/features/orders/send-to-delivery-button";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,11 +25,12 @@ import {
   type OrderStatus,
 } from "@/lib/orders/status";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
+import { partIdentity, workOrderNumber } from "@/lib/production/ot-number";
 import {
   PRODUCTION_STATUS_LABELS,
   type ProductionStatus,
 } from "@/lib/production/status";
-import { isManufacturingItem, QUOTE_ITEM_KIND_LABELS } from "@/lib/quotes/items";
+import { isManufacturingItem } from "@/lib/quotes/items";
 import {
   QUOTE_ENGINEERING_TYPE_LABELS,
   RFQ_TYPE_LABELS,
@@ -35,14 +38,15 @@ import {
   type RfqType,
 } from "@/lib/quotes/rfq";
 import { listOrderActivity } from "@/server/services/activity";
-import { getOrderById } from "@/server/services/orders";
-
-function money(value: string, currency: string) {
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(Number(value));
-}
+import { getOrderById, resolveOrdersModuleId } from "@/server/services/orders";
+import {
+  listActiveMaterialsForSelect,
+  listWorkOrderMaterials,
+} from "@/server/services/inventory";
+import { listPurchaseRequestsForOrder } from "@/server/services/purchasing";
+import { getDeliveryByOrderId } from "@/server/services/deliveries";
+import { displayQty } from "@/lib/inventory/catalog";
+import { displayMoney } from "@/lib/quotes/money";
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -62,7 +66,13 @@ export default async function OrderDetailPage({
 }) {
   const { access } = await requirePermission(PERMISSION_IDS.ordersView);
   const { id } = await params;
-  const order = await getOrderById(id);
+  const resolved = await resolveOrdersModuleId(id);
+  if (!resolved) notFound();
+  if (resolved.workOrderId) {
+    redirect(`/production/${resolved.workOrderId}`);
+  }
+
+  const order = await getOrderById(resolved.orderId);
   if (!order) notFound();
 
   const activity = await listOrderActivity(order.id);
@@ -75,6 +85,30 @@ export default async function OrderDetailPage({
   const canCreateOt =
     access.permissions.includes(PERMISSION_IDS.productionCreate) &&
     (order.status === "aprobado" || order.status === "en_produccion");
+  const canReadPurchasing = access.permissions.includes(PERMISSION_IDS.purchasingRead);
+  const canReserve =
+    access.permissions.includes(PERMISSION_IDS.inventoryReserve) ||
+    access.permissions.includes(PERMISSION_IDS.ordersUpdate);
+  const canConsume = access.permissions.includes(PERMISSION_IDS.inventoryConsume);
+  let orderMaterials: Awaited<ReturnType<typeof listWorkOrderMaterials>> = [];
+  let catalogMaterials: Awaited<ReturnType<typeof listActiveMaterialsForSelect>> =
+    [];
+  let materialRequests: Awaited<ReturnType<typeof listPurchaseRequestsForOrder>> =
+    [];
+  let materialsLoadError: string | null = null;
+  try {
+    const loaded = await Promise.all([
+      listWorkOrderMaterials(order.id),
+      canReserve ? listActiveMaterialsForSelect() : Promise.resolve([]),
+      listPurchaseRequestsForOrder(order.id),
+    ]);
+    orderMaterials = loaded[0];
+    catalogMaterials = loaded[1];
+    materialRequests = loaded[2];
+  } catch {
+    materialsLoadError =
+      "No se pudo cargar el material de esta orden. Reintenta o avisa a sistemas si el error continúa.";
+  }
   const otByItem = new Map<string, (typeof order.productionOrders)[number]>();
   for (const ot of order.productionOrders) {
     if (!ot.orderItemId) continue;
@@ -88,12 +122,27 @@ export default async function OrderDetailPage({
     }
   }
 
+  const titleNumber = workOrderNumber(order.number);
+  const drawings = order.items.filter((item) => isManufacturingItem(item.kind));
+  const drawingCountLabel =
+    order.drawingCount === 1 ? "1 plano" : `${order.drawingCount} planos`;
+  const activeParts = order.productionOrders.filter((ot) => ot.status !== "cancelada");
+  const delivery = await getDeliveryByOrderId(order.id);
+  const canSendToDelivery =
+    !delivery &&
+    access.permissions.includes(PERMISSION_IDS.ordersUpdate) &&
+    activeParts.length > 0 &&
+    activeParts.every((ot) => ot.status === "terminada" || ot.status === "entregada");
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{order.number}</h2>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Orden de trabajo
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <h2 className="text-2xl font-semibold tracking-tight">{titleNumber}</h2>
             <Badge variant="secondary">
               {ORDER_STATUS_LABELS[order.status as OrderStatus]}
             </Badge>
@@ -104,6 +153,7 @@ export default async function OrderDetailPage({
               {order.customerName}
             </Link>
             {order.customerCode ? ` · ${order.customerCode}` : ""}
+            {` · ${drawingCountLabel}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -118,9 +168,10 @@ export default async function OrderDetailPage({
               Editar
             </Link>
           ) : null}
-          {canCreateOt ? (
-            <Link href={`/production/new?orderId=${order.id}`} className={buttonVariants()}>
-              Nueva OT
+          {canSendToDelivery ? <SendToDeliveryButton orderId={order.id} /> : null}
+          {delivery ? (
+            <Link href={`/deliveries/${delivery.id}`} className={buttonVariants({ variant: "outline" })}>
+              Ver entrega {delivery.number}
             </Link>
           ) : null}
         </div>
@@ -164,25 +215,21 @@ export default async function OrderDetailPage({
                 muted: !order.engineeringNumber,
               },
               {
-                label: "Pedido",
-                value: `${order.number} · ${ORDER_STATUS_LABELS[order.status as OrderStatus]}`,
+                label: "Orden de trabajo",
+                value: `${titleNumber} · ${ORDER_STATUS_LABELS[order.status as OrderStatus]}`,
               },
               {
-                label: "OT",
-                value:
-                  order.productionOrders.length > 0
-                    ? `${order.productionOrders.length} orden${order.productionOrders.length === 1 ? "" : "es"}`
-                    : "Sin OT",
-                muted: order.productionOrders.length === 0,
+                label: "Cantidad de planos",
+                value: drawingCountLabel,
               },
               {
-                label: "Inventario",
-                href: canReadProduction ? "/inventory" : null,
-                value: "Reservas / consumo en OT",
+                label: "Materiales",
+                href: "#materiales",
+                value: "Reserva y consumo de la orden de trabajo",
               },
               { label: "Compras", value: "Módulo pendiente", muted: true },
-              { label: "Calidad", value: "Cierre físico en OT", muted: true },
-              { label: "Entrega", value: "Handoff OT entregada", muted: true },
+              { label: "Calidad", value: "Cierre físico por número de parte", muted: true },
+              { label: "Entrega", value: "Handoff de la OT", muted: true },
             ]}
           />
         </CardContent>
@@ -193,7 +240,8 @@ export default async function OrderDetailPage({
           <CardTitle>Información general</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Número pedido" value={order.number} />
+          <Field label="ID" value={titleNumber} />
+          <Field label="Cantidad de Planos" value={String(order.drawingCount)} />
           <Field label="Cliente" value={order.customerName} />
           <Field label="RFQ origen" value={order.quoteNumber} />
           <Field label="Tipo RFQ" value={RFQ_TYPE_LABELS[order.rfqType as RfqType]} />
@@ -214,7 +262,7 @@ export default async function OrderDetailPage({
             value={ORDER_ORIGIN_LABELS[order.origin as keyof typeof ORDER_ORIGIN_LABELS]}
           />
           <Field
-            label="Estado comercial"
+            label="Estado"
             value={ORDER_STATUS_LABELS[order.status as OrderStatus]}
           />
           <Field
@@ -234,7 +282,7 @@ export default async function OrderDetailPage({
                 : null
             }
           />
-          <Field label="Total" value={money(order.total, order.currency)} />
+          <Field label="Total" value={displayMoney(order.total, order.currency)} />
         </CardContent>
       </Card>
 
@@ -259,122 +307,88 @@ export default async function OrderDetailPage({
         </Card>
       ) : null}
 
-      <Card>
+      <Card id="materiales" className="scroll-mt-24 overflow-visible">
         <CardHeader>
-          <CardTitle>Partidas</CardTitle>
+          <CardTitle>Materiales</CardTitle>
         </CardHeader>
         <CardContent>
-          {order.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sin partidas.</p>
+          <ProductionMaterialsPanel
+            orderId={order.id}
+            lines={orderMaterials}
+            materials={catalogMaterials}
+            canReserve={canReserve && order.status !== "cancelado"}
+            canConsume={canConsume && order.status !== "cancelado"}
+            loadError={materialsLoadError}
+            requests={materialRequests}
+            canReadPurchasing={canReadPurchasing}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Número de Parte</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {drawings.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Sin planos en esta orden de trabajo.
+            </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>#</TableHead>
-                  <TableHead>Tipo</TableHead>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Estado</TableHead>
                   <TableHead>Descripción</TableHead>
-                  <TableHead>Parte</TableHead>
                   <TableHead className="text-right">Cantidad</TableHead>
                   <TableHead className="text-right">Total</TableHead>
-                  <TableHead>OT</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {order.items.map((item) => {
+                {drawings.map((item) => {
                   const linked = otByItem.get(item.id);
                   const manufacturing = isManufacturingItem(item.kind);
                   const canIssue =
                     canCreateOt &&
                     manufacturing &&
                     (!linked || linked.status === "cancelada");
+                  const partId = partIdentity(
+                    linked?.partNumber || item.partNumber,
+                    linked?.number ?? "Sin plano",
+                  );
+                  const href =
+                    linked && linked.status !== "cancelada"
+                      ? `/production/${linked.id}`
+                      : canIssue
+                        ? `/production/new?orderId=${order.id}&orderItemId=${item.id}`
+                        : null;
                   return (
                     <TableRow key={item.id}>
-                      <TableCell>{item.position}</TableCell>
                       <TableCell>
-                        {QUOTE_ITEM_KIND_LABELS[
-                          item.kind as keyof typeof QUOTE_ITEM_KIND_LABELS
-                        ] ?? "Pieza"}
-                      </TableCell>
-                      <TableCell>{item.description}</TableCell>
-                      <TableCell>{item.partNumber ?? "—"}</TableCell>
-                      <TableCell className="text-right">
-                        {item.quantity} {item.unit}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {money(item.lineTotal, order.currency)}
-                      </TableCell>
-                      <TableCell>
-                        {!manufacturing ? (
-                          <span className="text-muted-foreground">No genera OT</span>
-                        ) : linked && linked.status !== "cancelada" ? (
-                          canReadProduction ? (
-                            <Link
-                              href={`/production/${linked.id}`}
-                              className="font-medium hover:underline"
-                            >
-                              {linked.number}
-                            </Link>
-                          ) : (
-                            linked.number
-                          )
-                        ) : canIssue ? (
-                          <Link
-                            href={`/production/new?orderId=${order.id}&orderItemId=${item.id}`}
-                            className="font-medium hover:underline"
-                          >
-                            Crear OT
+                        {href && (canReadProduction || canIssue) ? (
+                          <Link href={href} className="font-medium hover:underline">
+                            {partId}
                           </Link>
                         ) : (
-                          "Sin OT"
+                          <span className="font-medium">{partId}</span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        {linked
+                          ? PRODUCTION_STATUS_LABELS[linked.status as ProductionStatus]
+                          : "—"}
+                      </TableCell>
+                      <TableCell>{item.description}</TableCell>
+                      <TableCell className="text-right">
+                        {displayQty(item.quantity)} {item.unit}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {displayMoney(item.lineTotal, order.currency)}
                       </TableCell>
                     </TableRow>
                   );
                 })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Órdenes de trabajo</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {order.productionOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Este pedido aún no tiene OT. La conversión no crea piso.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>OT</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Parte</TableHead>
-                  <TableHead>Prometida</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {order.productionOrders.map((ot) => (
-                  <TableRow key={ot.id}>
-                    <TableCell>
-                      {canReadProduction ? (
-                        <Link href={`/production/${ot.id}`} className="font-medium hover:underline">
-                          {ot.number}
-                        </Link>
-                      ) : (
-                        ot.number
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {PRODUCTION_STATUS_LABELS[ot.status as ProductionStatus]}
-                    </TableCell>
-                    <TableCell>{ot.partNumber ?? "—"}</TableCell>
-                    <TableCell>{ot.promisedDate.toLocaleDateString("es-MX")}</TableCell>
-                  </TableRow>
-                ))}
               </TableBody>
             </Table>
           )}

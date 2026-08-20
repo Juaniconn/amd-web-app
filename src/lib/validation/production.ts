@@ -20,7 +20,7 @@ export const machineStatusSchema = z.enum(MACHINE_STATUSES);
 export const routeStepKindSchema = z.enum(PRODUCTION_ROUTE_STEP_KINDS);
 
 export const createProductionOrderSchema = z.object({
-  orderId: z.string().trim().min(1, "El pedido es obligatorio"),
+  orderId: z.string().trim().min(1, "La orden de trabajo es obligatoria"),
   orderItemId: z.string().trim().min(1, "La partida es obligatoria. Cada pieza tiene su OT."),
   routeId: optionalText(80),
   description: z
@@ -43,7 +43,7 @@ export const createProductionOrderSchema = z.object({
 });
 
 export const updateProductionOrderSchema = z.object({
-  id: z.string().trim().min(1, "La OT es obligatoria"),
+  id: z.string().trim().min(1, "El número de parte es obligatorio"),
   description: z
     .string()
     .trim()
@@ -57,6 +57,10 @@ export const updateProductionOrderSchema = z.object({
   promisedDate: z.coerce.date({ error: "La fecha prometida es obligatoria" }),
   priority: productionPrioritySchema,
   notes: optionalText(4000),
+  routeId: optionalText(80),
+  workCenterId: optionalText(80),
+  machineId: optionalText(80),
+  operatorUserId: optionalText(80),
 });
 
 export const productionIdSchema = z.object({
@@ -110,6 +114,21 @@ export const machineSchema = z.object({
     .max(24)
     .default(8),
   capacity: optionalText(200),
+  hourlyCost: z.preprocess(
+    (value) => (value === "" || value === undefined ? null : value),
+    z.coerce.number().min(0).nullable().optional(),
+  ),
+  bendLengthMm: z.preprocess(
+    (value) => (value === "" || value === undefined ? null : value),
+    z.coerce.number().min(0).nullable().optional(),
+  ),
+  tonnageTon: z.preprocess(
+    (value) => (value === "" || value === undefined ? null : value),
+    z.coerce.number().min(0).nullable().optional(),
+  ),
+  calculatorSpecs: z
+    .record(z.string(), z.union([z.number(), z.null()]))
+    .optional(),
   notes: optionalText(2000),
   status: machineStatusSchema.default("disponible"),
   active: z.coerce.boolean().default(true),

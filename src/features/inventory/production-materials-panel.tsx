@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +10,15 @@ import { displayQty } from "@/lib/inventory/catalog";
 import {
   addOrderMaterialAction,
   consumeOrderMaterialAction,
+  consumeAllOrderMaterialsAction,
   removeOrderMaterialAction,
   reserveOrderMaterialsAction,
 } from "@/server/actions/inventory";
+import { requestOrderMaterialsAction } from "@/server/actions/purchasing";
+import {
+  PURCHASE_REQUEST_STATUS_LABELS,
+  type PurchaseRequestStatus,
+} from "@/lib/purchasing/catalog";
 
 type Line = {
   id: string;
@@ -27,22 +34,41 @@ type Line = {
   covered: boolean;
 };
 
+type MissingMaterial = {
+  code: string;
+  description: string;
+  shortage: string;
+  available: string;
+  unitCode: string;
+};
+
 export function ProductionMaterialsPanel({
-  productionOrderId,
+  orderId,
   lines,
   materials,
   canReserve,
   canConsume,
+  loadError,
+  requests = [],
+  canReadPurchasing = false,
 }: {
-  productionOrderId: string;
+  orderId: string;
   lines: Line[];
   materials: { id: string; code: string; description: string; unitCode: string }[];
   canReserve: boolean;
   canConsume: boolean;
+  loadError?: string | null;
+  requests?: {
+    id: string;
+    number: string;
+    status: string;
+  }[];
+  canReadPurchasing?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [missing, setMissing] = useState<MissingMaterial[]>([]);
   const [pending, setPending] = useState(false);
 
   async function run(
@@ -50,32 +76,60 @@ export function ProductionMaterialsPanel({
       ok: boolean;
       error?: string;
       shortage?: boolean;
+      covered?: boolean;
+      waitingApplied?: boolean;
+      releasedFromWait?: boolean;
+      missing?: MissingMaterial[];
+      number?: string;
     }>,
     formData: FormData,
   ) {
     setPending(true);
     setError(null);
     setInfo(null);
+    setMissing([]);
     const result = await action(formData);
     setPending(false);
     if (!result.ok) {
       setError(result.error ?? "No se pudo completar.");
       return;
     }
-    if (result.shortage) {
+    if (result.missing && result.missing.length > 0) {
+      setMissing(result.missing);
       setInfo(
-        "Reserva parcial: hay faltante. La OT puede pasar a Esperando Material.",
+        result.waitingApplied
+          ? "No hay disponibilidad suficiente. Los números de parte Liberada pasaron a Esperando Material."
+          : "No hay disponibilidad suficiente para cubrir todo el material.",
       );
+    } else if (result.covered) {
+      setInfo(
+        result.releasedFromWait
+          ? "Material completo. Los números de parte en espera volvieron a Liberada."
+          : "Material cubierto y reservado para los números de parte de esta OT.",
+      );
+    } else if (result.number) {
+      setInfo(`Solicitud ${result.number} creada como borrador para Compras.`);
     }
     router.refresh();
   }
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        El material de la cotización llega aquí. Reserva si hay existencia. Si falta,
+        genera la solicitud de compra. Cuando todos los números de parte estén
+        terminados, consume todo para cerrar el material de la OT.
+      </p>
+      {loadError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {loadError}
+        </p>
+      ) : null}
       {lines.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Sin material declarado. La OT puede programarse hasta que se agregue
-          una línea.
+          {canReserve
+            ? "Sin material declarado. Elige un material del catálogo, indica la cantidad y agrégalo a esta orden."
+            : "Sin material declarado. Quien edite la orden o reserve inventario puede agregar las líneas aquí."}
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -105,7 +159,7 @@ export function ProductionMaterialsPanel({
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="mt-1">
-                        Parcial
+                        Falta disponibilidad
                       </Badge>
                     )}
                   </td>
@@ -123,7 +177,7 @@ export function ProductionMaterialsPanel({
                           onSubmit={(event) => {
                             event.preventDefault();
                             const formData = new FormData();
-                            formData.set("productionOrderId", productionOrderId);
+                            formData.set("orderId", orderId);
                             formData.set("lineId", line.id);
                             void run(reserveOrderMaterialsAction, formData);
                           }}
@@ -147,6 +201,7 @@ export function ProductionMaterialsPanel({
                           <input type="hidden" name="lineId" value={line.id} />
                           <Input
                             name="quantity"
+                            inputMode="decimal"
                             placeholder={displayQty(line.consumable)}
                             className="h-7 w-20"
                             required
@@ -193,7 +248,7 @@ export function ProductionMaterialsPanel({
               void run(addOrderMaterialAction, new FormData(event.currentTarget));
             }}
           >
-            <input type="hidden" name="productionOrderId" value={productionOrderId} />
+            <input type="hidden" name="orderId" value={orderId} />
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Material</label>
               <select
@@ -202,19 +257,25 @@ export function ProductionMaterialsPanel({
                 className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm"
               >
                 <option value="">Seleccionar</option>
-                {materials.map((material) => (
-                  <option key={material.id} value={material.id}>
-                    {material.code} · {material.description} ({material.unitCode})
+                {materials.length === 0 ? (
+                  <option value="" disabled>
+                    No hay materiales activos
                   </option>
-                ))}
+                ) : (
+                  materials.map((material) => (
+                    <option key={material.id} value={material.id}>
+                      {material.code} · {material.description} ({material.unitCode})
+                    </option>
+                  ))
+                )}
               </select>
             </div>
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Cantidad</label>
-              <Input name="quantity" className="h-8 w-24" required />
+              <Input name="quantity" inputMode="decimal" className="h-8 w-24" required />
             </div>
             <Button type="submit" variant="outline" disabled={pending}>
-              Agregar a la OT
+              Agregar material
             </Button>
           </form>
           {lines.length > 0 ? (
@@ -222,7 +283,7 @@ export function ProductionMaterialsPanel({
               onSubmit={(event) => {
                 event.preventDefault();
                 const formData = new FormData();
-                formData.set("productionOrderId", productionOrderId);
+                formData.set("orderId", orderId);
                 void run(reserveOrderMaterialsAction, formData);
               }}
             >
@@ -231,6 +292,70 @@ export function ProductionMaterialsPanel({
               </Button>
             </form>
           ) : null}
+          {canConsume && lines.some((line) => Number(line.consumable) > 0) ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const formData = new FormData();
+                formData.set("orderId", orderId);
+                void run(consumeAllOrderMaterialsAction, formData);
+              }}
+            >
+              <Button type="submit" disabled={pending}>
+                Consumir todo
+              </Button>
+            </form>
+          ) : null}
+          {lines.some((line) => !line.covered) ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const formData = new FormData();
+                formData.set("orderId", orderId);
+                void run(requestOrderMaterialsAction, formData);
+              }}
+            >
+              <Button type="submit" variant="outline" disabled={pending}>
+                Pedir solicitud de material
+              </Button>
+            </form>
+          ) : null}
+        </div>
+      ) : null}
+
+      {requests.length > 0 ? (
+        <ul className="space-y-1 text-sm">
+          {requests.map((request) => (
+            <li key={request.id}>
+              {canReadPurchasing ? (
+                <Link
+                  href={`/purchasing/requests/${request.id}`}
+                  className="font-medium hover:underline"
+                >
+                  {request.number}
+                </Link>
+              ) : (
+                <span className="font-medium">{request.number}</span>
+              )}
+              {" · "}
+              {PURCHASE_REQUEST_STATUS_LABELS[request.status as PurchaseRequestStatus] ??
+                request.status}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {missing.length > 0 ? (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
+          <p className="font-medium">Materiales sin disponibilidad para reservar</p>
+          <ul className="mt-2 space-y-1">
+            {missing.map((item) => (
+              <li key={item.code}>
+                {item.code} · {item.description}: faltan {displayQty(item.shortage)}{" "}
+                {item.unitCode} (disponible {displayQty(item.available)})
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 

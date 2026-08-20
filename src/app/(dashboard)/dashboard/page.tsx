@@ -12,12 +12,12 @@ import { getProductionDashboardStats } from "@/server/services/production-kpis";
 import { getOrderDashboardStats } from "@/server/services/orders-kpis";
 import { getProjectDashboardStats } from "@/server/services/projects-kpis";
 import { getQuoteDashboardStats } from "@/server/services/quotes";
-
-const UPCOMING = [
-  { label: "Ventas hoy", phase: "Fase 10+" },
-  { label: "Material por comprar", phase: "Fase 7" },
-  { label: "Entregas próximas", phase: "Fase 9" },
-];
+import {
+  getBillingDashboardStats,
+  getDeliveryDashboardStats,
+  getPurchasingDashboardStats,
+  getQualityDashboardStats,
+} from "@/server/services/operations-kpis";
 
 export default async function DashboardPage() {
   const session = await auth.api.getSession({
@@ -55,6 +55,18 @@ export default async function DashboardPage() {
     : null;
   const orderStats = canReadOrders ? await getOrderDashboardStats() : null;
   const projectStats = canReadProjects ? await getProjectDashboardStats() : null;
+  const purchasingStats = snapshot.user.permissions.includes(PERMISSION_IDS.purchasingRead)
+    ? await getPurchasingDashboardStats()
+    : null;
+  const qualityStats = snapshot.user.permissions.includes(PERMISSION_IDS.qualityRead)
+    ? await getQualityDashboardStats()
+    : null;
+  const deliveryStats = snapshot.user.permissions.includes(PERMISSION_IDS.deliveriesRead)
+    ? await getDeliveryDashboardStats()
+    : null;
+  const billingStats = snapshot.user.permissions.includes(PERMISSION_IDS.billingRead)
+    ? await getBillingDashboardStats()
+    : null;
   const roleNames = snapshot.user.roles.map(
     (roleId) => ROLES[roleId as RoleId]?.name ?? roleId,
   );
@@ -66,8 +78,7 @@ export default async function DashboardPage() {
           Hola, {snapshot.user.name}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Sesión autenticada contra PostgreSQL. Los KPIs operativos aparecerán
-          cuando existan los módulos correspondientes.
+          Centro de operaciones de AMD México. Los números salen de PostgreSQL.
         </p>
       </div>
 
@@ -109,7 +120,7 @@ export default async function DashboardPage() {
             <KpiCard
               label="Convertidas del mes"
               value={String(quoteStats.convertedThisMonth)}
-              hint="Cotizaciones convertidas a pedido"
+              hint="Cotizaciones convertidas a orden de trabajo"
             />
           </>
         ) : null}
@@ -159,12 +170,12 @@ export default async function DashboardPage() {
         {orderStats ? (
           <>
             <KpiCard
-              label="Pedidos activos"
+              label="Órdenes de trabajo activas"
               value={String(orderStats.active)}
               hint="No completados ni cancelados"
             />
             <KpiCard
-              label="Pedidos retrasados"
+              label="Órdenes de trabajo retrasadas"
               value={String(orderStats.delayed)}
               hint="Fecha prometida vencida"
             />
@@ -188,6 +199,62 @@ export default async function DashboardPage() {
               label="Movimientos del día"
               value={String(inventoryStats.movementsToday)}
               hint="Entradas, salidas, reservas, consumos y ajustes"
+            />
+          </>
+        ) : null}
+        {purchasingStats ? (
+          <>
+            <KpiCard
+              label="OC abiertas"
+              value={String(purchasingStats.open)}
+              hint="Borrador, enviada, confirmada o parcial"
+            />
+            <KpiCard
+              label="Compras urgentes"
+              value={String(purchasingStats.urgent)}
+              hint="OC marcadas como urgentes y aún abiertas"
+            />
+          </>
+        ) : null}
+        {qualityStats ? (
+          <>
+            <KpiCard
+              label="Inspecciones rechazadas"
+              value={String(qualityStats.rejectedInspections)}
+              hint="Histórico de rechazos"
+            />
+            <KpiCard
+              label="NCR abiertos"
+              value={String(qualityStats.openNcrs)}
+              hint="Abierta, en análisis o retrabajo"
+            />
+          </>
+        ) : null}
+        {deliveryStats ? (
+          <>
+            <KpiCard
+              label="Entregas en curso"
+              value={String(deliveryStats.inTransit)}
+              hint="Pendiente, preparando o enviado"
+            />
+            <KpiCard
+              label="Incidencias de entrega"
+              value={String(deliveryStats.incidents)}
+              hint="Entregas en incidencia"
+            />
+          </>
+        ) : null}
+        {billingStats ? (
+          <>
+            <KpiCard
+              label="CxC abiertas"
+              value={String(billingStats.open)}
+              hint="Facturas emitidas o con pago parcial"
+            />
+            <KpiCard
+              label="Facturas vencidas"
+              value={String(billingStats.overdue)}
+              hint="Emitidas/parciales con fecha vencida"
             />
           </>
         ) : null}
@@ -220,26 +287,18 @@ export default async function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>KPIs operativos</CardTitle>
+          <CardTitle>Beta interna</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="mb-4 text-sm text-muted-foreground">
-            No se muestran cifras inventadas. Estas métricas se calcularán desde
-            PostgreSQL cuando existan las tablas de cada fase.
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            Módulos listos para captura real: clientes, cotizaciones, ingeniería, órdenes de
+            trabajo, proyectos, producción, inventario, sucursales, compras, calidad, entregas y
+            facturación operativa.
           </p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {UPCOMING.map((item) => (
-              <div
-                key={item.label}
-                className="rounded-lg border bg-muted/40 px-4 py-3"
-              >
-                <p className="text-sm font-medium">{item.label}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Pendiente · {item.phase}
-                </p>
-              </div>
-            ))}
-          </div>
+          <p>
+            Si un KPI está en 0, el módulo funciona y todavía no hay movimientos. Los registros
+            DEMO no son operación real de AMD México.
+          </p>
         </CardContent>
       </Card>
 

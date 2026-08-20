@@ -15,13 +15,13 @@ import { changeProductionStatusAction } from "@/server/actions/production";
 const ACTIONS: { status: ProductionStatus; label: string }[] = [
   { status: "liberada", label: "Liberar a piso" },
   { status: "programada", label: "Programar" },
-  { status: "en_produccion", label: "Iniciar / reanudar" },
+  { status: "en_produccion", label: "Iniciar" },
   { status: "pausada", label: "Pausar" },
   { status: "esperando_material", label: "Esperando material" },
   { status: "calidad", label: "Enviar a calidad" },
   { status: "terminada", label: "Cierre físico" },
   { status: "entregada", label: "Cierre administrativo" },
-  { status: "cancelada", label: "Cancelar OT" },
+  { status: "cancelada", label: "Cancelar número de parte" },
 ];
 
 export function ProductionStatusActions({
@@ -94,7 +94,9 @@ export function ProductionStatusActions({
             disabled={pending}
             onClick={() => run(item.status)}
           >
-            {item.label}
+            {item.status === "en_produccion" && status === "pausada"
+              ? "Reanudar"
+              : item.label}
           </Button>
         ))}
         {available.length === 0 ? (

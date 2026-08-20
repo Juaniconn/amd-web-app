@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ProductionMaterialsPanel } from "@/features/inventory/production-materials-panel";
 import { ProductionAssignPanel } from "@/features/production/production-assign-panel";
 import { ProductionReworkPanel } from "@/features/production/production-rework-panel";
 import { ProductionStatusActions } from "@/features/production/production-status-actions";
@@ -12,9 +11,9 @@ import { requirePermission } from "@/lib/auth/session";
 import {
   PRODUCTION_MONITORING_LABELS,
   PRODUCTION_PRIORITY_LABELS,
-  PRODUCTION_ROUTE_STEP_KIND_LABELS,
   productionPriorityVariant,
 } from "@/lib/production/catalog";
+import { displayQty } from "@/lib/inventory/catalog";
 import {
   canAssignProduction,
   canEditProduction,
@@ -22,6 +21,7 @@ import {
   PRODUCTION_STATUS_LABELS,
 } from "@/lib/production/status";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
+import { partIdentity, workOrderNumber } from "@/lib/production/ot-number";
 import { listProductionActivity } from "@/server/services/activity";
 import { listEngineeringDocuments, listQuoteDocuments } from "@/server/services/documents";
 import {
@@ -29,21 +29,41 @@ import {
   listDowntimeReasons,
   listUsersForProduction,
 } from "@/server/services/production";
-import {
-  listActiveMaterialsForSelect,
-  listOrderMaterials,
-} from "@/server/services/inventory";
 import { listMachines, listWorkCenters } from "@/server/services/production-catalogs";
 import { listProductionOrderDocuments } from "@/server/services/documents";
 import { listMachineHours, listRework } from "@/server/services/production-time";
+import {
+  getQualityCloseState,
+  listInspectionsForOrder,
+} from "@/server/services/quality";
+import {
+  INSPECTION_RESULT_LABELS,
+  INSPECTION_TYPE_LABELS,
+  type InspectionResult,
+  type InspectionType,
+} from "@/lib/quality/catalog";
 
-function Field({ label, value }: { label: string; value?: string | null }) {
+function Field({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value?: string | null;
+  href?: string | null;
+}) {
   return (
     <div>
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 text-sm">{value || "—"}</p>
+      {href && value ? (
+        <Link href={href} className="mt-1 block text-sm hover:underline">
+          {value}
+        </Link>
+      ) : (
+        <p className="mt-1 text-sm">{value || "—"}</p>
+      )}
     </div>
   );
 }
@@ -65,9 +85,9 @@ export default async function ProductionDetailPage({
   const machines = await listMachines({ activeOnly: true });
   const machineEntries = await listMachineHours(order.id);
   const rework = await listRework(order.id);
-  const orderMaterials = await listOrderMaterials(order.id);
-  const catalogMaterials = await listActiveMaterialsForSelect();
   const attachedDocs = await listProductionOrderDocuments(order.id);
+  const qualityState = await getQualityCloseState(order.id);
+  const inspections = await listInspectionsForOrder(order.id);
   const packageDocs =
     attachedDocs.length > 0
       ? attachedDocs
@@ -76,10 +96,12 @@ export default async function ProductionDetailPage({
         : await listQuoteDocuments(order.quoteId);
   const drawingsTitle =
     attachedDocs.length > 0
-      ? "Plano de la OT"
+      ? "Plano del número de parte"
       : order.origin === "rfq_ingenieria"
         ? "Paquete liberado"
         : "Adjuntos de RFQ";
+  const partId = partIdentity(order.partNumber, order.number);
+  const parentOt = workOrderNumber(order.orderNumber);
 
   const status = order.status;
   const canUpdate = access.permissions.includes(PERMISSION_IDS.productionUpdate);
@@ -91,10 +113,10 @@ export default async function ProductionDetailPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Orden de trabajo
+            Número de parte
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{order.number}</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">{partId}</h2>
             <Badge variant="secondary">{PRODUCTION_STATUS_LABELS[status]}</Badge>
             <Badge variant="outline">{PRODUCTION_MONITORING_LABELS[order.monitoring]}</Badge>
             {order.isDemo ? <Badge variant="outline">DEMO</Badge> : null}
@@ -103,9 +125,9 @@ export default async function ProductionDetailPage({
             <Link href={`/customers/${order.customerId}`} className="hover:underline">
               {order.customerName}
             </Link>
-            {" · Pedido "}
+            {" · "}
             <Link href={`/orders/${order.orderId}`} className="hover:underline">
-              {order.orderNumber}
+              {parentOt}
             </Link>
             {" · "}
             <Link href={`/quotes/${order.quoteId}`} className="hover:underline">
@@ -125,7 +147,7 @@ export default async function ProductionDetailPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/production" className={buttonVariants({ variant: "outline" })}>
+          <Link href={`/orders/${order.orderId}`} className={buttonVariants({ variant: "outline" })}>
             Volver
           </Link>
           {editable ? (
@@ -147,13 +169,24 @@ export default async function ProductionDetailPage({
       />
 
       {assignable ? (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Quien programa elige centro, máquina disponible y operador. Al guardar,
+            el número de parte pasa a Programada si el material de la OT ya está
+            reservado. El operador lo inicia desde aquí o desde Mis números de parte.
+          </p>
         <ProductionAssignPanel
           productionOrderId={order.id}
           workCenterId={order.workCenterId}
           machineId={order.machineId}
           operatorUserId={order.operatorUserId}
           workCenters={workCenters}
-          machines={machines}
+          machines={machines.map((machine) => ({
+            id: machine.id,
+            name: machine.name,
+            workCenterId: machine.workCenterId,
+            status: machine.status,
+          }))}
           users={users}
           canAssignCenter={access.permissions.includes(PERMISSION_IDS.productionSchedule)}
           canAssignMachine={access.permissions.includes(
@@ -163,6 +196,7 @@ export default async function ProductionDetailPage({
             PERMISSION_IDS.productionAssignOperator,
           )}
         />
+        </div>
       ) : null}
 
       <Card>
@@ -170,7 +204,8 @@ export default async function ProductionDetailPage({
           <CardTitle>Información general</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Pedido" value={order.orderNumber} />
+          <Field label="ID" value={partId} />
+          <Field label="Orden de trabajo" value={parentOt} href={`/orders/${order.orderId}`} />
           <Field label="Cliente" value={order.customerName} />
           <Field label="RFQ" value={order.quoteNumber} />
           <Field label="Ingeniería" value={order.engineeringNumber} />
@@ -179,7 +214,7 @@ export default async function ProductionDetailPage({
             value={order.origin === "rfq_ingenieria" ? "RFQ + Ingeniería" : "RFQ directa"}
           />
           <Field label="Descripción" value={order.description} />
-          <Field label="Cantidad" value={`${order.quantity} ${order.unit}`} />
+          <Field label="Cantidad" value={`${displayQty(order.quantity)} ${order.unit}`} />
           <Field
             label="Fecha prometida"
             value={order.promisedDate.toLocaleDateString("es-MX")}
@@ -204,39 +239,74 @@ export default async function ProductionDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Material / reservas</CardTitle>
+          <CardTitle>Calidad</CardTitle>
         </CardHeader>
-        <CardContent>
-          <ProductionMaterialsPanel
-            productionOrderId={order.id}
-            lines={orderMaterials}
-            materials={catalogMaterials}
-            canReserve={access.permissions.includes(PERMISSION_IDS.inventoryReserve)}
-            canConsume={
-              access.permissions.includes(PERMISSION_IDS.inventoryConsume) &&
-              canLogProductionTime(status)
-            }
-          />
+        <CardContent className="space-y-3">
+          {qualityState.warning ? (
+            <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">{qualityState.warning}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Al enviar a Calidad se abre un borrador de inspección. Si se aprueba, el
+              número de parte pasa a Terminada. Si se rechaza, vuelve a producción para
+              retrabajo.
+            </p>
+          )}
+          {inspections.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin inspecciones capturadas.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {inspections.map((item) => (
+                <li key={item.id} className="rounded-lg border px-3 py-2">
+                  <Link href={`/quality/inspections/${item.id}`} className="font-medium hover:underline">
+                    {item.number}
+                  </Link>
+                  {" · "}
+                  {INSPECTION_TYPE_LABELS[item.type as InspectionType]}
+                  {" · "}
+                  {INSPECTION_RESULT_LABELS[item.result as InspectionResult]}
+                </li>
+              ))}
+            </ul>
+          )}
+          {access.permissions.includes(PERMISSION_IDS.qualityInspect) ? (
+            <Link
+              href={`/quality/inspections/new?ot=${order.id}`}
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Registrar inspección
+            </Link>
+          ) : null}
         </CardContent>
       </Card>
 
+      <p className="text-sm text-muted-foreground">
+        El material de este número de parte se gestiona en la{" "}
+        <Link
+          href={`/orders/${order.orderId}#materiales`}
+          className="font-medium hover:underline"
+        >
+          orden de trabajo {parentOt}
+        </Link>
+        .
+      </p>
+
       <Card>
         <CardHeader>
-          <CardTitle>Ruta / operaciones</CardTitle>
+          <CardTitle>Procesos</CardTitle>
         </CardHeader>
         <CardContent>
           {order.operations.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Sin ruta asignada. Las rutas A/B/C y futuras se configuran en el
-              catálogo.
+              Aún no hay procesos. Se copian de la cotización al convertir a OT.
             </p>
           ) : (
             <ol className="space-y-2 text-sm">
               {order.operations.map((step) => (
                 <li key={step.id} className="rounded-lg border px-3 py-2">
-                  {step.position}. {step.name} ·{" "}
-                  {PRODUCTION_ROUTE_STEP_KIND_LABELS[step.kind]} · {step.status}
+                  {step.position}. {step.name}
                   {step.workCenterName ? ` · ${step.workCenterName}` : ""}
+                  {" · "}
+                  {step.status}
                 </li>
               ))}
             </ol>
@@ -251,8 +321,8 @@ export default async function ProductionDetailPage({
         <CardContent>
           {packageDocs.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Esta OT no tiene plano asignado. Al crearla desde el pedido se
-              eligen los archivos de cotización o ingeniería.
+              Este número de parte no tiene plano asignado. Al crearlo desde la orden de
+              trabajo se eligen los archivos de cotización o ingeniería.
             </p>
           ) : (
             <ul className="space-y-2 text-sm">
@@ -276,27 +346,25 @@ export default async function ProductionDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Horas máquina</CardTitle>
+          <CardTitle>Tiempo de maquinado, scrap y retrabajo</CardTitle>
         </CardHeader>
-        <CardContent>
-          <ProductionTimePanel
-            productionOrderId={order.id}
-            machineEntries={machineEntries}
-            canWrite={canUpdate && canLogProductionTime(status)}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Scrap y retrabajo</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ProductionReworkPanel
-            productionOrderId={order.id}
-            rows={rework}
-            canWrite={canUpdate}
-          />
+        <CardContent className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Horas máquina</p>
+            <ProductionTimePanel
+              productionOrderId={order.id}
+              machineEntries={machineEntries}
+              canWrite={canUpdate && canLogProductionTime(status)}
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Scrap y retrabajo</p>
+            <ProductionReworkPanel
+              productionOrderId={order.id}
+              rows={rework}
+              canWrite={canUpdate}
+            />
+          </div>
         </CardContent>
       </Card>
 

@@ -37,8 +37,7 @@ import type {
 import { recordActivity } from "@/server/services/activity";
 import type { Actor } from "@/server/services/customers";
 import { nextDocumentNumber } from "@/server/services/numbering";
-
-const PAGE_SIZE = 20;
+import { resolvePageSize } from "@/lib/ui/pagination";
 
 async function loadProjectRow(id: string) {
   const [row] = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
@@ -54,8 +53,10 @@ export async function listProjects(query: {
   delayed?: boolean;
   customerId?: string;
   page?: number;
+  pageSize?: number;
 }) {
   const page = Math.max(1, query.page ?? 1);
+  const pageSize = resolvePageSize(query.pageSize);
   const filters = [];
   if (query.status) filters.push(eq(projects.status, query.status));
   if (query.customerId) filters.push(eq(projects.customerId, query.customerId));
@@ -101,15 +102,16 @@ export async function listProjects(query: {
     .leftJoin(users, eq(projects.ownerUserId, users.id))
     .where(where)
     .orderBy(desc(projects.createdAt))
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
 
   const total = totalRow?.value ?? 0;
   return {
     rows,
     total,
     page,
-    pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
   };
 }
 
@@ -412,11 +414,11 @@ export async function attachOrderToProject(
   }
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order) {
-    throw new AppError("El pedido no existe.", "ORDER_NOT_FOUND", 404);
+    throw new AppError("La orden de trabajo no existe.", "ORDER_NOT_FOUND", 404);
   }
   if (order.customerId !== project.customerId) {
     throw new AppError(
-      "El pedido debe ser del mismo cliente del proyecto.",
+      "La orden de trabajo debe ser del mismo cliente del proyecto.",
       "PROJECT_CUSTOMER_MISMATCH",
       409,
     );

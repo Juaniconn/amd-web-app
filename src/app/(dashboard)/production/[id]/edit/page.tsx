@@ -4,6 +4,8 @@ import { ProductionForm } from "@/features/production/production-form";
 import { buttonVariants } from "@/components/ui/button";
 import { requirePermission } from "@/lib/auth/session";
 import { canEditProduction } from "@/lib/production/status";
+import { partIdentity, workOrderNumber } from "@/lib/production/ot-number";
+import { inputQty } from "@/lib/inventory/catalog";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import { getProductionOrderById, listOrderItems } from "@/server/services/production";
 import {
@@ -33,8 +35,15 @@ export default async function EditProductionPage({
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Editar OT</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{order.number}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Número de parte
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight">
+            Editar {partIdentity(order.partNumber, order.number)}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Orden de trabajo {workOrderNumber(order.orderNumber)} · {order.customerName}
+          </p>
         </div>
         <Link
           href={`/production/${order.id}`}
@@ -71,7 +80,7 @@ export default async function EditProductionPage({
           routeId: order.routeId ?? "",
           description: order.description,
           partNumber: order.partNumber ?? "",
-          quantity: order.quantity,
+          quantity: inputQty(order.quantity),
           unit: order.unit,
           promisedDate: order.promisedDate.toISOString().slice(0, 10),
           priority: order.priority,

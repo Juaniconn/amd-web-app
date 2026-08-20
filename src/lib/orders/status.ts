@@ -51,7 +51,7 @@ export function canTransitionOrder(from: OrderStatus, to: OrderStatus): boolean 
 export function assertOrderTransition(from: OrderStatus, to: OrderStatus) {
   if (!canTransitionOrder(from, to)) {
     throw new Error(
-      `No se puede cambiar un pedido de ${ORDER_STATUS_LABELS[from]} a ${ORDER_STATUS_LABELS[to]}.`,
+      `No se puede cambiar una orden de trabajo de ${ORDER_STATUS_LABELS[from]} a ${ORDER_STATUS_LABELS[to]}.`,
     );
   }
 }

@@ -3,6 +3,7 @@ import {
   type AnyPgColumn,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -12,8 +13,11 @@ import {
   boolean,
 } from "drizzle-orm/pg-core";
 import { users } from "./auth";
+import { branches } from "./branches";
 import { contacts, customers } from "./crm";
 import { projects } from "./projects";
+import type { QuoteItemCosting } from "@/lib/quotes/costing";
+import type { QuoteAgentPreview } from "@/lib/quotes/market-preview";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -78,6 +82,20 @@ export const orderOriginEnum = pgEnum("order_origin", [
   "rfq_ingenieria",
 ]);
 
+export const quoteAddresseeModeEnum = pgEnum("quote_addressee_mode", [
+  "nombre",
+  "departamento",
+]);
+
+export const paymentTermEnum = pgEnum("payment_term", [
+  "net_15",
+  "net_30",
+  "net_45",
+  "net_60",
+  "net_90",
+  "net_120",
+]);
+
 export const quotes = pgTable(
   "quotes",
   {
@@ -96,8 +114,30 @@ export const quotes = pgTable(
     validUntil: timestamp("valid_until", { withTimezone: true }),
     currency: quoteCurrencyEnum("currency").notNull().default("mxn"),
     paymentTerms: text("payment_terms"),
+    paymentTerm: paymentTermEnum("payment_term").default("net_30"),
     leadTime: text("lead_time"),
     notes: text("notes"),
+    addresseeMode: quoteAddresseeModeEnum("addressee_mode")
+      .notNull()
+      .default("nombre"),
+    branchId: text("branch_id").references(() => branches.id, {
+      onDelete: "restrict",
+    }),
+    branchName: text("branch_name"),
+    branchCode: text("branch_code"),
+    branchAddress: text("branch_address"),
+    branchCity: text("branch_city"),
+    branchState: text("branch_state"),
+    branchCountry: text("branch_country"),
+    branchPostalCode: text("branch_postal_code"),
+    branchPhone: text("branch_phone"),
+    branchEmail: text("branch_email"),
+    branchRfc: text("branch_rfc"),
+    shippingAddress: text("shipping_address"),
+    shippingCity: text("shipping_city"),
+    shippingState: text("shipping_state"),
+    shippingPostalCode: text("shipping_postal_code"),
+    shippingCountry: text("shipping_country"),
     rfqType: quoteRfqTypeEnum("rfq_type").notNull().default("solo_fabricacion"),
     requiresEngineering: boolean("requires_engineering").notNull().default(false),
     engineeringType: quoteEngineeringTypeEnum("engineering_type"),
@@ -127,6 +167,7 @@ export const quotes = pgTable(
       { onDelete: "set null" },
     ),
     isDemo: boolean("is_demo").default(false).notNull(),
+    agentPreview: jsonb("agent_preview").$type<QuoteAgentPreview | null>(),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -144,6 +185,7 @@ export const quotes = pgTable(
     index("quotes_engineering_status_idx").on(table.engineeringStatus),
     index("quotes_deleted_at_idx").on(table.deletedAt),
     index("quotes_valid_until_idx").on(table.validUntil),
+    index("quotes_branch_id_idx").on(table.branchId),
     uniqueIndex("quotes_converted_order_uidx")
       .on(table.convertedOrderId)
       .where(sql`${table.convertedOrderId} is not null`),
@@ -198,6 +240,7 @@ export const quoteItems = pgTable(
       precision: 7,
       scale: 2,
     }),
+    costing: jsonb("costing").$type<QuoteItemCosting | null>(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -238,6 +281,9 @@ export const orders = pgTable(
     currency: quoteCurrencyEnum("currency").notNull().default("mxn"),
     total: numeric("total", { precision: 14, scale: 2 }).notNull().default("0"),
     status: orderStatusEnum("status").notNull().default("pendiente"),
+    branchId: text("branch_id").references(() => branches.id, {
+      onDelete: "set null",
+    }),
     isDemo: boolean("is_demo").default(false).notNull(),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
@@ -256,6 +302,7 @@ export const orders = pgTable(
     index("orders_project_id_idx").on(table.projectId),
     index("orders_status_idx").on(table.status),
     index("orders_promised_date_idx").on(table.promisedDate),
+    index("orders_branch_id_idx").on(table.branchId),
   ],
 );
 
@@ -311,6 +358,10 @@ export const quotesRelations = relations(quotes, ({ one, many }) => ({
   project: one(projects, {
     fields: [quotes.projectId],
     references: [projects.id],
+  }),
+  branch: one(branches, {
+    fields: [quotes.branchId],
+    references: [branches.id],
   }),
   convertedOrder: one(orders, {
     fields: [quotes.convertedOrderId],

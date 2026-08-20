@@ -132,8 +132,14 @@ export function availableQty(onHand: string | number, reserved: string | number)
   return subQty(onHand, reserved);
 }
 
-export function displayQty(value: string | number): string {
+export function displayQty(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "";
   const n = parseQty(value);
   if (Number.isInteger(n)) return String(n);
   return n.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+export function inputQty(value: string | number | null | undefined): string {
+  const shown = displayQty(value);
+  return shown || "0";
 }
