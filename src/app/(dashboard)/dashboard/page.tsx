@@ -25,7 +25,8 @@ export default async function DashboardPage() {
   });
 
   if (!session) {
-    redirect("/login");
+    // `reauth=1` evita el bucle con cookies caducas (ver src/proxy.ts).
+    redirect("/login?reauth=1");
   }
 
   const snapshot = await getDashboardSnapshot(session.user.id);

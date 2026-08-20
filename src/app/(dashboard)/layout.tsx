@@ -15,7 +15,8 @@ export default async function DashboardLayout({
   });
 
   if (!session) {
-    redirect("/login");
+    // `reauth=1` evita el bucle con cookies caducas (ver src/proxy.ts).
+    redirect("/login?reauth=1");
   }
 
   const access = await getUserAccess(session.user.id);

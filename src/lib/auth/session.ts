@@ -13,7 +13,11 @@ export async function getSession() {
 export async function requireSession() {
   const session = await getSession();
   if (!session) {
-    redirect("/login");
+    // `reauth=1` avisa al middleware de que la sesión fue rechazada aquí.
+    // Sin ese marcador, una cookie caduca provoca un bucle: el middleware ve
+    // la cookie y manda a /dashboard, esta función la valida, falla y vuelve
+    // a /login — ERR_TOO_MANY_REDIRECTS sin llegar nunca al formulario.
+    redirect("/login?reauth=1");
   }
   return session;
 }
