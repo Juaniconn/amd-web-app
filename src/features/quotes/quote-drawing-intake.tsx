@@ -238,6 +238,16 @@ export function QuoteDrawingIntake({
               <li key={item.id} className="grid gap-2 sm:grid-cols-6 sm:items-end">
                 <div className="sm:col-span-2">
                   <p className="text-sm font-medium">{item.description}</p>
+                  {item.costing.part_number ? (
+                    <p className="text-sm font-semibold tracking-tight">
+                      Número de parte: {item.costing.part_number}
+                      {item.costing.revision ? ` · Rev. ${item.costing.revision}` : ""}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Sin número de parte en el plano
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {item.costing.material} · {item.sourceFile}
                   </p>
