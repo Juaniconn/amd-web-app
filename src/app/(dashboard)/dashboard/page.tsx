@@ -140,19 +140,19 @@ export default async function DashboardPage() {
             <KpiCard
               label="Diseños liberados"
               value={String(engineeringStats.released)}
-              hint="Listos para cotización final / OT"
+              hint="Listos para cotización final u orden de trabajo"
             />
           </>
         ) : null}
         {productionStats ? (
           <>
             <KpiCard
-              label="OT activas"
+              label="Números de parte en producción"
               value={String(productionStats.active)}
-              hint="OT no cerradas ni canceladas"
+              hint="Piezas en piso no cerradas ni canceladas"
             />
             <KpiCard
-              label="OT retrasadas"
+              label="Números de parte retrasados"
               value={String(productionStats.delayed)}
               hint="Fecha prometida vencida"
             />
@@ -173,12 +173,12 @@ export default async function DashboardPage() {
             <KpiCard
               label="Órdenes de trabajo activas"
               value={String(orderStats.active)}
-              hint="No completados ni cancelados"
+              hint="OT no completadas ni canceladas"
             />
             <KpiCard
               label="Órdenes de trabajo retrasadas"
               value={String(orderStats.delayed)}
-              hint="Fecha prometida vencida"
+              hint="OT con fecha prometida vencida"
             />
           </>
         ) : null}
