@@ -46,7 +46,7 @@ import { canCreateProductionOrder, type OrderOrigin } from "@/lib/production/gat
 import { isManufacturingItem } from "@/lib/quotes/items";
 import type { QuoteItemCosting } from "@/lib/quotes/costing";
 import { formatQty } from "@/lib/inventory/catalog";
-import { nextOtNumberForPartida, otNumberForPartida } from "@/lib/production/ot-number";
+import { nextPartNumberFolio, partNumberFolio } from "@/lib/production/ot-number";
 import type { RfqType } from "@/lib/quotes/rfq";
 import {
   assertProductionTransition,
@@ -80,12 +80,12 @@ async function uniqueOtNumberForPartida(
   orderNumber: string,
   position: number,
 ) {
-  const base = otNumberForPartida(orderNumber, position);
+  const base = partNumberFolio(orderNumber, position);
   const rows = await tx
     .select({ number: productionOrders.number })
     .from(productionOrders)
     .where(ilike(productionOrders.number, `${base}%`));
-  return nextOtNumberForPartida(
+  return nextPartNumberFolio(
     orderNumber,
     position,
     rows.map((row) => row.number),
@@ -453,7 +453,7 @@ export async function insertConvertedOrderWorkOrders(
   for (const item of input.items) {
     if (!isManufacturingItem(item.kind)) continue;
     const id = crypto.randomUUID();
-    const number = otNumberForPartida(input.orderNumber, item.position);
+    const number = partNumberFolio(input.orderNumber, item.position);
     await tx.insert(productionOrders).values({
       id,
       number,

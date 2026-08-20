@@ -148,6 +148,13 @@
       "when": 1787010000000,
       "tag": "0020_quote_agent_preview",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787096400000,
+      "tag": "0021_part_number_folio",
+      "breakpoints": true
     }
   ]
 }

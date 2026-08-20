@@ -1,38 +1,50 @@
 import { describe, expect, it } from "vitest";
-import { nextOtNumberForPartida, otNumberForPartida, partIdentity, workOrderNumber } from "./ot-number";
+import {
+  nextPartNumberFolio,
+  partIdentity,
+  partNumberFolio,
+  workOrderNumber,
+} from "./ot-number";
 
 describe("workOrderNumber", () => {
-  it("prefixes the commercial order number", () => {
+  it("prefija el número de la OT comercial", () => {
+    // La OT sí lleva prefijo OT-: es la orden de trabajo (tabla orders).
     expect(workOrderNumber("PED-2026-00001")).toBe("OT-PED-2026-00001");
   });
 });
 
 describe("partIdentity", () => {
-  it("prefers the drawing part number", () => {
-    expect(partIdentity("AMD-100", "OT-PED-2026-00001-01")).toBe("AMD-100");
+  it("prefiere el número de parte del plano", () => {
+    expect(partIdentity("AMD-100", "NP-PED-2026-00001-01")).toBe("AMD-100");
   });
 
-  it("falls back when the drawing number is missing", () => {
-    expect(partIdentity(null, "OT-PED-2026-00001-01")).toBe("OT-PED-2026-00001-01");
-    expect(partIdentity("  ", "OT-PED-2026-00001-01")).toBe("OT-PED-2026-00001-01");
+  it("usa el folio cuando no hay número de plano", () => {
+    expect(partIdentity(null, "NP-PED-2026-00001-01")).toBe("NP-PED-2026-00001-01");
+    expect(partIdentity("  ", "NP-PED-2026-00001-01")).toBe("NP-PED-2026-00001-01");
   });
 });
 
-describe("otNumberForPartida", () => {
-  it("uses the order number and padded partida", () => {
-    expect(otNumberForPartida("AMD-2026-00001", 1)).toBe("OT-AMD-2026-00001-01");
-    expect(otNumberForPartida("AMD-2026-00001", 12)).toBe("OT-AMD-2026-00001-12");
+describe("partNumberFolio", () => {
+  it("usa prefijo NP- con el número de OT y la partida", () => {
+    // ADR-062: el número de parte en producción NO usa OT-, para no nombrar
+    // dos entidades distintas con el mismo término.
+    expect(partNumberFolio("AMD-2026-00001", 1)).toBe("NP-AMD-2026-00001-01");
+    expect(partNumberFolio("AMD-2026-00001", 12)).toBe("NP-AMD-2026-00001-12");
   });
 
-  it("adds a revision suffix when the base OT already exists", () => {
-    expect(nextOtNumberForPartida("AMD-2026-00001", 1, ["OT-AMD-2026-00001-01"])).toBe(
-      "OT-AMD-2026-00001-01-R2",
+  it("conserva el número de la OT dentro del folio", () => {
+    expect(partNumberFolio("AMD-2026-00001", 3)).toContain("AMD-2026-00001");
+  });
+
+  it("agrega sufijo de revisión cuando el folio base ya existe", () => {
+    expect(nextPartNumberFolio("AMD-2026-00001", 1, ["NP-AMD-2026-00001-01"])).toBe(
+      "NP-AMD-2026-00001-01-R2",
     );
     expect(
-      nextOtNumberForPartida("AMD-2026-00001", 1, [
-        "OT-AMD-2026-00001-01",
-        "OT-AMD-2026-00001-01-R2",
+      nextPartNumberFolio("AMD-2026-00001", 1, [
+        "NP-AMD-2026-00001-01",
+        "NP-AMD-2026-00001-01-R2",
       ]),
-    ).toBe("OT-AMD-2026-00001-01-R3");
+    ).toBe("NP-AMD-2026-00001-01-R3");
   });
 });
