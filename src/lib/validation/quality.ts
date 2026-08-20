@@ -19,7 +19,7 @@ export const ncrStatusSchema = z.enum(NCR_STATUSES);
 
 export const createInspectionSchema = z
   .object({
-    productionOrderId: z.string().trim().min(1, "La OT es obligatoria"),
+    productionOrderId: z.string().trim().min(1, "El número de parte es obligatorio"),
     type: inspectionTypeSchema,
     inspectedAt: optionalText(40),
     partNumber: optionalText(80),
@@ -49,7 +49,7 @@ export const createInspectionSchema = z
   });
 
 export const createNcrSchema = z.object({
-  productionOrderId: z.string().trim().min(1, "La OT es obligatoria"),
+  productionOrderId: z.string().trim().min(1, "El número de parte es obligatorio"),
   inspectionId: optionalText(80),
   cause: optionalText(1000),
   disposition: optionalText(1000),

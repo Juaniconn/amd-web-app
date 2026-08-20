@@ -21,7 +21,7 @@ export const routeStepKindSchema = z.enum(PRODUCTION_ROUTE_STEP_KINDS);
 
 export const createProductionOrderSchema = z.object({
   orderId: z.string().trim().min(1, "La orden de trabajo es obligatoria"),
-  orderItemId: z.string().trim().min(1, "La partida es obligatoria. Cada pieza tiene su OT."),
+  orderItemId: z.string().trim().min(1, "La partida es obligatoria. Cada pieza tiene su número de parte en producción."),
   routeId: optionalText(80),
   description: z
     .string()
@@ -64,17 +64,17 @@ export const updateProductionOrderSchema = z.object({
 });
 
 export const productionIdSchema = z.object({
-  id: z.string().trim().min(1, "La OT es obligatoria"),
+  id: z.string().trim().min(1, "El número de parte es obligatorio"),
 });
 
 export const changeProductionStatusSchema = z.object({
-  id: z.string().trim().min(1, "La OT es obligatoria"),
+  id: z.string().trim().min(1, "El número de parte es obligatorio"),
   status: productionStatusSchema,
   pauseReasonId: optionalText(80),
 });
 
 export const assignProductionSchema = z.object({
-  id: z.string().trim().min(1, "La OT es obligatoria"),
+  id: z.string().trim().min(1, "El número de parte es obligatorio"),
   workCenterId: optionalText(80),
   machineId: optionalText(80),
   operatorUserId: optionalText(80),
@@ -159,7 +159,7 @@ export const productionRouteSchema = z.object({
 });
 
 export const startTimeEntrySchema = z.object({
-  productionOrderId: z.string().trim().min(1, "La OT es obligatoria"),
+  productionOrderId: z.string().trim().min(1, "El número de parte es obligatorio"),
   operationId: optionalText(80),
   machineId: optionalText(80),
   operatorUserId: optionalText(80),
@@ -173,7 +173,7 @@ export const stopTimeEntrySchema = z.object({
 });
 
 export const logDowntimeSchema = z.object({
-  productionOrderId: z.string().trim().min(1, "La OT es obligatoria"),
+  productionOrderId: z.string().trim().min(1, "El número de parte es obligatorio"),
   reasonId: z.string().trim().min(1, "El motivo es obligatorio"),
   machineId: optionalText(80),
   notes: optionalText(500),
@@ -183,7 +183,7 @@ export const logDowntimeSchema = z.object({
 
 export const createReworkSchema = z
   .object({
-    productionOrderId: z.string().trim().min(1, "La OT es obligatoria"),
+    productionOrderId: z.string().trim().min(1, "El número de parte es obligatorio"),
     partNumber: optionalText(80),
     quantity: z.coerce.number().min(0, "El retrabajo no puede ser negativo").default(0),
     scrapQuantity: z.coerce.number().min(0).default(0),

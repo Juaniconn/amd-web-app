@@ -12,7 +12,7 @@ export function qualityPhysicalCloseState(finals: FinalInspectionForGate[]) {
       hasFinal: false,
       latestResult: null as string | null,
       warning:
-        "No hay inspección final registrada. El cierre físico no se bloquea, pero Calidad debe inspeccionar la OT.",
+        "No hay inspección final registrada. El cierre físico no se bloquea, pero Calidad debe inspeccionar el número de parte.",
     };
   }
 

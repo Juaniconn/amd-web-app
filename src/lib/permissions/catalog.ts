@@ -205,7 +205,8 @@ export const ROLES: Record<
   },
   produccion: {
     name: "Producción",
-    description: "Órdenes de trabajo (OT), máquinas, programación y cierre administrativo.",
+    description:
+      "Números de parte en producción, máquinas, programación y cierre administrativo.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
       PERMISSION_IDS.branchesRead,
@@ -222,7 +223,8 @@ export const ROLES: Record<
   },
   calidad: {
     name: "Calidad",
-    description: "Cierre físico de OT, retrabajos y consulta de planos vigentes.",
+    description:
+      "Cierre físico de números de parte, retrabajos y consulta de planos vigentes.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
       PERMISSION_IDS.branchesRead,
@@ -240,7 +242,8 @@ export const ROLES: Record<
   },
   almacen: {
     name: "Almacén",
-    description: "Inventario, entradas, salidas, ajustes y existencias. Consulta OT para reservar y entregar a piso.",
+    description:
+      "Inventario, entradas, salidas, ajustes y existencias. Consulta órdenes de trabajo para reservar y entregar a piso.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
       PERMISSION_IDS.branchesRead,
@@ -339,39 +342,41 @@ export const PERMISSIONS: Record<
   },
   "production:view": {
     name: "Ver producción",
-    description: "Consultar órdenes de trabajo, máquinas, tiempos y KPIs de piso.",
+    description: "Consultar números de parte en producción, máquinas, tiempos y KPIs de piso.",
   },
   "production:create": {
     name: "Crear número de parte",
     description: "Crear números de parte anclados a una orden de trabajo.",
   },
   "production:update": {
-    name: "Editar OT",
-    description: "Editar cabecera de OT, centros, rutas y catálogos de piso.",
+    name: "Editar número de parte",
+    description:
+      "Editar cabecera del número de parte, centros, rutas y catálogos de piso.",
   },
   "production:cancel": {
-    name: "Cancelar OT",
+    name: "Cancelar número de parte",
     description: "Cancelar un número de parte. No borra la orden de trabajo ni la RFQ.",
   },
   "production:close": {
-    name: "Cerrar OT",
+    name: "Cerrar número de parte",
     description: "Cierre administrativo de la orden tras el sello físico de Calidad.",
   },
   "production:schedule": {
-    name: "Programar OT",
+    name: "Programar número de parte",
     description: "Programar centro, máquina y ventana de piso.",
   },
   "production:assign_machine": {
     name: "Asignar máquina",
-    description: "Asignar una máquina de un centro de trabajo a la OT.",
+    description: "Asignar una máquina de un centro de trabajo al número de parte.",
   },
   "production:assign_operator": {
     name: "Asignar operador",
-    description: "Asignar un operador registrado a la OT.",
+    description: "Asignar un operador registrado al número de parte.",
   },
   "quality:release": {
     name: "Liberar calidad",
-    description: "Cierre físico del producto. Pasa la OT de Calidad a Terminada.",
+    description:
+      "Cierre físico del producto. Pasa el número de parte de Calidad a Terminada.",
   },
   "quality:read": {
     name: "Ver calidad",
@@ -443,7 +448,8 @@ export const PERMISSIONS: Record<
   },
   "inventory:consume": {
     name: "Consumir material",
-    description: "Registrar consumo de producción contra una reserva de OT.",
+    description:
+      "Registrar consumo de producción contra una reserva de orden de trabajo.",
   },
   "orders:view": {
     name: "Ver órdenes de trabajo",

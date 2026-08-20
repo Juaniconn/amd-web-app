@@ -27,7 +27,7 @@ export function canCreateProductionOrder(
         ok: false,
         code: "ENGINEERING_NOT_RELEASED",
         message:
-          "La OT con origen RFQ + Ingeniería requiere el paquete de ingeniería Liberado.",
+          "El número de parte con origen RFQ + Ingeniería requiere el paquete de ingeniería Liberado.",
       };
     }
   }
