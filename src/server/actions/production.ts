@@ -17,6 +17,7 @@ import {
   releaseReworkSchema,
   startTimeEntrySchema,
   stopTimeEntrySchema,
+  updateOperationSchema,
   updateProductionOrderSchema,
   workCenterSchema,
 } from "@/lib/validation/production";
@@ -27,8 +28,10 @@ import {
 } from "@/server/services/production-catalogs";
 import {
   assignProduction,
+  assignOperationOperator,
   changeProductionStatus,
   createProductionOrder,
+  updateOperation,
   updateProductionOrder,
 } from "@/server/services/production";
 import {
@@ -300,6 +303,43 @@ export async function releaseReworkAction(formData: FormData) {
       return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
     }
     await releaseRework(parsed.data.id, actorFrom(session));
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function updateOperationAction(formData: FormData) {
+  try {
+    const { session } = await requirePermission(PERMISSION_IDS.productionUpdate);
+    const parsed = updateOperationSchema.safeParse({
+      id: formData.get("id"),
+      status: formData.get("status") || undefined,
+      operatorUserId: formData.get("operatorUserId") || undefined,
+      machineId: formData.get("machineId") || undefined,
+      notes: formData.get("notes") || undefined,
+      startedAt: formData.get("startedAt") || undefined,
+      finishedAt: formData.get("finishedAt") || undefined,
+    });
+    if (!parsed.success) {
+      return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+    }
+    await updateOperation(parsed.data, actorFrom(session));
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function assignOperationOperatorAction(formData: FormData) {
+  try {
+    const { session } = await requirePermission(PERMISSION_IDS.productionAssignOperator);
+    const operationId = formData.get("operationId")?.toString() ?? "";
+    const operatorUserId = formData.get("operatorUserId")?.toString() || null;
+    if (!operationId) {
+      return { ok: false as const, error: "ID de operación requerido." };
+    }
+    await assignOperationOperator(operationId, operatorUserId, actorFrom(session));
     return { ok: true as const };
   } catch (error) {
     return fail(error);

@@ -60,6 +60,7 @@ import {
 import type {
   AssignProductionInput,
   CreateProductionOrderInput,
+  UpdateOperationInput,
   UpdateProductionOrderInput,
 } from "@/lib/validation/production";
 import { recordActivity } from "@/server/services/activity";
@@ -1193,4 +1194,50 @@ export async function listDowntimeReasons(activeOnly = true) {
     .from(downtimeReasons)
     .where(activeOnly ? eq(downtimeReasons.active, true) : undefined)
     .orderBy(asc(downtimeReasons.sortOrder));
+}
+
+export async function updateOperation(
+  input: UpdateOperationInput,
+  actor: Actor,
+): Promise<void> {
+  const [existing] = await db
+    .select({ id: productionOperations.id })
+    .from(productionOperations)
+    .where(eq(productionOperations.id, input.id))
+    .limit(1);
+
+  if (!existing) {
+    throw new AppError("Operación no encontrada.", "OP_NOT_FOUND", 404);
+  }
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (input.status) updates.status = input.status;
+  if (input.operatorUserId !== undefined) updates.operatorUserId = input.operatorUserId || null;
+  if (input.machineId !== undefined) updates.machineId = input.machineId || null;
+
+  await db.update(productionOperations).set(updates).where(eq(productionOperations.id, input.id));
+}
+
+export async function assignOperationOperator(
+  operationId: string,
+  operatorUserId: string | null,
+  actor: Actor,
+): Promise<void> {
+  const [existing] = await db
+    .select({ id: productionOperations.id })
+    .from(productionOperations)
+    .where(eq(productionOperations.id, operationId))
+    .limit(1);
+
+  if (!existing) {
+    throw new AppError("Operación no encontrada.", "OP_NOT_FOUND", 404);
+  }
+
+  await db
+    .update(productionOperations)
+    .set({
+      operatorUserId,
+      updatedAt: new Date(),
+    })
+    .where(eq(productionOperations.id, operationId));
 }

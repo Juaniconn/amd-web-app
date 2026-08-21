@@ -200,6 +200,18 @@ export const releaseReworkSchema = z.object({
   id: z.string().trim().min(1, "El retrabajo es obligatorio"),
 });
 
+export const updateOperationSchema = z.object({
+  id: z.string().trim().min(1, "La operación es obligatoria"),
+  status: z.enum(["pendiente", "en_proceso", "terminada", "omitida"]).optional(),
+  operatorUserId: z.string().trim().min(1).optional().nullable(),
+  machineId: z.string().trim().min(1).optional().nullable(),
+  notes: z.string().trim().max(500).optional().nullable(),
+  startedAt: z.coerce.date().optional().nullable(),
+  finishedAt: z.coerce.date().optional().nullable(),
+});
+
+export type UpdateOperationInput = z.infer<typeof updateOperationSchema>;
+
 export type CreateProductionOrderInput = z.infer<
   typeof createProductionOrderSchema
 >;
