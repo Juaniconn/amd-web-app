@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -447,7 +447,10 @@ export function QuoteItemsPanel({
       )}
 
       {items.some((item) => (item.costing?.processes?.length ?? 0) > 0) ? (
-        <div className="space-y-3 rounded-lg border p-4">
+        // Un desplegable por partida, cerrado al abrir la pantalla: los
+        // procesos son detalle de consulta y ocupaban toda la vista.
+        // Se usa <details> nativo para no añadir dependencias ni estado.
+        <div className="space-y-2 rounded-lg border p-4">
           <div>
             <p className="text-sm font-medium">Procesos</p>
             <p className="text-xs text-muted-foreground">
@@ -455,18 +458,31 @@ export function QuoteItemsPanel({
               parte.
             </p>
           </div>
-          <ol className="space-y-3">
+          <div className="space-y-2">
             {items
-              .filter((item) => item.kind !== "servicio_ingenieria")
+              .filter(
+                (item) =>
+                  item.kind !== "servicio_ingenieria" &&
+                  (item.costing?.processes?.length ?? 0) > 0,
+              )
               .map((item) => (
-                <li key={item.id}>
-                  <p className="text-sm font-medium">
-                    {item.partNumber || item.description}
-                    {item.costing?.pieces_per_stock
-                      ? ` · ${item.costing.pieces_per_stock} pza / hoja`
-                      : ""}
-                  </p>
-                  <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                <details
+                  key={item.id}
+                  className="group rounded-lg border bg-background [&_summary::-webkit-details-marker]:hidden"
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-medium hover:bg-muted/50">
+                    <span>
+                      {item.partNumber || item.description}
+                      {item.costing?.pieces_per_stock
+                        ? ` · ${item.costing.pieces_per_stock} pza / hoja`
+                        : ""}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2 text-xs font-normal text-muted-foreground">
+                      {item.costing?.processes?.length} proceso(s)
+                      <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+                    </span>
+                  </summary>
+                  <ul className="list-disc space-y-1 border-t px-3 py-2 pl-8 text-sm text-muted-foreground">
                     {(item.costing?.processes ?? []).map((step) => (
                       <li key={`${item.id}-${step.position}`}>
                         {step.position}. {step.name}
@@ -474,9 +490,9 @@ export function QuoteItemsPanel({
                       </li>
                     ))}
                   </ul>
-                </li>
+                </details>
               ))}
-          </ol>
+          </div>
         </div>
       ) : null}
 

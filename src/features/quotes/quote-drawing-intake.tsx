@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -312,18 +313,36 @@ export function QuoteDrawingIntake({
             </Table>
           </div>
           {shown.items.some((item) => (item.costing.processes?.length ?? 0) > 0) ? (
-            <ul className="space-y-1">
+            // Desplegable cerrado por defecto: mismo criterio que en la tabla
+            // de partidas, los procesos son detalle de consulta.
+            <div className="space-y-2">
               {shown.items
                 .filter((item) => (item.costing.processes?.length ?? 0) > 0)
                 .map((item) => (
-                  <li key={`proc-${item.id}`} className="text-xs text-muted-foreground">
-                    <span className="font-medium">
-                      {item.costing.part_number ?? item.sourceFile}
-                    </span>{" "}
-                    · {item.costing.processes?.map((step) => step.name).join(" → ")}
-                  </li>
+                  <details
+                    key={`proc-${item.id}`}
+                    className="group rounded-lg border [&_summary::-webkit-details-marker]:hidden"
+                  >
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-medium hover:bg-muted/50">
+                      <span>
+                        Procesos · {item.costing.part_number ?? item.sourceFile}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2 text-xs font-normal text-muted-foreground">
+                        {item.costing.processes?.length} proceso(s)
+                        <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+                      </span>
+                    </summary>
+                    <ul className="list-disc space-y-1 border-t px-3 py-2 pl-8 text-sm text-muted-foreground">
+                      {(item.costing.processes ?? []).map((step) => (
+                        <li key={`${item.id}-${step.position}`}>
+                          {step.position}. {step.name}
+                          {step.notes ? ` — ${step.notes}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 ))}
-            </ul>
+            </div>
           ) : null}
           <p className="text-sm font-medium">
             Total preliminar {displayMoney(total, currency)}
