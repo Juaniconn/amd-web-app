@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
 import {
   customers,
@@ -79,14 +79,15 @@ export async function getKanbanBoard(): Promise<KanbanColumn[]> {
     .leftJoin(users, eq(productionOrders.operatorUserId, users.id))
     .orderBy(asc(productionOrders.promisedDate), asc(productionOrders.priority));
 
+  const now = new Date();
   const tasksWithOps = await Promise.all(
     allTasks.map(async (row) => {
       const [totalResult] = await db
-        .select({ value: sql<number>`count(*)::int` })
+        .select({ value: count() })
         .from(productionOperations)
         .where(eq(productionOperations.productionOrderId, row.id));
       const [doneResult] = await db
-        .select({ value: sql<number>`count(*)::int` })
+        .select({ value: count() })
         .from(productionOperations)
         .where(
           and(
@@ -106,7 +107,6 @@ export async function getKanbanBoard(): Promise<KanbanColumn[]> {
     }),
   );
 
-  const now = new Date();
   const columns: KanbanColumn[] = [
     {
       id: "pendiente",

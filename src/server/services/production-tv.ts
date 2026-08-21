@@ -1,29 +1,18 @@
 import "server-only";
 
-import { sql, and, eq, ne, gte, lte, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { db } from "@/db";
 import {
   customers,
+  laborHours,
+  machineHours,
   machines,
   orders,
   productionOrders,
   users,
   workCenters,
-  machineHours,
-  laborHours,
-  productionOperations,
 } from "@/db/schema";
-import {
-  ACTIVE_PRODUCTION_STATUSES,
-  PRODUCTION_STATUS_LABELS,
-} from "@/lib/production/status";
-
-export type TvMetric = {
-  label: string;
-  value: number;
-  status: "green" | "yellow" | "red";
-  hint?: string;
-};
+import { ACTIVE_PRODUCTION_STATUSES } from "@/lib/production/status";
 
 export type TvMachineStatus = {
   id: string;
@@ -57,16 +46,15 @@ export type TvDashboard = {
     partsInProgress: number;
     partsInQuality: number;
   };
-}
+};
 
 export async function getTvDashboard(): Promise<TvDashboard> {
   const now = new Date();
   const startOfDay = new Date(now);
   startOfDay.setHours(0, 0, 0, 0);
 
-  // Active parts count
-  const [activeResult] = await db
-    .select({ value: sql<number>`count(*)::int` })
+  const activeRows = await db
+    .select()
     .from(productionOrders)
     .where(
       and(
@@ -74,11 +62,10 @@ export async function getTvDashboard(): Promise<TvDashboard> {
         ne(productionOrders.status, "cancelada"),
       ),
     );
-  const activeParts = activeResult?.value ?? 0;
+  const activeParts = activeRows.length;
 
-  // Delayed parts
-  const [delayedResult] = await db
-    .select({ value: sql<number>`count(*)::int` })
+  const delayedRows = await db
+    .select()
     .from(productionOrders)
     .where(
       and(
@@ -86,37 +73,38 @@ export async function getTvDashboard(): Promise<TvDashboard> {
         inArray(productionOrders.status, ["pendiente", "liberada", "programada", "en_produccion", "pausada", "esperando_material"]),
       ),
     );
-  const delayedParts = delayedResult?.value ?? 0;
+  const delayedParts = delayedRows.length;
 
-  // Machine hours today
-  const [machineHoursResult] = await db
-    .select({ value: sql<number>`coalesce(sum(duration_minutes), 0)::int` })
+  const machineHoursRows = await db
+    .select()
     .from(machineHours)
     .where(gte(machineHours.startedAt, startOfDay));
-  const machineHoursToday = machineHoursResult?.value ?? 0;
+  const machineHoursToday = machineHoursRows.reduce(
+    (acc, row) => acc + (row.durationMinutes ?? 0),
+    0,
+  );
 
-  // Labor hours today
-  const [laborHoursResult] = await db
-    .select({ value: sql<number>`coalesce(sum(duration_minutes), 0)::int` })
+  const laborHoursRows = await db
+    .select()
     .from(laborHours)
     .where(gte(laborHours.startedAt, startOfDay));
-  const laborHoursToday = laborHoursResult?.value ?? 0;
+  const laborHoursToday = laborHoursRows.reduce(
+    (acc, row) => acc + (row.durationMinutes ?? 0),
+    0,
+  );
 
-  // Parts in progress
-  const [inProgressResult] = await db
-    .select({ value: sql<number>`count(*)::int` })
+  const inProgressRows = await db
+    .select()
     .from(productionOrders)
     .where(eq(productionOrders.status, "en_produccion"));
-  const partsInProgress = inProgressResult?.value ?? 0;
+  const partsInProgress = inProgressRows.length;
 
-  // Parts in quality
-  const [qualityResult] = await db
-    .select({ value: sql<number>`count(*)::int` })
+  const qualityRows = await db
+    .select()
     .from(productionOrders)
     .where(eq(productionOrders.status, "calidad"));
-  const partsInQuality = qualityResult?.value ?? 0;
+  const partsInQuality = qualityRows.length;
 
-  // Orders with progress
   const ordersWithParts = await db
     .select({
       id: orders.id,
@@ -133,8 +121,8 @@ export async function getTvDashboard(): Promise<TvDashboard> {
 
   const orderProgress = await Promise.all(
     ordersWithParts.map(async (order) => {
-      const [totalResult] = await db
-        .select({ value: sql<number>`count(*)::int` })
+      const total = await db
+        .select()
         .from(productionOrders)
         .where(
           and(
@@ -142,8 +130,8 @@ export async function getTvDashboard(): Promise<TvDashboard> {
             ne(productionOrders.status, "cancelada"),
           ),
         );
-      const [doneResult] = await db
-        .select({ value: sql<number>`count(*)::int` })
+      const done = await db
+        .select()
         .from(productionOrders)
         .where(
           and(
@@ -151,20 +139,19 @@ export async function getTvDashboard(): Promise<TvDashboard> {
             inArray(productionOrders.status, ["terminada", "entregada"]),
           ),
         );
-      const total = totalResult?.value ?? 0;
-      const done = doneResult?.value ?? 0;
-      const isDelayed = total > 0 && done < total && !!order.promisedDate && order.promisedDate < now;
+      const totalCount = total.length;
+      const doneCount = done.length;
+      const isDelayed = totalCount > 0 && doneCount < totalCount && !!order.promisedDate && order.promisedDate < now;
       return {
         ...order,
-        totalParts: total,
-        doneParts: done,
-        status: orders.status ? "active" : "completed",
+        totalParts: totalCount,
+        doneParts: doneCount,
+        status: "active",
         isDelayed,
       };
     }),
   );
 
-  // Machine status
   const machineRows = await db
     .select({
       id: machines.id,
@@ -180,7 +167,7 @@ export async function getTvDashboard(): Promise<TvDashboard> {
 
   const machinesWithParts = await Promise.all(
     machineRows.map(async (machine) => {
-      const [currentJob] = await db
+      const currentJob = await db
         .select({ number: productionOrders.number })
         .from(productionOrders)
         .where(
@@ -192,7 +179,7 @@ export async function getTvDashboard(): Promise<TvDashboard> {
         .limit(1);
       return {
         ...machine,
-        currentPartNumber: currentJob?.number ?? null,
+        currentPartNumber: currentJob[0]?.number ?? null,
       };
     }),
   );
