@@ -13,6 +13,25 @@ function canSee(permission: PermissionId | undefined, permissions: PermissionId[
   return permissions.includes(permission);
 }
 
+const NAV_ICONS: Record<string, string> = {
+  "/dashboard": "📊",
+  "/customers": "👥",
+  "/quotes": "💰",
+  "/engineering": "🔧",
+  "/orders": "📋",
+  "/projects": "📁",
+  "/production": "⚙️",
+  "/production/kanban": "📌",
+  "/tv": "📺",
+  "/inventory": "📦",
+  "/purchasing": "🛒",
+  "/suppliers": "🏭",
+  "/machines": "🔩",
+  "/quality": "✅",
+  "/deliveries": "🚚",
+  "/billing": "🧾",
+};
+
 export function AppSidebar({ pathname, permissions }: AppSidebarProps) {
   const isOperator = permissions.includes(PERMISSION_IDS.productionView) &&
     !permissions.includes(PERMISSION_IDS.productionCreate);
@@ -22,14 +41,18 @@ export function AppSidebar({ pathname, permissions }: AppSidebarProps) {
       className="hidden w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex"
       suppressHydrationWarning
     >
-      <div className="border-b border-sidebar-border px-5 py-5">
-        <p
-          className="text-xs font-medium uppercase tracking-widest text-sidebar-foreground/60"
-          suppressHydrationWarning
-        >
-          AMD México
-        </p>
-        <p className="mt-1 text-lg font-semibold tracking-tight">Operations</p>
+      <div className="border-b border-sidebar-border px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
+            AMD
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-widest text-sidebar-foreground/60">
+              AMD México
+            </p>
+            <p className="text-sm font-semibold tracking-tight">Operations</p>
+          </div>
+        </div>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {isOperator ? (
@@ -42,12 +65,13 @@ export function AppSidebar({ pathname, permissions }: AppSidebarProps) {
                 <Link
                   href="/my-production"
                   className={cn(
-                    "flex items-center rounded-md px-2.5 py-2 text-sm",
+                    "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm",
                     pathname === "/my-production"
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
                   )}
                 >
+                  <span>⚙️</span>
                   Mis tareas de hoy
                 </Link>
               </li>
@@ -68,12 +92,13 @@ export function AppSidebar({ pathname, permissions }: AppSidebarProps) {
                       <Link
                         href={item.href}
                         className={cn(
-                          "flex items-center rounded-md px-2.5 py-2 text-sm",
+                          "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm",
                           active
                             ? "bg-sidebar-accent text-sidebar-accent-foreground"
                             : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
                         )}
                       >
+                        <span>{NAV_ICONS[item.href] ?? "📄"}</span>
                         {item.label}
                       </Link>
                     ) : (
@@ -81,7 +106,10 @@ export function AppSidebar({ pathname, permissions }: AppSidebarProps) {
                         className="flex cursor-not-allowed items-center justify-between rounded-md px-2.5 py-2 text-sm text-sidebar-foreground/35"
                         title={`${item.label} estará disponible en ${item.phase}`}
                       >
-                        {item.label}
+                        <span className="flex items-center gap-2.5">
+                          <span className="opacity-50">{NAV_ICONS[item.href] ?? "📄"}</span>
+                          {item.label}
+                        </span>
                         <span className="text-[10px] uppercase tracking-wide">
                           {item.phase}
                         </span>
@@ -106,12 +134,13 @@ export function AppSidebar({ pathname, permissions }: AppSidebarProps) {
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex items-center rounded-md px-2.5 py-2 text-sm",
+                      "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm",
                       active
                         ? "bg-sidebar-accent text-sidebar-accent-foreground"
                         : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
                     )}
                   >
+                    <span>{NAV_ICONS[item.href] ?? "⚙️"}</span>
                     {item.label}
                   </Link>
                 ) : (
