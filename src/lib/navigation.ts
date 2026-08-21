@@ -20,6 +20,20 @@ export const NAV_ITEMS: NavItem[] = [
     phase: "Fase 1",
   },
   {
+    href: "/production/kanban",
+    label: "Tablero Kanban",
+    enabled: true,
+    permission: PERMISSION_IDS.productionView,
+    phase: "Fase 5",
+  },
+  {
+    href: "/tv",
+    label: "Dashboard TV",
+    enabled: true,
+    permission: PERMISSION_IDS.productionView,
+    phase: "Fase 5",
+  },
+  {
     href: "/customers",
     label: "Clientes",
     enabled: true,
