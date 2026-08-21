@@ -16,6 +16,7 @@ type AppShellProps = {
 
 const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
+  "/my-production": "Mis tareas de hoy",
   "/customers": "Clientes",
   "/customers/new": "Nuevo cliente",
   "/quotes": "Cotizaciones",

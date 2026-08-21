@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { NAV_ITEMS, SETTINGS_NAV_ITEMS } from "@/lib/navigation";
-import type { PermissionId } from "@/lib/permissions/catalog";
+import { PERMISSION_IDS, type PermissionId } from "@/lib/permissions/catalog";
 import { cn } from "@/lib/utils";
 
 type AppSidebarProps = {
@@ -14,6 +14,9 @@ function canSee(permission: PermissionId | undefined, permissions: PermissionId[
 }
 
 export function AppSidebar({ pathname, permissions }: AppSidebarProps) {
+  const isOperator = permissions.includes(PERMISSION_IDS.productionView) &&
+    !permissions.includes(PERMISSION_IDS.productionCreate);
+
   return (
     <aside
       className="hidden w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex"
@@ -29,42 +32,67 @@ export function AppSidebar({ pathname, permissions }: AppSidebarProps) {
         <p className="mt-1 text-lg font-semibold tracking-tight">Operations</p>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
-          Operación
-        </p>
-        <ul className="space-y-0.5">
-          {NAV_ITEMS.map((item) => {
-            const allowed = item.enabled && canSee(item.permission, permissions);
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <li key={item.href}>
-                {allowed ? (
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      "flex items-center rounded-md px-2.5 py-2 text-sm",
-                      active
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                ) : (
-                  <span
-                    className="flex cursor-not-allowed items-center justify-between rounded-md px-2.5 py-2 text-sm text-sidebar-foreground/35"
-                    title={`${item.label} estará disponible en ${item.phase}`}
-                  >
-                    {item.label}
-                    <span className="text-[10px] uppercase tracking-wide">
-                      {item.phase}
-                    </span>
-                  </span>
-                )}
+        {isOperator ? (
+          <>
+            <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+              Mi trabajo
+            </p>
+            <ul className="space-y-0.5">
+              <li>
+                <Link
+                  href="/my-production"
+                  className={cn(
+                    "flex items-center rounded-md px-2.5 py-2 text-sm",
+                    pathname === "/my-production"
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                  )}
+                >
+                  Mis tareas de hoy
+                </Link>
               </li>
-            );
-          })}
-        </ul>
+            </ul>
+          </>
+        ) : (
+          <>
+            <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+              Operación
+            </p>
+            <ul className="space-y-0.5">
+              {NAV_ITEMS.map((item) => {
+                const allowed = item.enabled && canSee(item.permission, permissions);
+                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                return (
+                  <li key={item.href}>
+                    {allowed ? (
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "flex items-center rounded-md px-2.5 py-2 text-sm",
+                          active
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                        )}
+                      >
+                        {item.label}
+                      </Link>
+                    ) : (
+                      <span
+                        className="flex cursor-not-allowed items-center justify-between rounded-md px-2.5 py-2 text-sm text-sidebar-foreground/35"
+                        title={`${item.label} estará disponible en ${item.phase}`}
+                      >
+                        {item.label}
+                        <span className="text-[10px] uppercase tracking-wide">
+                          {item.phase}
+                        </span>
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
         <p className="mt-6 px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
           Sistema
         </p>
