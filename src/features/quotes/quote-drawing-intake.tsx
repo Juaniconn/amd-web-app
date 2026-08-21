@@ -5,6 +5,14 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { displayMoney } from "@/lib/quotes/money";
 import {
   previewGrandTotal,
@@ -233,58 +241,90 @@ export function QuoteDrawingIntake({
       {shown ? (
         <div className="space-y-3 rounded-lg border bg-background p-3">
           <p className="text-xs text-muted-foreground">{shown.note}</p>
-          <ul className="space-y-3">
-            {shown.items.map((item) => (
-              <li key={item.id} className="grid gap-2 sm:grid-cols-6 sm:items-end">
-                <div className="sm:col-span-2">
-                  <p className="text-sm font-medium">{item.description}</p>
-                  {item.costing.part_number ? (
-                    <p className="text-sm font-semibold tracking-tight">
-                      Número de parte: {item.costing.part_number}
-                      {item.costing.revision ? ` · Rev. ${item.costing.revision}` : ""}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Sin número de parte en el plano
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    {item.costing.material} · {item.sourceFile}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor={`qty-${item.id}`}>Cantidad</Label>
-                  <Input
-                    id={`qty-${item.id}`}
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={item.costing.quantity ?? 1}
-                    disabled={pending}
-                    onChange={(event) => {
-                      const qty = Math.max(1, Number(event.target.value || 1));
-                      void onQty(item.id, qty, false);
-                    }}
-                    onBlur={(event) => {
-                      const qty = Math.max(1, Number(event.target.value || 1));
-                      void onQty(item.id, qty, true);
-                    }}
-                  />
-                </div>
-                <p className="text-sm">
-                  Unitario {displayMoney(item.costing.breakdown?.unit_price, currency)}
-                </p>
-                <p className="text-sm font-medium sm:col-span-2">
-                  Lote {displayMoney(item.costing.breakdown?.total, currency)}
-                </p>
-                {(item.costing.processes?.length ?? 0) > 0 ? (
-                  <p className="text-xs text-muted-foreground sm:col-span-6">
-                    Procesos: {item.costing.processes?.map((step) => step.name).join(" → ")}
-                  </p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          {/* Tabla con lo esencial del preliminar: número de parte, material,
+              medidas clave y costo. La cantidad es editable y el ERP recalcula
+              sin relanzar el agente (ADR-059). */}
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>N° parte</TableHead>
+                  <TableHead>Rev.</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Material</TableHead>
+                  <TableHead className="text-right">Calibre</TableHead>
+                  <TableHead className="text-right">Peso lb</TableHead>
+                  <TableHead className="text-right">Cant.</TableHead>
+                  <TableHead className="text-right">Unitario</TableHead>
+                  <TableHead className="text-right">Lote</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {shown.items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">
+                      {item.costing.part_number ?? (
+                        <span className="text-xs text-muted-foreground">Sin número</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{item.costing.revision ?? "—"}</TableCell>
+                    <TableCell>
+                      <p className="max-w-[22rem] truncate" title={item.description}>
+                        {item.description}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{item.sourceFile}</p>
+                    </TableCell>
+                    <TableCell>{item.costing.material}</TableCell>
+                    <TableCell className="text-right">
+                      {item.costing.thickness_in ? `${item.costing.thickness_in}"` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {item.costing.unit_weight_lb ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Input
+                        aria-label={`Cantidad de ${item.costing.part_number ?? item.sourceFile}`}
+                        className="ml-auto w-20 text-right"
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={item.costing.quantity ?? 1}
+                        disabled={pending}
+                        onChange={(event) => {
+                          const qty = Math.max(1, Number(event.target.value || 1));
+                          void onQty(item.id, qty, false);
+                        }}
+                        onBlur={(event) => {
+                          const qty = Math.max(1, Number(event.target.value || 1));
+                          void onQty(item.id, qty, true);
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {displayMoney(item.costing.breakdown?.unit_price, currency)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {displayMoney(item.costing.breakdown?.total, currency)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {shown.items.some((item) => (item.costing.processes?.length ?? 0) > 0) ? (
+            <ul className="space-y-1">
+              {shown.items
+                .filter((item) => (item.costing.processes?.length ?? 0) > 0)
+                .map((item) => (
+                  <li key={`proc-${item.id}`} className="text-xs text-muted-foreground">
+                    <span className="font-medium">
+                      {item.costing.part_number ?? item.sourceFile}
+                    </span>{" "}
+                    · {item.costing.processes?.map((step) => step.name).join(" → ")}
+                  </li>
+                ))}
+            </ul>
+          ) : null}
           <p className="text-sm font-medium">
             Total preliminar {displayMoney(total, currency)}
           </p>

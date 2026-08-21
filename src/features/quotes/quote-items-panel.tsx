@@ -299,7 +299,9 @@ export function QuoteItemsPanel({
               <TableHead>Proveedor</TableHead>
               <TableHead className="text-right">Cant.</TableHead>
               <TableHead className="text-right">P. unit.</TableHead>
+              <TableHead className="text-right">IVA</TableHead>
               <TableHead className="text-right">Subtotal</TableHead>
+              <TableHead className="text-right">Total</TableHead>
               <TableHead>Archivos</TableHead>
               {canWrite ? <TableHead /> : null}
             </TableRow>
@@ -329,7 +331,54 @@ export function QuoteItemsPanel({
                   {displayMoney(item.unitPrice, currency)}
                 </TableCell>
                 <TableCell className="text-right">
+                  {canWrite ? (
+                    // IVA editable sin abrir el formulario completo. Los demás
+                    // campos viajan en hidden porque updateQuoteItemSchema los
+                    // exige todos; así se reutiliza la acción sin tocar backend.
+                    <form
+                      action={(formData) => run(updateQuoteItemAction, formData)}
+                      className="flex justify-end"
+                    >
+                      <input type="hidden" name="id" value={item.id} />
+                      <input type="hidden" name="quoteId" value={quoteId} />
+                      <input type="hidden" name="description" value={item.description} />
+                      <input type="hidden" name="partNumber" value={item.partNumber ?? ""} />
+                      <input type="hidden" name="quantity" value={inputQty(item.quantity)} />
+                      <input type="hidden" name="unit" value={item.unit} />
+                      <input type="hidden" name="unitPrice" value={inputMoney(item.unitPrice)} />
+                      <input
+                        type="hidden"
+                        name="discountPercent"
+                        value={String(Number(item.discountPercent) || 0)}
+                      />
+                      <input type="hidden" name="estimatedCost" value="0" />
+                      {item.kind ? (
+                        <input type="hidden" name="kind" value={item.kind} />
+                      ) : null}
+                      <select
+                        name="taxPercent"
+                        aria-label={`IVA de la partida ${item.position ?? ""}`}
+                        className="h-8 w-20 rounded-lg border border-input bg-background px-2 text-sm"
+                        defaultValue={String(Number(item.taxPercent))}
+                        disabled={pending}
+                        onChange={(event) => event.currentTarget.form?.requestSubmit()}
+                      >
+                        {TAX_PERCENTS.map((percent) => (
+                          <option key={percent} value={percent}>
+                            {percent}%
+                          </option>
+                        ))}
+                      </select>
+                    </form>
+                  ) : (
+                    `${Number(item.taxPercent)}%`
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
                   {displayMoney(item.lineSubtotal, currency)}
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  {displayMoney(item.lineTotal, currency)}
                 </TableCell>
                 <TableCell>
                   {item.kind === "servicio_ingenieria"
@@ -342,7 +391,7 @@ export function QuoteItemsPanel({
                       {item.kind !== "servicio_ingenieria" ? (
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           disabled={pending}
                           onClick={() => {
@@ -357,7 +406,7 @@ export function QuoteItemsPanel({
                       ) : null}
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         disabled={pending}
                         onClick={() => {
@@ -367,7 +416,7 @@ export function QuoteItemsPanel({
                           setEditingId(item.id);
                         }}
                       >
-                        Editar
+                        Editar partida
                       </Button>
                       <form
                         action={(formData) =>
@@ -381,11 +430,11 @@ export function QuoteItemsPanel({
                         <input type="hidden" name="quoteId" value={quoteId} />
                         <Button
                           type="submit"
-                          variant="ghost"
+                          variant="destructive"
                           size="sm"
                           disabled={pending}
                         >
-                          Quitar
+                          Eliminar
                         </Button>
                       </form>
                     </div>
