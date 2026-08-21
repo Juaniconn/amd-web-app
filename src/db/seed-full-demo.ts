@@ -20,7 +20,6 @@ import {
   activityLogs,
 } from "@/db/schema";
 import { customerTypeEnum } from "@/db/schema/crm";
-import { materialCategoryEnum } from "@/db/schema/inventory";
 
 type Actor = { id: string; name: string } | null;
 
@@ -116,32 +115,12 @@ export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
   }
   console.log(`✓ ${CLIENTS.length} clientes creados`);
 
-  // 2. Create materials
-  const materialIds: string[] = [];
-  for (let i = 0; i < MATERIALS.length; i++) {
-    const mat = MATERIALS[i];
-    const id = `demo-mat-${i + 1}`;
-    materialIds.push(id);
-    await db.insert(materials).values({
-      id,
-      code: mat.code,
-      description: mat.description,
-      category: materialCategoryEnum.enumValues[0],
-      unitId: "u-kg",
-      warehouseId: "wh-mp",
-      isCritical: i < 3,
-      active: true,
-      costPerKg: (50 + Math.floor(Math.random() * 100)).toString(),
-      isDemo: true,
-      createdBy: actor?.id ?? null,
-      updatedBy: actor?.id ?? null,
-      createdAt: now,
-      updatedAt: now,
-    }).onConflictDoNothing();
-  }
-  console.log(`✓ ${MATERIALS.length} materiales creados`);
+  // 2. Get existing materials (created by seedInventoryCatalogs)
+  const existingMaterials = await db.select().from(materials);
+  const materialIds = existingMaterials.map((m) => m.id);
+  console.log(`✓ ${materialIds.length} materiales encontrados`);
 
-  // 3. Create inventory balances
+  // Create inventory balances for materials
   for (let i = 0; i < materialIds.length; i++) {
     await db.insert(inventoryBalances).values({
       id: `demo-bal-${i + 1}`,
