@@ -130,11 +130,11 @@ async function seed() {
       .limit(1);
 
     await wipeOperationalData(db);
+    await seedDemoComplete(db, admin ?? null);
     await seedInventoryCatalogs(db);
     await seedProductionCatalogs(db, admin ?? null);
     await seedCalculatorCatalogs(db, admin ?? null);
     await seedBetaFlow(db, admin ?? null);
-    await seedDemoComplete(db, admin ?? null);
 
     console.log(
       "Foundation, plant catalogs and beta walkthrough seed completed. Official branches CJS/GDL/ELP come from migration 0009.",
