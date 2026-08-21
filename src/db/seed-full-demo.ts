@@ -18,8 +18,23 @@ import {
   invoices,
   invoicePayments,
   activityLogs,
+  suppliers,
+  documents,
+  purchaseOrders,
+  purchaseOrderItems,
+  purchaseReceipts,
+  purchaseReceiptItems,
+  contacts,
+  engineeringRequests,
+  ncrs,
+  users,
+  accounts,
+  userRoles,
 } from "@/db/schema";
+import { hashPassword } from "better-auth/crypto";
 import { customerTypeEnum } from "@/db/schema/crm";
+import { materialCategoryEnum } from "@/db/schema/inventory";
+import { machineStatusEnum } from "@/db/schema/production";
 
 type Actor = { id: string; name: string } | null;
 
@@ -43,26 +58,39 @@ const CLIENTS = [
   { code: "EstrucOeste", name: "Estructuras Metálicas Oeste S.A. de C.V.", rfc: "EMO010320XX1", city: "Mazatlán", type: "construccion" },
 ];
 
-const MATERIALS = [
-  { code: "MAT-A36-3", description: "Lámina A36 3mm" },
-  { code: "MAT-A36-6", description: "Lámina A36 6mm" },
-  { code: "MAT-SS304-3", description: "Lámina SS304 3mm" },
-  { code: "MAT-AL6061", description: "Barra AL6061" },
-  { code: "CONSUMIBLE-GAS", description: "Gas argón" },
+const SUPPLIERS = [
+  { code: "ACEROS-NAL", name: "Aceros Nacionales S.A.", material: "Acero A36" },
+  { code: "ALUM-MEX", name: "Aluminios de México S.A.", material: "Aluminio 6061" },
+  { code: "SS-IMP", name: "Stainless Imports LLC", material: "Acero inoxidable" },
+  { code: "METAL-DEL", name: "Metales del Norte S.A.", material: "Lámina galvanizada" },
+  { code: "CONSUMIBLES-T", name: "Consumibles Técnicos S.A.", material: "Electrodos y gases" },
 ];
 
-const PARTS = [
-  { number: "BRV-001", description: "Fixture de ensamble línea A", qty: 24, unitPrice: 1850 },
-  { number: "BRV-002", description: "Cubierta de protección", qty: 50, unitPrice: 420 },
-  { number: "PS-440", description: "Stamping die insert D2", qty: 10, unitPrice: 890 },
-  { number: "APN-200", description: "Soporte de motor", qty: 100, unitPrice: 320 },
-  { number: "MSM-105", description: "Chasis principal", qty: 8, unitPrice: 12500 },
-  { number: "MVL-300", description: "Panel de control", qty: 15, unitPrice: 2800 },
-  { number: "AME-500", description: "Componente aeroespacial", qty: 5, unitPrice: 45000 },
-  { number: "EPP-600", description: "Carcasa de lavadora", qty: 200, unitPrice: 180 },
-  { number: "HDC-700", description: "Troquel de precisión", qty: 3, unitPrice: 85000 },
-  { number: "TVG-800", description: "Brida de tubería", qty: 40, unitPrice: 950 },
-  { number: "EMO-900", description: "Viga estructural", qty: 20, unitPrice: 3200 },
+const MATERIALS_POOL = [
+  { code: "A36-3MM", desc: "Lámina A36 3mm", cost: 55 },
+  { code: "A36-6MM", desc: "Lámina A36 6mm", cost: 48 },
+  { code: "A36-10MM", desc: "Lámina A36 10mm", cost: 42 },
+  { code: "SS304-3MM", desc: "Lámina SS304 3mm", cost: 180 },
+  { code: "SS316-6MM", desc: "Lámina SS316 6mm", cost: 220 },
+  { code: "AL6061-BAR", desc: "Barra AL6061", cost: 95 },
+  { code: "AL7075-BAR", desc: "Barra AL7075", cost: 145 },
+  { code: "GALV-2MM", desc: "Lámina galvanizada 2mm", cost: 38 },
+  { code: "TUBO-RED-2", desc: "Tubería redonda 2\"", cost: 65 },
+  { code: "TUBO-CUA-3", desc: "Tubería cuadrada 3\"", cost: 72 },
+  { code: "ELECT-7018", desc: "Electrodo E7018", cost: 12 },
+  { code: "GAS-ARGON", desc: "Gas argón industrial", cost: 85 },
+  { code: "CO2-IND", desc: "CO2 industrial", cost: 25 },
+];
+
+const OPERATORS = [
+  { id: "op-juan-martinez", name: "Juan Martínez" },
+  { id: "op-ramiro-sanchez", name: "Ramiro Sánchez" },
+  { id: "op-luis-hernandez", name: "Luis Hernández" },
+  { id: "op-ana-torres", name: "Ana Torres" },
+  { id: "op-carlos-diaz", name: "Carlos Díaz" },
+  { id: "op-maria-lopez", name: "María López" },
+  { id: "op-roberto-garcia", name: "Roberto García" },
+  { id: "op-patricia-ramirez", name: "Patricia Ramírez" },
 ];
 
 const PROCESS_NAMES = [
@@ -71,17 +99,136 @@ const PROCESS_NAMES = [
   "Soldadura MIG",
   "Soldadura TIG",
   "Maquinado CNC",
+  "Torneado",
   "Rectificado",
   "Tratamiento térmico",
   "Pintura electrostática",
   "Ensamble",
   "Inspección final",
+  "Empaque",
+];
+
+const PART_TEMPLATES = [
+  { number: "FX", description: "Fixture de ensamble" },
+  { number: "CUB", description: "Cubierta de protección" },
+  { number: "SOP", description: "Soporte estructural" },
+  { number: "CHS", description: "Chasis principal" },
+  { number: "PNL", description: "Panel de control" },
+  { number: "CMP", description: "Componente mecánico" },
+  { number: "TRJ", description: "Troquel de precisión" },
+  { number: "BDG", description: "Brida de conexión" },
+  { number: "VG-EST", description: "Viga estructural" },
+  { number: "CRN", description: "Carcasa exterior" },
+  { number: "INS", description: "Insertos de herramental" },
+  { number: "EJE", description: "Eje de transmisión" },
 ];
 
 export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
-  console.log("Iniciando seed completo de demo...");
+  console.log("🚀 Iniciando seed completo de demo...");
 
-  // 1. Create customers
+  // ==========================================
+  // 1. OPERATORS (users with role produccion)
+  // ==========================================
+  for (const op of OPERATORS) {
+    const existing = await db.select({ id: users.id }).from(users).where(eq(users.id, op.id)).limit(1);
+    if (existing.length === 0) {
+      const hashed = await hashPassword("operador123");
+      await db.insert(users).values({
+        id: op.id,
+        name: op.name,
+        email: `${op.id.replace("op-", "")}@amd-demo.local`,
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await db.insert(accounts).values({
+        id: `acc-${op.id}`,
+        accountId: op.id,
+        providerId: "credential",
+        userId: op.id,
+        password: hashed,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await db.insert(userRoles).values({
+        userId: op.id,
+        roleId: "produccion",
+        createdAt: now,
+      });
+    }
+  }
+  console.log(`✓ ${OPERATORS.length} operadores creados`);
+
+  // ==========================================
+  // 2. SUPPLIERS
+  // ==========================================
+  const supplierIds: string[] = [];
+  for (let i = 0; i < SUPPLIERS.length; i++) {
+    const sup = SUPPLIERS[i];
+    const id = `demo-sup-${i + 1}`;
+    supplierIds.push(id);
+    await db.insert(suppliers).values({
+      id,
+      code: sup.code,
+      legalName: sup.name,
+      contactName: `Contacto ${sup.name.split(" ")[0]}`,
+      email: `ventas@${sup.code.toLowerCase().replace(/[^a-z]/g, "")}.example`,
+      phone: `(${Math.floor(Math.random() * 900) + 100})-${Math.floor(Math.random() * 9000) + 1000}`,
+      city: "Monterrey",
+      country: "México",
+      status: "activo",
+      usedInCalculator: i < 3,
+      isDemo: true,
+      createdBy: actor?.id ?? null,
+      updatedBy: actor?.id ?? null,
+      createdAt: now,
+      updatedAt: now,
+    }).onConflictDoNothing();
+  }
+  console.log(`✓ ${SUPPLIERS.length} proveedores creados`);
+
+  // ==========================================
+  // 3. MATERIALS
+  // ==========================================
+  const materialIds: string[] = [];
+  for (let i = 0; i < MATERIALS_POOL.length; i++) {
+    const mat = MATERIALS_POOL[i];
+    const id = `demo-mat-${i + 1}`;
+    materialIds.push(id);
+    await db.insert(materials).values({
+      id,
+      code: mat.code,
+      description: mat.desc,
+      category: materialCategoryEnum.enumValues[0],
+      unitId: "u-kg",
+      warehouseId: "wh-mp",
+      supplierId: supplierIds[i % supplierIds.length] || null,
+      isCritical: i < 5,
+      active: true,
+      minStock: formatQty(20),
+      costPerKg: formatMoney(mat.cost, 4),
+      usedInCalculator: i < 4,
+      isDemo: true,
+      createdBy: actor?.id ?? null,
+      updatedBy: actor?.id ?? null,
+      createdAt: now,
+      updatedAt: now,
+    }).onConflictDoNothing();
+
+    await db.insert(inventoryBalances).values({
+      id: `demo-bal-${i + 1}`,
+      materialId: id,
+      warehouseId: "wh-mp",
+      onHand: formatQty(Math.floor(Math.random() * 800) + 100),
+      reserved: formatQty(Math.floor(Math.random() * 50)),
+      updatedAt: now,
+    }).onConflictDoNothing();
+  }
+  console.log(`✓ ${MATERIALS_POOL.length} materiales con inventario`);
+
+  // ==========================================
+  // 4. CUSTOMERS
+  // ==========================================
   const customerIds: string[] = [];
   for (let i = 0; i < CLIENTS.length; i++) {
     const client = CLIENTS[i];
@@ -93,79 +240,89 @@ export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
       legalName: client.name,
       tradeName: client.code,
       rfc: client.rfc,
-      phone: `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`,
+      phone: `(${Math.floor(Math.random() * 900) + 100})-${Math.floor(Math.random() * 9000) + 1000}`,
       email: `contacto@${client.code.toLowerCase()}.example`,
       address: `Av. Industrial ${Math.floor(Math.random() * 1000) + 100}`,
       city: client.city,
       state: "México",
       country: "México",
       shippingSameAsBilling: Math.random() > 0.3,
-      shippingAddress: `Puerta ${Math.floor(Math.random() * 5) + 1}, Parque Industrial`,
+      shippingAddress: `Puerta ${Math.floor(Math.random() * 5) + 1}`,
       shippingCity: client.city,
       shippingState: "México",
       type: customerTypeEnum.enumValues[0],
       status: "activo",
-      notes: `Cliente demo ${i + 1} de ${CLIENTS.length}`,
+      notes: `Cliente demo ${i + 1}`,
       isDemo: true,
       createdBy: actor?.id ?? null,
       updatedBy: actor?.id ?? null,
       createdAt: daysFromNow(-Math.floor(Math.random() * 60) - 30),
       updatedAt: now,
     }).onConflictDoNothing();
-  }
-  console.log(`✓ ${CLIENTS.length} clientes creados`);
 
-  // 2. Get existing materials (created by seedInventoryCatalogs)
-  const existingMaterials = await db.select().from(materials);
-  const materialIds = existingMaterials.map((m) => m.id);
-  console.log(`✓ ${materialIds.length} materiales encontrados`);
-
-  // Create inventory balances for materials
-  for (let i = 0; i < materialIds.length; i++) {
-    await db.insert(inventoryBalances).values({
-      id: `demo-bal-${i + 1}`,
-      materialId: materialIds[i],
-      warehouseId: "wh-mp",
-      onHand: formatQty(Math.floor(Math.random() * 500) + 100),
-      reserved: "0",
+    await db.insert(contacts).values({
+      id: `demo-contact-${i + 1}`,
+      customerId: id,
+      name: `Contacto ${client.code}`,
+      title: "Compras",
+      email: `contacto@${client.code.toLowerCase()}.example`,
+      phone: `656-123-${String(i).padStart(4, "0")}`,
+      isPrimary: true,
+      isDemo: true,
+      createdBy: actor?.id ?? null,
+      updatedBy: actor?.id ?? null,
+      createdAt: now,
       updatedAt: now,
     }).onConflictDoNothing();
   }
-  console.log(`✓ ${materialIds.length} balances de inventario creados`);
+  console.log(`✓ ${CLIENTS.length} clientes con contactos`);
 
-  // 4. Create quotes (30 total, 3 per customer)
-  const quoteIds: string[] = [];
-  for (let i = 0; i < 30; i++) {
-    const customerId = customerIds[i % customerIds.length];
-    const partIndex = i % PARTS.length;
-    const part = PARTS[partIndex];
-    const qty = part.qty;
-    const line = calculateLineTotals({
-      quantity: qty,
-      unitPrice: part.unitPrice,
-      discountPercent: 0,
-      taxPercent: 16,
-      estimatedCost: part.unitPrice * 0.4,
-    });
-    const totals = calculateQuoteTotals([line]);
-    const quoteNum = `COT-${YEAR}-${String(i + 1).padStart(5, "0")}`;
-    const quoteId = `demo-quote-${i + 1}`;
-    quoteIds.push(quoteId);
+  // ==========================================
+  // 5. QUOTES (30 quotes, each with 1-8 parts)
+  // ==========================================
+  let otCounter = 0;
+
+  for (let q = 0; q < 30; q++) {
+    const customerId = customerIds[q % customerIds.length];
+    const numParts = 1 + Math.floor(Math.random() * 8); // 1 to 8 parts per quote
+
+    // Generate lines for each part
+    const lines: ReturnType<typeof calculateLineTotals>[] = [];
+    for (let p = 0; p < numParts; p++) {
+      const partTemplate = PART_TEMPLATES[(q + p) % PART_TEMPLATES.length];
+      const qty = 5 + Math.floor(Math.random() * 50);
+      const unitPrice = 200 + Math.floor(Math.random() * 3000);
+      const line = calculateLineTotals({
+        quantity: qty,
+        unitPrice,
+        discountPercent: 0,
+        taxPercent: q % 5 === 3 ? 0 : 16, // Some USD quotes with 0% tax
+        estimatedCost: unitPrice * 0.35,
+      });
+      lines.push(line);
+    }
+    const totals = calculateQuoteTotals(lines);
+
+    const quoteNum = `COT-${YEAR}-${String(q + 1).padStart(5, "0")}`;
+    const quoteId = `demo-quote-${q + 1}`;
+    const contactId = `demo-contact-${(q % customerIds.length) + 1}`;
+
+    const quoteStatus = q % 5 === 0 ? "convertida" : q % 5 === 1 ? "enviada" : q % 5 === 2 ? "borrador" : q % 5 === 3 ? "en_revision" : "aprobada";
 
     await db.insert(quotes).values({
       id: quoteId,
       number: quoteNum,
       customerId,
-      contactId: null,
+      contactId,
       ownerUserId: actor?.id ?? null,
       issueDate: daysFromNow(-Math.floor(Math.random() * 30) - 5),
-      validUntil: daysFromNow(Math.floor(Math.random() * 15) + 15),
-      currency: i % 5 === 3 ? "usd" : "mxn",
+      validUntil: daysFromNow(Math.floor(Math.random() * 20) + 10),
+      currency: q % 5 === 3 ? "usd" : "mxn",
       paymentTerms: "30 días",
       paymentTerm: "net_30",
-      leadTime: "12 días hábiles",
-      notes: `Cotización demo ${i + 1}. Parte ${part.number}`,
-      addresseeMode: "nombre",
+      leadTime: `${10 + Math.floor(Math.random() * 10)} días hábiles`,
+      notes: `Cotización demo ${q + 1} con ${numParts} partes`,
+      addresseeMode: q % 2 === 0 ? "nombre" : "departamento",
       branchId: "amd-branch-cjs",
       branchName: "Ciudad Juárez",
       branchCode: "CJS",
@@ -174,10 +331,10 @@ export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
       shippingState: "Chihuahua",
       shippingPostalCode: "32600",
       shippingCountry: "México",
-      rfqType: "solo_fabricacion",
-      requiresEngineering: false,
-      engineeringStatus: "no_requerida",
-      status: i % 4 === 0 ? "convertida" : i % 4 === 1 ? "enviada" : i % 4 === 2 ? "borrador" : "en_revision",
+      rfqType: q % 3 === 0 ? "diseno_fabricacion" : q % 3 === 1 ? "solo_fabricacion" : "diseno_solamente",
+      requiresEngineering: q % 3 === 0,
+      engineeringStatus: q % 3 === 0 ? "liberada" : "no_requerida",
+      status: quoteStatus,
       subtotal: formatMoney(totals.subtotal),
       taxTotal: formatMoney(totals.taxTotal),
       total: formatMoney(totals.total),
@@ -191,99 +348,222 @@ export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
       updatedAt: now,
     }).onConflictDoNothing();
 
-    await db.insert(quoteItems).values({
-      id: `${quoteId}-item-1`,
-      quoteId,
-      position: 1,
-      kind: "pieza",
-      description: part.description,
-      partNumber: part.number,
-      quantity: formatQty(qty),
-      unit: "pza",
-      unitPrice: formatMoney(part.unitPrice, 4),
-      discountPercent: "0",
-      taxPercent: "16",
-      estimatedCost: formatMoney(part.unitPrice * 0.4, 4),
-      lineSubtotal: formatMoney(line.lineSubtotal),
-      lineTax: formatMoney(line.lineTax),
-      lineTotal: formatMoney(line.lineTotal),
-      lineEstimatedCost: formatMoney(line.lineEstimatedCost),
-      lineProfit: formatMoney(line.lineProfit),
-      lineMarginPercent: line.lineMarginPercent === null ? null : formatMoney(line.lineMarginPercent),
-      createdAt: now,
-      updatedAt: now,
-    }).onConflictDoNothing();
+    // Create quote items
+    for (let p = 0; p < numParts; p++) {
+      const partTemplate = PART_TEMPLATES[(q + p) % PART_TEMPLATES.length];
+      const qty = 5 + Math.floor(Math.random() * 50);
+      const unitPrice = 200 + Math.floor(Math.random() * 3000);
 
-    if (i % 4 === 0) {
-      const orderNum = `AMD-${YEAR}-${String(i + 1).padStart(5, "0")}`;
-      const orderId = `demo-order-${i + 1}`;
+      await db.insert(quoteItems).values({
+        id: `${quoteId}-item-${p + 1}`,
+        quoteId,
+        position: p + 1,
+        kind: "pieza",
+        description: `${partTemplate.description} ${partTemplate.number}-${String(q + 1).padStart(3, "0")}`,
+        partNumber: `${partTemplate.number}-${q + 1}-${p + 1}`,
+        quantity: formatQty(qty),
+        unit: "pza",
+        unitPrice: formatMoney(unitPrice, 4),
+        discountPercent: "0",
+        taxPercent: q % 5 === 3 ? "0" : "16",
+        estimatedCost: formatMoney(unitPrice * 0.35, 4),
+        lineSubtotal: formatMoney(lines[p].lineSubtotal),
+        lineTax: formatMoney(lines[p].lineTax),
+        lineTotal: formatMoney(lines[p].lineTotal),
+        lineEstimatedCost: formatMoney(lines[p].lineEstimatedCost),
+        lineProfit: formatMoney(lines[p].lineProfit),
+        lineMarginPercent: lines[p].lineMarginPercent !== null ? formatMoney(lines[p].lineMarginPercent!) : null,
+        createdAt: now,
+        updatedAt: now,
+      }).onConflictDoNothing();
+    }
+
+    // ==========================================
+    // 6. ORDER + ENGINEERING (if converted)
+    // ==========================================
+    if (quoteStatus === "convertida" || quoteStatus === "aprobada") {
+      const orderNum = `AMD-${YEAR}-${String(q + 1).padStart(5, "0")}`;
+      const orderId = `demo-order-${q + 1}`;
+
+      // Create engineering request if needed
+      let engineeringId: string | null = null;
+      if (q % 3 === 0) {
+        engineeringId = `demo-eng-${q + 1}`;
+        await db.insert(engineeringRequests).values({
+          id: engineeringId,
+          number: `ING-${YEAR}-${String(q + 1).padStart(5, "0")}`,
+          customerId,
+          quoteId,
+          assigneeUserId: actor?.id ?? null,
+          description: `Ingeniería para ${quoteNum}`,
+          projectType: "diseno_nuevo",
+          priority: q % 2 === 0 ? "alta" : "media",
+          dueDate: daysFromNow(15),
+          status: "liberado",
+          hoursLogged: formatMoney(8 + Math.floor(Math.random() * 20)),
+          releasedAt: daysFromNow(-Math.floor(Math.random() * 10)),
+          isDemo: true,
+          createdBy: actor?.id ?? null,
+          updatedBy: actor?.id ?? null,
+          createdAt: daysFromNow(-Math.floor(Math.random() * 20)),
+          updatedAt: now,
+        }).onConflictDoNothing();
+      }
 
       await db.insert(orders).values({
         id: orderId,
         number: orderNum,
         customerId,
         quoteId,
-        origin: "rfq_directa",
+        origin: q % 3 === 0 ? "rfq_ingenieria" : "rfq_directa",
+        engineeringRequestId: engineeringId,
         ownerUserId: actor?.id ?? null,
         promisedDate: daysFromNow(Math.floor(Math.random() * 14) + 7),
-        notes: `Orden demo ${i + 1}`,
-        currency: i % 5 === 3 ? "usd" : "mxn",
+        notes: `Orden demo ${q + 1}`,
+        currency: q % 5 === 3 ? "usd" : "mxn",
         total: formatMoney(totals.total),
-        status: i % 3 === 0 ? "en_produccion" : "aprobado",
+        status: q % 3 === 0 ? "en_produccion" : "aprobado",
         branchId: "amd-branch-cjs",
         isDemo: true,
         createdBy: actor?.id ?? null,
         updatedBy: actor?.id ?? null,
-        createdAt: daysFromNow(-Math.floor(Math.random() * 20)),
+        createdAt: daysFromNow(-Math.floor(Math.random() * 15)),
         updatedAt: now,
       }).onConflictDoNothing();
 
-      await db.insert(orderItems).values({
-        id: `${orderId}-item-1`,
-        orderId,
-        position: 1,
-        kind: "pieza",
-        description: part.description,
-        partNumber: part.number,
-        quantity: formatQty(qty),
-        unit: "pza",
-        unitPrice: formatMoney(part.unitPrice, 4),
-        discountPercent: "0",
-        taxPercent: "16",
-        lineSubtotal: formatMoney(line.lineSubtotal),
-        lineTax: formatMoney(line.lineTax),
-        lineTotal: formatMoney(line.lineTotal),
-      }).onConflictDoNothing();
+      // Create order items
+      for (let p = 0; p < numParts; p++) {
+        const partTemplate = PART_TEMPLATES[(q + p) % PART_TEMPLATES.length];
+        const qty = 5 + Math.floor(Math.random() * 50);
+        const unitPrice = 200 + Math.floor(Math.random() * 3000);
 
-      if (i % 2 === 0) {
-        const otNum = `OT-${YEAR}-${String(i + 1).padStart(5, "0")}`;
-        const otId = `demo-ot-${i + 1}`;
-        const routeId = i % 3 === 0 ? "route-a" : i % 3 === 1 ? "route-b" : null;
+        await db.insert(orderItems).values({
+          id: `${orderId}-item-${p + 1}`,
+          orderId,
+          position: p + 1,
+          kind: "pieza",
+          description: `${partTemplate.description} ${partTemplate.number}-${String(q + 1).padStart(3, "0")}`,
+          partNumber: `${partTemplate.number}-${q + 1}-${p + 1}`,
+          quantity: formatQty(qty),
+          unit: "pza",
+          unitPrice: formatMoney(unitPrice, 4),
+          discountPercent: "0",
+          taxPercent: q % 5 === 3 ? "0" : "16",
+          lineSubtotal: formatMoney(lines[p].lineSubtotal),
+          lineTax: formatMoney(lines[p].lineTax),
+          lineTotal: formatMoney(lines[p].lineTotal),
+        }).onConflictDoNothing();
+      }
+
+      // ==========================================
+      // 7. PURCHASE ORDER (if order needs materials)
+      // ==========================================
+      if (q % 2 === 0) {
+        const poNum = `OC-${YEAR}-${String(q + 1).padStart(5, "0")}`;
+        const poId = `demo-po-${q + 1}`;
+
+        await db.insert(purchaseOrders).values({
+          id: poId,
+          number: poNum,
+          supplierId: supplierIds[q % supplierIds.length],
+          branchId: "amd-branch-cjs",
+          orderId,
+          issueDate: daysFromNow(-Math.floor(Math.random() * 10)),
+          expectedDate: daysFromNow(7),
+          currency: "mxn",
+          paymentTerm: "net_30",
+          isUrgent: q % 4 === 0,
+          status: q % 3 === 0 ? "recibida" : "enviada",
+          subtotal: formatMoney(totals.estimatedCost),
+          taxTotal: formatMoney(totals.estimatedCost * 0.16),
+          total: formatMoney(totals.estimatedCost * 1.16),
+          isDemo: true,
+          createdBy: actor?.id ?? null,
+          updatedBy: actor?.id ?? null,
+          createdAt: now,
+          updatedAt: now,
+        }).onConflictDoNothing();
+
+        await db.insert(purchaseOrderItems).values({
+          id: `${poId}-item-1`,
+          purchaseOrderId: poId,
+          position: 1,
+          materialId: materialIds[q % materialIds.length],
+          warehouseId: "wh-mp",
+          description: `Material para ${orderNum}`,
+          quantity: formatQty(100),
+          receivedQty: q % 3 === 0 ? formatQty(100) : "0",
+          unitPrice: formatMoney(MATERIALS_POOL[q % MATERIALS_POOL.length].cost, 4),
+          taxPercent: "16",
+          lineSubtotal: formatMoney(totals.estimatedCost),
+          lineTax: formatMoney(totals.estimatedCost * 0.16),
+          lineTotal: formatMoney(totals.estimatedCost * 1.16),
+          createdAt: now,
+        }).onConflictDoNothing();
+
+        if (q % 3 === 0) {
+          const receiptNum = `REC-${YEAR}-${String(q + 1).padStart(5, "0")}`;
+          const receiptId = `demo-rec-${q + 1}`;
+
+          await db.insert(purchaseReceipts).values({
+            id: receiptId,
+            number: receiptNum,
+            purchaseOrderId: poId,
+            receivedAt: daysFromNow(-Math.floor(Math.random() * 3)),
+            notes: "Recepción completa",
+            createdBy: actor?.id ?? null,
+            createdAt: now,
+          }).onConflictDoNothing();
+
+          await db.insert(purchaseReceiptItems).values({
+            id: `${receiptId}-item-1`,
+            receiptId,
+            purchaseOrderItemId: `${poId}-item-1`,
+            quantity: formatQty(100),
+          }).onConflictDoNothing();
+        }
+      }
+
+      // ==========================================
+      // 8. PRODUCTION ORDERS (one per part)
+      // ==========================================
+      for (let p = 0; p < numParts; p++) {
+        if (q % 2 !== 0 && p > 2) continue; // Only create OT for some parts
+
+        otCounter++;
+        const partTemplate = PART_TEMPLATES[(q + p) % PART_TEMPLATES.length];
+        const otNum = `OT-${YEAR}-${String(otCounter).padStart(5, "0")}`;
+        const otId = `demo-ot-${otCounter}`;
+        const qty = 5 + Math.floor(Math.random() * 50);
+
+        const otStatus = p % 5 === 0 ? "en_produccion" : p % 5 === 1 ? "terminada" : p % 5 === 2 ? "calidad" : p % 5 === 3 ? "programada" : "liberada";
 
         await db.insert(productionOrders).values({
           id: otId,
           number: otNum,
           orderId,
-          orderItemId: `${orderId}-item-1`,
+          orderItemId: `${orderId}-item-${p + 1}`,
           customerId,
           quoteId,
-          origin: "rfq_directa",
-          routeId,
-          description: part.description,
-          partNumber: part.number,
+          origin: q % 3 === 0 ? "rfq_ingenieria" : "rfq_directa",
+          routeId: p % 3 === 0 ? "route-a" : p % 3 === 1 ? "route-b" : null,
+          description: `${partTemplate.description} ${partTemplate.number}-${String(q + 1).padStart(3, "0")}`,
+          partNumber: `${partTemplate.number}-${q + 1}-${p + 1}`,
           quantity: formatQty(qty),
           unit: "pza",
           promisedDate: daysFromNow(Math.floor(Math.random() * 10) + 5),
-          priority: i % 4 === 0 ? "urgente" : i % 4 === 1 ? "compromiso_inmediato" : "programada",
-          status: i % 5 === 0 ? "en_produccion" : i % 5 === 1 ? "terminada" : i % 5 === 2 ? "calidad" : i % 5 === 3 ? "programada" : "liberada",
-          notes: `OT demo ${i + 1}`,
-          workCenterId: i % 3 === 0 ? "wc-cnc" : i % 3 === 1 ? "wc-laser" : "wc-ensamble",
-          machineId: i % 3 === 0 ? "m-vmc-1" : i % 3 === 1 ? "m-laser-1" : null,
-          operatorUserId: i % 2 === 0 ? "op-juan-martinez" : "op-ramiro-sanchez",
-          releasedAt: i % 5 >= 3 ? daysFromNow(-Math.floor(Math.random() * 5) - 2) : null,
-          scheduledAt: i % 5 >= 3 ? daysFromNow(-Math.floor(Math.random() * 3) - 1) : null,
-          startedAt: i % 5 === 0 ? daysFromNow(-1) : null,
-          qualityAt: i % 5 === 2 ? now : null,
+          priority: p % 4 === 0 ? "urgente" : p % 4 === 1 ? "compromiso_inmediato" : "programada",
+          status: otStatus,
+          notes: `OT demo ${otCounter}`,
+          workCenterId: p % 3 === 0 ? "wc-cnc" : p % 3 === 1 ? "wc-laser" : "wc-ensamble",
+          machineId: p % 3 === 0 ? "m-vmc-1" : p % 3 === 1 ? "m-laser-1" : p % 3 === 2 ? "m-durma-1" : null,
+          operatorUserId: p % 2 === 0 ? OPERATORS[p % OPERATORS.length].id : null,
+          releasedAt: p % 5 >= 3 ? daysFromNow(-Math.floor(Math.random() * 5) - 2) : null,
+          scheduledAt: p % 5 >= 3 ? daysFromNow(-Math.floor(Math.random() * 3) - 1) : null,
+          startedAt: p % 5 === 0 ? daysFromNow(-1) : null,
+          qualityAt: p % 5 === 2 ? now : null,
+          physicallyClosedAt: p % 5 === 1 ? now : null,
+          deliveredAt: p % 5 === 1 ? daysFromNow(1) : null,
           isDemo: true,
           createdBy: actor?.id ?? null,
           updatedBy: actor?.id ?? null,
@@ -291,127 +571,128 @@ export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
           updatedAt: now,
         }).onConflictDoNothing();
 
-        const numProcesses = 3 + Math.floor(Math.random() * 5);
-        for (let p = 0; p < numProcesses; p++) {
+        // Create operations (processes) for this OT
+        const numProcesses = 3 + Math.floor(Math.random() * 6);
+        for (let proc = 0; proc < numProcesses; proc++) {
+          const procStatus = proc < numProcesses - 2 ? "terminada" : proc === numProcesses - 2 ? (p % 5 === 0 ? "en_proceso" : "pendiente") : "pendiente";
+
           await db.insert(productionOperations).values({
-            id: `${otId}-op-${p + 1}`,
+            id: `${otId}-op-${proc + 1}`,
             productionOrderId: otId,
-            position: p + 1,
-            kind: p === numProcesses - 1 ? "calidad" : p === 0 ? "produccion" : "produccion",
-            workCenterId: p === 0 ? "wc-laser" : p < numProcesses - 1 ? "wc-cnc" : "wc-calidad",
-            name: PROCESS_NAMES[p % PROCESS_NAMES.length],
-            status: i % 5 === 0 && p === 0 ? "en_proceso" : p < numProcesses - 2 ? "terminada" : "pendiente",
-            machineId: p === 0 ? "m-laser-1" : p < numProcesses - 1 ? "m-vmc-1" : null,
-            operatorUserId: p === 0 ? "op-juan-martinez" : p === 1 ? "op-ramiro-sanchez" : null,
-            startedAt: p < numProcesses - 1 ? daysFromNow(-Math.floor(Math.random() * 3)) : null,
-            finishedAt: p < numProcesses - 2 ? daysFromNow(-Math.floor(Math.random() * 2)) : null,
+            position: proc + 1,
+            kind: proc === numProcesses - 1 ? "calidad" : proc === 0 ? "produccion" : "produccion",
+            workCenterId: proc === 0 ? "wc-laser" : proc < numProcesses - 1 ? "wc-cnc" : "wc-calidad",
+            name: PROCESS_NAMES[proc % PROCESS_NAMES.length],
+            status: procStatus as any,
+            machineId: proc === 0 ? "m-laser-1" : proc < numProcesses - 1 ? "m-vmc-1" : null,
+            operatorUserId: proc === 0 ? OPERATORS[p % OPERATORS.length].id : proc === 1 ? OPERATORS[(p + 1) % OPERATORS.length].id : null,
+            startedAt: proc < numProcesses - 1 ? daysFromNow(-Math.floor(Math.random() * 3)) : null,
+            finishedAt: proc < numProcesses - 2 ? daysFromNow(-Math.floor(Math.random() * 2)) : null,
             createdAt: now,
             updatedAt: now,
           }).onConflictDoNothing();
         }
 
-        if (i % 5 === 2) {
+        // Quality inspection for some
+        if (p % 5 === 2 || p % 5 === 1) {
           await db.insert(qualityInspections).values({
-            id: `demo-insp-${i + 1}`,
-            number: `INSP-${YEAR}-${String(i + 1).padStart(5, "0")}`,
+            id: `demo-insp-${otCounter}`,
+            number: `INSP-${YEAR}-${String(otCounter).padStart(5, "0")}`,
             productionOrderId: otId,
             type: "final",
-            inspectorUserId: "op-ana-torres",
+            inspectorUserId: OPERATORS[3].id,
             inspectedAt: now,
-            partNumber: part.number,
+            partNumber: `${partTemplate.number}-${q + 1}-${p + 1}`,
             qtyInspected: formatQty(qty),
             qtyAccepted: formatQty(qty - 1),
             qtyRejected: "1",
-            result: "aprobado_observaciones",
-            notes: "Inspección final aprobada con observaciones menores",
+            result: p % 2 === 0 ? "aprobado" : "aprobado_observaciones",
+            notes: "Inspección final",
             createdBy: actor?.id ?? null,
             createdAt: now,
             updatedAt: now,
           }).onConflictDoNothing();
         }
 
-        if (i % 5 === 1) {
+        // Delivery for some
+        if (p % 5 === 1) {
           await db.insert(deliveries).values({
-            id: `demo-del-${i + 1}`,
-            number: `ENT-${YEAR}-${String(i + 1).padStart(5, "0")}`,
+            id: `demo-del-${otCounter}`,
+            number: `ENT-${YEAR}-${String(otCounter).padStart(5, "0")}`,
             orderId,
             productionOrderId: otId,
             branchId: "amd-branch-cjs",
-            status: "enviado",
+            status: q % 2 === 0 ? "entregado" : "enviado",
             scheduledDate: daysFromNow(1),
             shippedAt: now,
             carrier: "Transporte propio",
-            trackingNumber: `AMD-${String(i + 1).padStart(5, "0")}`,
+            trackingNumber: `AMD-${String(otCounter).padStart(5, "0")}`,
             quantity: formatQty(qty),
             shippingAddress: "Puerta 3, Parque Industrial",
             shippingCity: "Ciudad Juárez",
             shippingState: "Chihuahua",
             shippingCountry: "México",
-            notes: "Entrega en tránsito",
+            notes: "Entrega demo",
             createdBy: actor?.id ?? null,
             updatedBy: actor?.id ?? null,
             createdAt: now,
             updatedAt: now,
           }).onConflictDoNothing();
         }
+      }
 
-        if (i % 5 === 1 || i % 5 === 2) {
-          await db.insert(invoices).values({
-            id: `demo-inv-${i + 1}`,
-            number: `FAC-${YEAR}-${String(i + 1).padStart(5, "0")}`,
-            orderId,
-            customerId,
-            branchId: "amd-branch-cjs",
-            issueDate: daysFromNow(-Math.floor(Math.random() * 10)),
-            dueDate: daysFromNow(30),
-            currency: i % 5 === 3 ? "usd" : "mxn",
-            paymentTerm: "net_30",
-            status: i % 5 === 1 ? "emitida" : "pagada",
-            subtotal: formatMoney(totals.subtotal),
-            taxTotal: formatMoney(totals.taxTotal),
-            total: formatMoney(totals.total),
-            paidTotal: i % 5 === 2 ? formatMoney(totals.total) : "0",
-            notes: `Factura demo ${i + 1}`,
+      // ==========================================
+      // 9. INVOICE (for completed orders)
+      // ==========================================
+      if (q % 3 === 0 || q % 3 === 1) {
+        const invNum = `FAC-${YEAR}-${String(q + 1).padStart(5, "0")}`;
+        const invId = `demo-inv-${q + 1}`;
+
+        await db.insert(invoices).values({
+          id: invId,
+          number: invNum,
+          orderId,
+          customerId,
+          branchId: "amd-branch-cjs",
+          issueDate: daysFromNow(-Math.floor(Math.random() * 10)),
+          dueDate: daysFromNow(30),
+          currency: q % 5 === 3 ? "usd" : "mxn",
+          paymentTerm: "net_30",
+          status: q % 3 === 0 ? "pagada" : "emitida",
+          subtotal: formatMoney(totals.subtotal),
+          taxTotal: formatMoney(totals.taxTotal),
+          total: formatMoney(totals.total),
+          paidTotal: q % 3 === 0 ? formatMoney(totals.total) : "0",
+          notes: `Factura demo ${q + 1}`,
+          createdBy: actor?.id ?? null,
+          updatedBy: actor?.id ?? null,
+          createdAt: now,
+          updatedAt: now,
+        }).onConflictDoNothing();
+
+        if (q % 3 === 0) {
+          await db.insert(invoicePayments).values({
+            id: `demo-invpay-${q + 1}`,
+            invoiceId: invId,
+            paidAt: daysFromNow(-Math.floor(Math.random() * 5)),
+            amount: formatMoney(totals.total),
+            method: "transferencia",
+            reference: `SPEI-${String(q + 1).padStart(5, "0")}`,
             createdBy: actor?.id ?? null,
-            updatedBy: actor?.id ?? null,
             createdAt: now,
-            updatedAt: now,
           }).onConflictDoNothing();
-
-          if (i % 5 === 2) {
-            await db.insert(invoicePayments).values({
-              id: `demo-invpay-${i + 1}`,
-              invoiceId: `demo-inv-${i + 1}`,
-              paidAt: daysFromNow(-Math.floor(Math.random() * 5)),
-              amount: formatMoney(totals.total),
-              method: "transferencia",
-              reference: `SPEI-${String(i + 1).padStart(5, "0")}`,
-              createdBy: actor?.id ?? null,
-              createdAt: now,
-            }).onConflictDoNothing();
-          }
         }
       }
     }
   }
 
-  console.log(`✓ ${quoteIds.length} cotizaciones creadas`);
-  console.log("✓ Pedidos, OT, Operaciones, Inspecciones, Entregas, Facturas creadas");
-
-  await db.insert(activityLogs).values({
-    id: "demo-activity-seed",
-    actorUserId: actor?.id ?? null,
-    action: "created",
-    entityType: "customer",
-    entityId: "demo-customer-1",
-    summary: activitySummary({
-      actorName: actor?.name ?? null,
-      action: "created",
-      entityType: "customer",
-      entityLabel: "Seed demo completo",
-    }),
-    createdAt: now,
-  }).onConflictDoNothing();
-
   console.log("✅ Seed completo de demo finalizado");
+  console.log("Resumen:");
+  console.log(`  - ${CLIENTS.length} clientes`);
+  console.log(`  - ${OPERATORS.length} operadores`);
+  console.log(`  - ${SUPPLIERS.length} proveedores`);
+  console.log(`  - ${MATERIALS_POOL.length} materiales`);
+  console.log(`  - 30 cotizaciones (1-8 partes c/u)`);
+  console.log(`  - ~${otCounter} OT en producción`);
+  console.log(`  - Ordenes de compra, entregas, facturas`);
 }
