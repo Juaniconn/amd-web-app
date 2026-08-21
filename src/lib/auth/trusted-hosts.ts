@@ -23,6 +23,21 @@ export function getFallbackAuthUrl() {
   return process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
 }
 
+/**
+ * ¿Deben las cookies de sesión llevar la marca `Secure`?
+ *
+ * Solo cuando el ERP se sirve por HTTPS. Con `Secure` activo el navegador
+ * descarta la cookie en conexiones HTTP —incluido el acceso por IP de LAN de
+ * la beta interna—, con lo que el login responde 200 pero la sesión no se
+ * guarda y el usuario vuelve al formulario.
+ *
+ * Se decide por `BETTER_AUTH_URL`: si declara https, las cookies son seguras.
+ * Así la Fase 13 (dominio con TLS) no necesita cambiar código.
+ */
+export function useSecureAuthCookies() {
+  return getFallbackAuthUrl().toLowerCase().startsWith("https://");
+}
+
 export function isLocalNetworkOrigin(origin: string) {
   try {
     const url = new URL(origin);
