@@ -348,9 +348,9 @@ export default async function OrderDetailPage({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>PN Plano</TableHead>
                   <TableHead>Número de Parte</TableHead>
                   <TableHead>Descripción</TableHead>
-                  <TableHead>PN Plano</TableHead>
                   <TableHead>Cantidad</TableHead>
                   <TableHead>Prioridad</TableHead>
                   <TableHead>Estado</TableHead>
@@ -365,20 +365,19 @@ export default async function OrderDetailPage({
                 {order.productionOrders.map((ot) => (
                   <TableRow key={ot.id}>
                     <TableCell className="font-mono font-bold">
-                      {canReadProduction ? (
+                      {canReadProduction && ot.partNumber ? (
                         <Link
                           href={`/production/${ot.id}`}
                           className="text-blue-600 hover:underline"
                         >
-                          {ot.number}
+                          {ot.partNumber}
                         </Link>
                       ) : (
-                        <span>{ot.number}</span>
+                        <span>{ot.partNumber ?? "—"}</span>
                       )}
                     </TableCell>
-                    <TableCell>{ot.description}</TableCell>
-                    <TableCell className="font-mono">
-                      {ot.partNumber ?? "—"}
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {ot.number}
                     </TableCell>
                     <TableCell>{ot.quantity} {ot.unit}</TableCell>
                     <TableCell>
