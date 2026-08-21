@@ -327,68 +327,97 @@ export default async function OrderDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Número de Parte</CardTitle>
+          <CardTitle>Números de Parte ({order.productionOrders.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {drawings.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Sin planos en esta orden de trabajo.
-            </p>
+          {order.productionOrders.length === 0 ? (
+            <div className="text-center py-6 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Aún no hay números de parte creados para esta orden.
+              </p>
+              {canCreateOt && (
+                <Link
+                  href={`/production/new?orderId=${order.id}`}
+                  className={buttonVariants({ variant: "default", size: "sm" })}
+                >
+                  Crear número de parte
+                </Link>
+              )}
+            </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <TableHead>Número de Parte</TableHead>
                   <TableHead>Descripción</TableHead>
-                  <TableHead className="text-right">Cantidad</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead>PN Plano</TableHead>
+                  <TableHead>Cantidad</TableHead>
+                  <TableHead>Prioridad</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Centro</TableHead>
+                  <TableHead>Máquina</TableHead>
+                  <TableHead>Operador</TableHead>
+                  <TableHead>Progreso</TableHead>
+                  <TableHead>Fecha prometida</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {drawings.map((item) => {
-                  const linked = otByItem.get(item.id);
-                  const manufacturing = isManufacturingItem(item.kind);
-                  const canIssue =
-                    canCreateOt &&
-                    manufacturing &&
-                    (!linked || linked.status === "cancelada");
-                  const partId = partIdentity(
-                    linked?.partNumber || item.partNumber,
-                    linked?.number ?? "Sin plano",
-                  );
-                  const href =
-                    linked && linked.status !== "cancelada"
-                      ? `/production/${linked.id}`
-                      : canIssue
-                        ? `/production/new?orderId=${order.id}&orderItemId=${item.id}`
-                        : null;
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        {href && (canReadProduction || canIssue) ? (
-                          <Link href={href} className="font-medium hover:underline">
-                            {partId}
-                          </Link>
-                        ) : (
-                          <span className="font-medium">{partId}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {linked
-                          ? PRODUCTION_STATUS_LABELS[linked.status as ProductionStatus]
-                          : "—"}
-                      </TableCell>
-                      <TableCell>{item.description}</TableCell>
-                      <TableCell className="text-right">
-                        {displayQty(item.quantity)} {item.unit}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {displayMoney(item.lineTotal, order.currency)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {order.productionOrders.map((ot) => (
+                  <TableRow key={ot.id}>
+                    <TableCell className="font-mono font-bold">
+                      {canReadProduction ? (
+                        <Link
+                          href={`/production/${ot.id}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {ot.number}
+                        </Link>
+                      ) : (
+                        <span>{ot.number}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{ot.description}</TableCell>
+                    <TableCell className="font-mono">
+                      {ot.partNumber ?? "—"}
+                    </TableCell>
+                    <TableCell>{ot.quantity} {ot.unit}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {ot.priority === "urgente" ? "Urgente" :
+                         ot.priority === "compromiso_inmediato" ? "Compromiso" :
+                         ot.priority === "programada" ? "Programada" : "Normal"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={ot.status === "cancelada" ? "destructive" : "secondary"}>
+                        {PRODUCTION_STATUS_LABELS[ot.status as ProductionStatus]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{ot.workCenterName ?? "—"}</TableCell>
+                    <TableCell>{ot.machineName ?? "—"}</TableCell>
+                    <TableCell>{ot.operatorName ?? "—"}</TableCell>
+                    <TableCell>
+                      {ot.operationsTotal > 0 ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full bg-green-500"
+                              style={{ width: `${Math.round((ot.operationsDone / ot.operationsTotal) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {ot.operationsDone}/{ot.operationsTotal}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {new Date(ot.promisedDate).toLocaleDateString("es-MX")}
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}

@@ -17,12 +17,15 @@ import {
   customers,
   documents,
   engineeringRequests,
+  machines,
   orderItems,
   orders,
+  productionOperations,
   productionOrders,
   projects,
   quotes,
   users,
+  workCenters,
 } from "@/db/schema";
 import { pickChangedFields } from "@/lib/audit/activity";
 import { AppError } from "@/lib/errors";
@@ -334,15 +337,47 @@ export async function getOrderById(id: string) {
     .select({
       id: productionOrders.id,
       number: productionOrders.number,
-      status: productionOrders.status,
-      promisedDate: productionOrders.promisedDate,
+      description: productionOrders.description,
       partNumber: productionOrders.partNumber,
       quantity: productionOrders.quantity,
+      unit: productionOrders.unit,
+      priority: productionOrders.priority,
+      status: productionOrders.status,
+      promisedDate: productionOrders.promisedDate,
+      workCenterName: workCenters.name,
+      machineName: machines.name,
+      operatorName: users.name,
       orderItemId: productionOrders.orderItemId,
     })
     .from(productionOrders)
+    .leftJoin(workCenters, eq(productionOrders.workCenterId, workCenters.id))
+    .leftJoin(machines, eq(productionOrders.machineId, machines.id))
+    .leftJoin(users, eq(productionOrders.operatorUserId, users.id))
     .where(eq(productionOrders.orderId, id))
     .orderBy(desc(productionOrders.createdAt));
+
+  const otsWithOps = await Promise.all(
+    ots.map(async (ot) => {
+      const [totalOp] = await db
+        .select({ value: sql<number>`count(*)::int` })
+        .from(productionOperations)
+        .where(eq(productionOperations.productionOrderId, ot.id));
+      const [doneOp] = await db
+        .select({ value: sql<number>`count(*)::int` })
+        .from(productionOperations)
+        .where(
+          and(
+            eq(productionOperations.productionOrderId, ot.id),
+            eq(productionOperations.status, "terminada"),
+          ),
+        );
+      return {
+        ...ot,
+        operationsTotal: totalOp?.value ?? 0,
+        operationsDone: doneOp?.value ?? 0,
+      };
+    }),
+  );
 
   const files = await db
     .select()
@@ -350,7 +385,7 @@ export async function getOrderById(id: string) {
     .where(and(eq(documents.entityType, "order"), eq(documents.entityId, id)))
     .orderBy(desc(documents.createdAt));
 
-  const openOtCount = ots.filter((ot) =>
+  const openOtCount = otsWithOps.filter((ot) =>
     ACTIVE_PRODUCTION_STATUSES.includes(
       ot.status as (typeof ACTIVE_PRODUCTION_STATUSES)[number],
     ),
@@ -370,7 +405,7 @@ export async function getOrderById(id: string) {
     engineeringNumber: row.engineeringNumber,
     engineeringStatus: row.engineeringStatus,
     items,
-    productionOrders: ots,
+    productionOrders: otsWithOps,
     documents: files,
     openOtCount,
     drawingCount: items.filter((item) => isManufacturingItem(item.kind)).length,
