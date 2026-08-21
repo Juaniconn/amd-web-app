@@ -8,7 +8,7 @@ import { PERMISSIONS, ROLES } from "../lib/permissions/catalog";
 import { seedInventoryCatalogs } from "./seed-inventory";
 import { seedProductionCatalogs } from "./seed-production";
 import { seedCalculatorCatalogs } from "./seed-calculator";
-import { seedBetaFlow } from "./seed-beta-flow";
+import { seedFullDemo } from "./seed-full-demo";
 import { seedDemoComplete } from "./seed-demo-complete";
 import { wipeOperationalData } from "./seed-wipe";
 
@@ -134,7 +134,7 @@ async function seed() {
     await seedInventoryCatalogs(db);
     await seedProductionCatalogs(db, admin ?? null);
     await seedCalculatorCatalogs(db, admin ?? null);
-    await seedBetaFlow(db, admin ?? null);
+    await seedFullDemo(db, admin ?? null);
 
     console.log(
       "Foundation, plant catalogs and beta walkthrough seed completed. Official branches CJS/GDL/ELP come from migration 0009.",
