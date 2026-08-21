@@ -5,6 +5,7 @@ import { calculateLineTotals, calculateQuoteTotals, formatMoney } from "@/lib/qu
 import { activitySummary } from "@/lib/audit/activity";
 import {
   customers,
+  machines,
   materials,
   inventoryBalances,
   quotes,
@@ -125,6 +126,17 @@ const PART_TEMPLATES = [
 
 export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
   console.log("🚀 Iniciando seed completo de demo...");
+
+  // ==========================================
+  // 0. UPDATE MACHINE STATUSES (for demo)
+  // ==========================================
+  const machineStatuses = ["disponible", "en_produccion", "ocupada", "mantenimiento", "fuera_de_servicio"];
+  const allMachines = await db.select().from(machines);
+  for (let i = 0; i < allMachines.length; i++) {
+    const status = machineStatuses[i % machineStatuses.length] as any;
+    await db.update(machines).set({ status }).where(eq(machines.id, allMachines[i].id));
+  }
+  console.log(`✓ Estados de máquinas actualizados`);
 
   // ==========================================
   // 1. OPERATORS (users with role produccion)
