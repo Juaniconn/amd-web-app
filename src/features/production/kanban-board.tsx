@@ -64,7 +64,7 @@ function OrderCard({ part }: { part: PartSummary }) {
 
   return (
     <Card
-      className={`cursor-pointer hover:shadow-md ${
+      className={`hover:shadow-md ${
         part.isDelayed ? "border-l-4 border-l-red-500" : ""
       }`}
     >
@@ -73,7 +73,7 @@ function OrderCard({ part }: { part: PartSummary }) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <a
-                href={`/production/${part.id}`}
+                href={`/orders/${part.orderId}`}
                 className="font-mono text-sm font-bold truncate text-blue-600 hover:underline"
               >
                 {part.number}
@@ -149,7 +149,7 @@ function PartCard({ part }: { part: PartSummary }) {
               )}
             </div>
             <p className="text-[10px] text-muted-foreground truncate">{part.description}</p>
-            <p className="text-[10px] font-mono text-muted-foreground">OT: {part.number}</p>
+            <p className="text-[10px] font-mono text-muted-foreground">OT: {part.orderNumber}</p>
           </div>
           <Badge variant={priorityVariant[part.priority] ?? "outline"} className="shrink-0 text-[10px]">
             {PRODUCTION_PRIORITY_LABELS[part.priority as ProductionPriority] ?? part.priority}
