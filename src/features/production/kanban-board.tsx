@@ -23,6 +23,9 @@ type PartSummary = {
   unit: string;
   priority: string;
   status: string;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
   workCenterName: string | null;
   machineName: string | null;
   operatorName: string | null;
@@ -33,24 +36,11 @@ type PartSummary = {
   isDelayed: boolean;
 };
 
-type OrderWithParts = {
-  id: string;
-  number: string;
-  customerName: string;
-  status: string;
-  promisedDate: Date | null;
-  totalParts: number;
-  activeParts: number;
-  completedParts: number;
-  hasDelayed: boolean;
-  parts: PartSummary[];
-};
-
 type OrdersKanbanColumn = {
   id: string;
   label: string;
   color: string;
-  orders: OrderWithParts[];
+  orders: PartSummary[];
 };
 
 type PartsKanbanColumn = {
@@ -67,60 +57,70 @@ const priorityVariant: Record<string, "destructive" | "default" | "secondary" | 
   produccion_normal: "outline",
 };
 
-function OrderCard({ order }: { order: OrderWithParts }) {
-  const progress = order.totalParts > 0
-    ? Math.round((order.completedParts / order.totalParts) * 100)
+function OrderCard({ part }: { part: PartSummary }) {
+  const progress = part.operationsTotal > 0
+    ? Math.round((part.operationsDone / part.operationsTotal) * 100)
     : 0;
 
   return (
-    <Card className={`hover:shadow-md ${order.hasDelayed ? "border-l-4 border-l-red-500" : ""}`}>
+    <Card
+      className={`cursor-pointer hover:shadow-md ${
+        part.isDelayed ? "border-l-4 border-l-red-500" : ""
+      }`}
+    >
       <CardContent className="p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <a
-                href={`/production/orders/${order.id}`}
+                href={`/production/${part.id}`}
                 className="font-mono text-sm font-bold truncate text-blue-600 hover:underline"
               >
-                {order.number}
+                {part.number}
               </a>
-              {order.hasDelayed && (
+              {part.isDelayed && (
                 <span className="shrink-0 text-[10px] font-bold text-red-500 uppercase">Atrasado</span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground truncate">{order.customerName}</p>
+            <p className="text-xs text-muted-foreground truncate">{part.description}</p>
           </div>
-          <Badge variant="outline" className="shrink-0">
-            {order.completedParts}/{order.totalParts}
+          <Badge variant={priorityVariant[part.priority] ?? "outline"} className="shrink-0 text-[10px]">
+            {PRODUCTION_PRIORITY_LABELS[part.priority as ProductionPriority] ?? part.priority}
           </Badge>
         </div>
 
-        {order.totalParts > 0 && (
-          <div className="space-y-1">
-            <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-              <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
-            </div>
-            <p className="text-[10px] text-muted-foreground text-right">{progress}%</p>
-          </div>
+        {part.partNumber && (
+          <p className="text-[10px] font-mono text-muted-foreground">PN: {part.partNumber}</p>
         )}
 
-        <div className="flex flex-wrap gap-1.5">
-          {order.parts.slice(0, 3).map((part) => (
-            <a
-              key={part.id}
-              href={`/production/${part.id}`}
-              className="text-[10px] px-2 py-0.5 rounded bg-muted hover:bg-blue-100"
-              title={part.partNumber ?? part.description}
-            >
-              {part.partNumber ?? part.number}
-            </a>
-          ))}
-          {order.parts.length > 3 && (
-            <span className="text-[10px] px-2 py-0.5 rounded bg-muted">
-              +{order.parts.length - 3}
-            </span>
-          )}
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          {part.workCenterName && <span>Centro: {part.workCenterName}</span>}
+          {part.machineName && <span>Máq: {part.machineName}</span>}
         </div>
+
+        {part.operatorName && (
+          <p className="text-[11px] text-muted-foreground">
+            Operador: <span className="font-medium">{part.operatorName}</span>
+          </p>
+        )}
+
+        <div>
+          <span className="text-[10px] px-2 py-0.5 rounded bg-muted">
+            {PRODUCTION_STATUS_LABELS[part.status as ProductionStatus] ?? part.status}
+          </span>
+        </div>
+
+        {part.operationsTotal > 0 && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>{part.operationsDone}/{part.operationsTotal}</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+              <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -230,11 +230,11 @@ export function KanbanBoard({ ordersColumns, partsColumns }: {
               {"orders" in column ? (
                 (column as OrdersKanbanColumn).orders.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-4">
-                    Sin órdenes
+                    Sin números de parte
                   </p>
                 ) : (
-                  (column as OrdersKanbanColumn).orders.map((order) => (
-                    <OrderCard key={order.id} order={order} />
+                  (column as OrdersKanbanColumn).orders.map((part) => (
+                    <OrderCard key={part.id} part={part} />
                   ))
                 )
               ) : (
