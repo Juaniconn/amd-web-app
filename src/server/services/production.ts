@@ -1121,11 +1121,13 @@ export async function getProductionOrderById(id: string) {
       workCenterName: workCenters.name,
       machineId: productionOperations.machineId,
       operatorUserId: productionOperations.operatorUserId,
+      operatorName: users.name,
       startedAt: productionOperations.startedAt,
       finishedAt: productionOperations.finishedAt,
     })
     .from(productionOperations)
     .leftJoin(workCenters, eq(productionOperations.workCenterId, workCenters.id))
+    .leftJoin(users, eq(productionOperations.operatorUserId, users.id))
     .where(eq(productionOperations.productionOrderId, id))
     .orderBy(asc(productionOperations.position));
 

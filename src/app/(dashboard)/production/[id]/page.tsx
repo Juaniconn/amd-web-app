@@ -4,6 +4,7 @@ import { ProductionAssignPanel } from "@/features/production/production-assign-p
 import { ProductionReworkPanel } from "@/features/production/production-rework-panel";
 import { ProductionStatusActions } from "@/features/production/production-status-actions";
 import { ProductionTimePanel } from "@/features/production/production-time-panel";
+import { ProductionOperationsTable } from "@/features/production/production-operations-table";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -295,22 +296,11 @@ export default async function ProductionDetailPage({
           <CardTitle>Procesos</CardTitle>
         </CardHeader>
         <CardContent>
-          {order.operations.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Aún no hay procesos. Se copian de la cotización al convertir a OT.
-            </p>
-          ) : (
-            <ol className="space-y-2 text-sm">
-              {order.operations.map((step) => (
-                <li key={step.id} className="rounded-lg border px-3 py-2">
-                  {step.position}. {step.name}
-                  {step.workCenterName ? ` · ${step.workCenterName}` : ""}
-                  {" · "}
-                  {step.status}
-                </li>
-              ))}
-            </ol>
-          )}
+          <ProductionOperationsTable
+            operations={order.operations}
+            operators={users}
+            canAssign={access.permissions.includes(PERMISSION_IDS.productionAssignOperator)}
+          />
         </CardContent>
       </Card>
 
