@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import { Moon, Sun } from "lucide-react";
 import { UserMenu } from "@/components/layout/user-menu";
 
 type AppHeaderProps = {
@@ -13,18 +17,28 @@ export function AppHeader({
   userEmail,
   roles,
 }: AppHeaderProps) {
+  const [dark, setDark] = useState(false);
+
+  function toggleDark() {
+    setDark(!dark);
+    document.documentElement.classList.toggle("dark");
+  }
+
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-card px-6">
+    <header className="flex h-14 items-center justify-between border-b bg-card px-6">
       <div>
-        <p
-          className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground"
-          suppressHydrationWarning
-        >
-          AMD Operations
-        </p>
-        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-base font-semibold tracking-tight">{title}</h1>
       </div>
-      <UserMenu name={userName} email={userEmail} roles={roles} />
+      <div className="flex items-center gap-3">
+        <button
+          onClick={toggleDark}
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+          aria-label="Toggle dark mode"
+        >
+          {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+        <UserMenu name={userName} email={userEmail} roles={roles} />
+      </div>
     </header>
   );
 }
