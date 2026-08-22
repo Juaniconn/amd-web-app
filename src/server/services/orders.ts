@@ -124,6 +124,20 @@ export async function listOrders(query: {
         where order_items.order_id = ${orders.id}
           and order_items.kind <> 'servicio_ingenieria'
       ), 0)`,
+      partsTotal: sql<number>`coalesce((
+        select count(*)::int from production_orders
+        where production_orders.order_id = ${orders.id}
+      ), 0)`,
+      partsDone: sql<number>`coalesce((
+        select count(*)::int from production_orders
+        where production_orders.order_id = ${orders.id}
+          and production_orders.status in ('terminada','entregada')
+      ), 0)`,
+      partsInProduction: sql<number>`coalesce((
+        select count(*)::int from production_orders
+        where production_orders.order_id = ${orders.id}
+          and production_orders.status = 'en_produccion'
+      ), 0)`,
       status: orders.status,
       origin: orders.origin,
       total: orders.total,
@@ -157,6 +171,9 @@ export async function listOrders(query: {
     rows: rows.map((row) => ({
       ...row,
       drawingCount: Number(row.drawingCount ?? 0),
+      partsTotal: Number(row.partsTotal ?? 0),
+      partsDone: Number(row.partsDone ?? 0),
+      partsInProduction: Number(row.partsInProduction ?? 0),
       workOrderNumber: workOrderNumber(row.number),
     })),
     total,

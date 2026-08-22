@@ -40,14 +40,14 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/customers", label: "Clientes", icon: <Users className="h-4 w-4" />, permission: PERMISSION_IDS.customersRead },
       { href: "/quotes", label: "Cotizaciones", icon: <FileText className="h-4 w-4" />, permission: PERMISSION_IDS.quotesRead },
-      { href: "/orders", label: "Pedidos", icon: <ClipboardList className="h-4 w-4" />, permission: PERMISSION_IDS.ordersView },
     ],
   },
   {
     label: "Producción",
     items: [
+      { href: "/orders", label: "Órdenes de Trabajo", icon: <ClipboardList className="h-4 w-4" />, permission: PERMISSION_IDS.ordersView },
       { href: "/engineering", label: "Ingeniería", icon: <Wrench className="h-4 w-4" />, permission: PERMISSION_IDS.engineeringRead },
-      { href: "/production", label: "Producción", icon: <Settings className="h-4 w-4" />, permission: PERMISSION_IDS.productionView },
+      { href: "/production", label: "Números de Parte", icon: <Settings className="h-4 w-4" />, permission: PERMISSION_IDS.productionView },
       { href: "/production/kanban", label: "Tablero Kanban", icon: <LayoutDashboard className="h-4 w-4" />, permission: PERMISSION_IDS.productionView },
       { href: "/inventory", label: "Inventario", icon: <Package className="h-4 w-4" />, permission: PERMISSION_IDS.inventoryRead },
       { href: "/purchasing", label: "Compras", icon: <ShoppingCart className="h-4 w-4" />, permission: PERMISSION_IDS.purchasingRead },

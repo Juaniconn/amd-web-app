@@ -44,9 +44,9 @@ export default function DashboardPage() {
           href="/quotes"
         />
         <StatCard
-          label="Pedidos"
+          label="Órdenes de Trabajo"
           value="15"
-          sub="3 atrasados"
+          sub="3 atrasadas"
           icon={<ClipboardList className="h-4 w-4" />}
           href="/orders"
         />
