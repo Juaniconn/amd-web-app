@@ -38,6 +38,7 @@ export async function listOrdersForDelivery() {
       id: orders.id,
       number: orders.number,
       customerName: customers.legalName,
+      shippingCity: customers.shippingCity,
       branchId: orders.branchId,
       status: orders.status,
     })
@@ -89,6 +90,7 @@ export async function listDeliveries(input?: {
       orderId: deliveries.orderId,
       orderNumber: orders.number,
       customerName: customers.legalName,
+      shippingCity: customers.shippingCity,
       branchCode: branches.code,
     })
     .from(deliveries)
@@ -116,6 +118,7 @@ export async function getDeliveryById(id: string) {
       orderNumber: orders.number,
       customerId: orders.customerId,
       customerName: customers.legalName,
+      shippingCity: customers.shippingCity,
       branchName: branches.name,
       branchCode: branches.code,
       otNumber: productionOrders.number,
