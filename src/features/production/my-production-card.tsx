@@ -4,14 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  CheckCircle2,
-  Play,
-  Lock,
-  Clock,
-  Package,
-  Settings,
   AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
   Loader2,
+  Lock,
+  Package,
+  Play,
 } from "lucide-react";
 import {
   finishMyOperationAction,
@@ -68,7 +68,11 @@ export function OperationCard({ op }: { op: MyOperationCard }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [good, setGood] = useState("");
+  const [scrap, setScrap] = useState("");
+  const [rework, setRework] = useState("");
+  const [rootCause, setRootCause] = useState("");
 
   const working = op.status === "en_proceso";
   const blocked = !op.isUnblocked && op.status === "pendiente";
@@ -79,17 +83,47 @@ export function OperationCard({ op }: { op: MyOperationCard }) {
   const isDelayed = new Date(op.promisedDate) < new Date();
   const time = elapsed(op.startedAt);
 
-  function run(action: (fd: FormData) => Promise<{ ok: boolean; error?: string }>) {
+  const scrapN = Number(scrap) || 0;
+  const reworkN = Number(rework) || 0;
+  const needsCause = scrapN > 0 || reworkN > 0;
+
+  function start() {
     setError(null);
     const fd = new FormData();
     fd.set("operationId", op.id);
     startTransition(async () => {
-      const res = await action(fd);
+      const res = await startMyOperationAction(fd);
       if (!res.ok) {
-        setError(res.error ?? "No se pudo completar la acción.");
+        setError(res.error ?? "No se pudo iniciar el proceso.");
         return;
       }
-      setConfirming(false);
+      router.refresh();
+    });
+  }
+
+  function finish() {
+    setError(null);
+    if (needsCause && !rootCause.trim()) {
+      setError("Indica la causa raíz del scrap o retrabajo.");
+      return;
+    }
+    const fd = new FormData();
+    fd.set("operationId", op.id);
+    if (good) fd.set("goodQuantity", good);
+    if (scrap) fd.set("scrapQuantity", scrap);
+    if (rework) fd.set("reworkQuantity", rework);
+    if (rootCause.trim()) fd.set("rootCause", rootCause.trim());
+    startTransition(async () => {
+      const res = await finishMyOperationAction(fd);
+      if (!res.ok) {
+        setError(res.error ?? "No se pudo cerrar el proceso.");
+        return;
+      }
+      setClosing(false);
+      setGood("");
+      setScrap("");
+      setRework("");
+      setRootCause("");
       router.refresh();
     });
   }
@@ -184,60 +218,124 @@ export function OperationCard({ op }: { op: MyOperationCard }) {
         </p>
       )}
 
-      {/* Acciones — botones grandes para usar con guantes en el piso */}
-      <div className="mt-3 flex gap-2">
-        {blocked ? (
-          <div className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-muted py-3 text-xs text-muted-foreground">
-            <Lock className="h-3.5 w-3.5" />
-            Espera el proceso anterior
-          </div>
-        ) : working ? (
-          confirming ? (
-            <>
+      {/* Acciones */}
+      {blocked ? (
+        <div className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-muted py-3 text-xs text-muted-foreground">
+          <Lock className="h-3.5 w-3.5" />
+          Espera el proceso anterior
+        </div>
+      ) : working ? (
+        closing ? (
+          <div className="mt-3 space-y-2 rounded-lg border bg-muted/30 p-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Reporte de producción
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              <label className="space-y-0.5">
+                <span className="block text-[10px] text-muted-foreground">Buenas</span>
+                <input
+                  type="number"
+                  min="0"
+                  inputMode="numeric"
+                  value={good}
+                  onChange={(e) => setGood(e.target.value)}
+                  placeholder={String(Number(op.quantity))}
+                  className="h-9 w-full rounded border bg-background px-2 text-sm"
+                />
+              </label>
+              <label className="space-y-0.5">
+                <span className="block text-[10px] font-medium text-red-600">Scrap</span>
+                <input
+                  type="number"
+                  min="0"
+                  inputMode="numeric"
+                  value={scrap}
+                  onChange={(e) => setScrap(e.target.value)}
+                  placeholder="0"
+                  className={`h-9 w-full rounded border bg-background px-2 text-sm ${
+                    scrapN > 0 ? "border-red-400" : ""
+                  }`}
+                />
+              </label>
+              <label className="space-y-0.5">
+                <span className="block text-[10px] font-medium text-amber-600">
+                  Retrabajo
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  inputMode="numeric"
+                  value={rework}
+                  onChange={(e) => setRework(e.target.value)}
+                  placeholder="0"
+                  className={`h-9 w-full rounded border bg-background px-2 text-sm ${
+                    reworkN > 0 ? "border-amber-400" : ""
+                  }`}
+                />
+              </label>
+            </div>
+
+            {needsCause && (
+              <label className="block space-y-0.5">
+                <span className="flex items-center gap-1 text-[10px] font-medium text-red-600">
+                  <AlertTriangle className="h-2.5 w-2.5" />
+                  Causa raíz (obligatoria)
+                </span>
+                <input
+                  type="text"
+                  value={rootCause}
+                  onChange={(e) => setRootCause(e.target.value)}
+                  placeholder="Ej. medida fuera de tolerancia, porosidad, herramienta gastada"
+                  className="h-9 w-full rounded border border-red-300 bg-background px-2 text-sm"
+                />
+              </label>
+            )}
+
+            <div className="flex gap-2 pt-1">
               <button
-                onClick={() => run(finishMyOperationAction)}
+                onClick={finish}
                 disabled={isPending}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
               >
                 {isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <CheckCircle2 className="h-4 w-4" />
                 )}
-                Sí, terminé
+                Confirmar cierre
               </button>
               <button
-                onClick={() => setConfirming(false)}
+                onClick={() => setClosing(false)}
                 disabled={isPending}
-                className="rounded-lg border px-4 py-3 text-sm hover:bg-muted"
+                className="rounded-lg border px-3 py-2.5 text-sm hover:bg-muted"
               >
                 Cancelar
               </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setConfirming(true)}
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Marcar terminado
-            </button>
-          )
+            </div>
+          </div>
         ) : (
           <button
-            onClick={() => run(startMyOperationAction)}
-            disabled={isPending}
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            onClick={() => setClosing(true)}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700"
           >
-            {isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4" />
-            )}
-            Iniciar proceso
+            <CheckCircle2 className="h-4 w-4" />
+            Terminar y reportar
           </button>
-        )}
-      </div>
+        )
+      ) : (
+        <button
+          onClick={start}
+          disabled={isPending}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Play className="h-4 w-4" />
+          )}
+          Iniciar proceso
+        </button>
+      )}
 
       <Link
         href={`/production/${op.partId}`}

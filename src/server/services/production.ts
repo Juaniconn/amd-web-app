@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import {
   and,
   asc,
@@ -8,6 +9,7 @@ import {
   eq,
   ilike,
   inArray,
+  isNull,
   lt,
   ne,
   notInArray,
@@ -20,6 +22,8 @@ import {
   documents,
   downtimeReasons,
   engineeringRequests,
+  laborHours,
+  machineHours,
   machines,
   materials,
   orderItems,
@@ -28,6 +32,7 @@ import {
   productionOperations,
   productionOrderMaterials,
   productionOrders,
+  productionRework,
   productionRouteSteps,
   quoteItems,
   quotes,
@@ -1332,6 +1337,98 @@ async function syncPartStatusFromOperations(
   }
 }
 
+/** Horas máquina, horas hombre, scrap y retrabajo de un número de parte */
+export async function getPartProductionRecord(productionOrderId: string) {
+  const machineLogs = await db
+    .select({
+      id: machineHours.id,
+      machineName: machines.name,
+      operationName: productionOperations.name,
+      operatorName: users.name,
+      startedAt: machineHours.startedAt,
+      endedAt: machineHours.endedAt,
+      durationMinutes: machineHours.durationMinutes,
+    })
+    .from(machineHours)
+    .innerJoin(machines, eq(machineHours.machineId, machines.id))
+    .leftJoin(
+      productionOperations,
+      eq(machineHours.operationId, productionOperations.id),
+    )
+    .leftJoin(users, eq(machineHours.operatorUserId, users.id))
+    .where(eq(machineHours.productionOrderId, productionOrderId))
+    .orderBy(desc(machineHours.startedAt));
+
+  const laborLogs = await db
+    .select({
+      id: laborHours.id,
+      operationName: productionOperations.name,
+      operatorName: users.name,
+      startedAt: laborHours.startedAt,
+      endedAt: laborHours.endedAt,
+      durationMinutes: laborHours.durationMinutes,
+    })
+    .from(laborHours)
+    .innerJoin(users, eq(laborHours.operatorUserId, users.id))
+    .leftJoin(
+      productionOperations,
+      eq(laborHours.operationId, productionOperations.id),
+    )
+    .where(eq(laborHours.productionOrderId, productionOrderId))
+    .orderBy(desc(laborHours.startedAt));
+
+  const reworkLogs = await db
+    .select({
+      id: productionRework.id,
+      quantity: productionRework.quantity,
+      scrapQuantity: productionRework.scrapQuantity,
+      rootCause: productionRework.rootCause,
+      laborHours: productionRework.laborHours,
+      machineHours: productionRework.machineHours,
+      qualityReleased: productionRework.qualityReleased,
+      qualityReleasedAt: productionRework.qualityReleasedAt,
+      notes: productionRework.notes,
+      createdAt: productionRework.createdAt,
+      createdByName: users.name,
+    })
+    .from(productionRework)
+    .leftJoin(users, eq(productionRework.createdBy, users.id))
+    .where(eq(productionRework.productionOrderId, productionOrderId))
+    .orderBy(desc(productionRework.createdAt));
+
+  const machineMinutes = machineLogs.reduce(
+    (acc, l) => acc + (l.durationMinutes ?? 0),
+    0,
+  );
+  const laborMinutes = laborLogs.reduce(
+    (acc, l) => acc + (l.durationMinutes ?? 0),
+    0,
+  );
+  const totalScrap = reworkLogs.reduce(
+    (acc, r) => acc + Number(r.scrapQuantity ?? 0),
+    0,
+  );
+  const totalRework = reworkLogs.reduce(
+    (acc, r) => acc + Number(r.quantity ?? 0),
+    0,
+  );
+
+  return {
+    machineLogs,
+    laborLogs,
+    reworkLogs,
+    totals: {
+      machineMinutes,
+      laborMinutes,
+      machineHours: Number((machineMinutes / 60).toFixed(2)),
+      laborHours: Number((laborMinutes / 60).toFixed(2)),
+      totalScrap,
+      totalRework,
+      openReworks: reworkLogs.filter((r) => !r.qualityReleased).length,
+    },
+  };
+}
+
 export async function assignOperationOperator(
   operationId: string,
   operatorUserId: string | null,
@@ -1372,7 +1469,9 @@ export async function startOperationAsOperator(
       status: productionOperations.status,
       operatorUserId: productionOperations.operatorUserId,
       productionOrderId: productionOperations.productionOrderId,
+      opMachineId: productionOperations.machineId,
       partStatus: productionOrders.status,
+      partMachineId: productionOrders.machineId,
     })
     .from(productionOperations)
     .innerJoin(
@@ -1419,6 +1518,57 @@ export async function startOperationAsOperator(
     .set({ status: "en_proceso", startedAt: now, updatedAt: now })
     .where(eq(productionOperations.id, operationId));
 
+  // Abrir cronómetro de horas hombre ligado a este proceso
+  const [openLabor] = await db
+    .select({ id: laborHours.id })
+    .from(laborHours)
+    .where(
+      and(
+        eq(laborHours.operatorUserId, operatorUserId),
+        isNull(laborHours.endedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!openLabor) {
+    await db.insert(laborHours).values({
+      id: randomUUID(),
+      productionOrderId: op.productionOrderId,
+      operationId,
+      operatorUserId,
+      startedAt: now,
+      createdBy: operatorUserId,
+    });
+  }
+
+  // Abrir cronómetro de máquina si el proceso tiene máquina y está libre
+  const machineId = op.opMachineId ?? op.partMachineId;
+  if (machineId) {
+    const [openMachine] = await db
+      .select({ id: machineHours.id })
+      .from(machineHours)
+      .where(
+        and(eq(machineHours.machineId, machineId), isNull(machineHours.endedAt)),
+      )
+      .limit(1);
+
+    if (!openMachine) {
+      await db.insert(machineHours).values({
+        id: randomUUID(),
+        productionOrderId: op.productionOrderId,
+        operationId,
+        machineId,
+        operatorUserId,
+        startedAt: now,
+        createdBy: operatorUserId,
+      });
+      await db
+        .update(machines)
+        .set({ status: "en_produccion", updatedAt: now })
+        .where(eq(machines.id, machineId));
+    }
+  }
+
   if (["liberada", "programada", "pausada"].includes(op.partStatus)) {
     await db
       .update(productionOrders)
@@ -1431,11 +1581,41 @@ export async function startOperationAsOperator(
  * El operador termina su proceso.
  * Si era el último pendiente del número de parte, este pasa a 'calidad'.
  */
+export type FinishOperationInput = {
+  operationId: string;
+  operatorUserId: string;
+  /** piezas buenas producidas en este proceso */
+  goodQuantity?: number;
+  /** piezas desechadas (scrap) */
+  scrapQuantity?: number;
+  /** piezas que necesitan retrabajo */
+  reworkQuantity?: number;
+  /** causa raíz — obligatoria si hay scrap o retrabajo */
+  rootCause?: string;
+  notes?: string;
+};
+
 export async function finishOperationAsOperator(
-  operationId: string,
-  operatorUserId: string,
-  notes?: string,
-): Promise<{ partCompleted: boolean; nextOperationName: string | null }> {
+  input: FinishOperationInput,
+): Promise<{
+  partCompleted: boolean;
+  nextOperationName: string | null;
+  reworkCreated: boolean;
+  laborMinutes: number;
+  machineMinutes: number;
+}> {
+  const { operationId, operatorUserId } = input;
+  const scrap = Math.max(0, input.scrapQuantity ?? 0);
+  const rework = Math.max(0, input.reworkQuantity ?? 0);
+
+  if ((scrap > 0 || rework > 0) && !input.rootCause?.trim()) {
+    throw new AppError(
+      "Indica la causa raíz cuando reportas scrap o retrabajo.",
+      "OP_ROOT_CAUSE_REQUIRED",
+      400,
+    );
+  }
+
   const [op] = await db
     .select({
       id: productionOperations.id,
@@ -1444,8 +1624,13 @@ export async function finishOperationAsOperator(
       status: productionOperations.status,
       operatorUserId: productionOperations.operatorUserId,
       productionOrderId: productionOperations.productionOrderId,
+      partNumber: productionOrders.partNumber,
     })
     .from(productionOperations)
+    .innerJoin(
+      productionOrders,
+      eq(productionOperations.productionOrderId, productionOrders.id),
+    )
     .where(eq(productionOperations.id, operationId))
     .limit(1);
 
@@ -1456,7 +1641,13 @@ export async function finishOperationAsOperator(
     throw new AppError("Este proceso no está asignado a ti.", "OP_FORBIDDEN", 403);
   }
   if (op.status === "terminada") {
-    return { partCompleted: false, nextOperationName: null };
+    return {
+      partCompleted: false,
+      nextOperationName: null,
+      reworkCreated: false,
+      laborMinutes: 0,
+      machineMinutes: 0,
+    };
   }
 
   const now = new Date();
@@ -1470,6 +1661,81 @@ export async function finishOperationAsOperator(
       updatedAt: now,
     })
     .where(eq(productionOperations.id, operationId));
+
+  // Cerrar cronómetro de horas hombre de este proceso
+  let laborMinutes = 0;
+  const openLabor = await db
+    .select({ id: laborHours.id, startedAt: laborHours.startedAt })
+    .from(laborHours)
+    .where(
+      and(
+        eq(laborHours.operationId, operationId),
+        eq(laborHours.operatorUserId, operatorUserId),
+        isNull(laborHours.endedAt),
+      ),
+    );
+
+  for (const entry of openLabor) {
+    const mins = Math.max(
+      1,
+      Math.round((now.getTime() - new Date(entry.startedAt).getTime()) / 60000),
+    );
+    laborMinutes += mins;
+    await db
+      .update(laborHours)
+      .set({ endedAt: now, durationMinutes: mins })
+      .where(eq(laborHours.id, entry.id));
+  }
+
+  // Cerrar cronómetro de máquina de este proceso y liberar la máquina
+  let machineMinutes = 0;
+  const openMachine = await db
+    .select({
+      id: machineHours.id,
+      startedAt: machineHours.startedAt,
+      machineId: machineHours.machineId,
+    })
+    .from(machineHours)
+    .where(
+      and(
+        eq(machineHours.operationId, operationId),
+        isNull(machineHours.endedAt),
+      ),
+    );
+
+  for (const entry of openMachine) {
+    const mins = Math.max(
+      1,
+      Math.round((now.getTime() - new Date(entry.startedAt).getTime()) / 60000),
+    );
+    machineMinutes += mins;
+    await db
+      .update(machineHours)
+      .set({ endedAt: now, durationMinutes: mins })
+      .where(eq(machineHours.id, entry.id));
+    await db
+      .update(machines)
+      .set({ status: "disponible", updatedAt: now })
+      .where(eq(machines.id, entry.machineId));
+  }
+
+  // Registrar scrap / retrabajo
+  let reworkCreated = false;
+  if (scrap > 0 || rework > 0) {
+    await db.insert(productionRework).values({
+      id: randomUUID(),
+      productionOrderId: op.productionOrderId,
+      partNumber: op.partNumber,
+      quantity: formatQty(rework),
+      scrapQuantity: formatQty(scrap),
+      rootCause: `[${op.name}] ${input.rootCause!.trim()}`,
+      laborHours: (laborMinutes / 60).toFixed(2),
+      machineHours: (machineMinutes / 60).toFixed(2),
+      notes: input.notes?.trim() || null,
+      createdBy: operatorUserId,
+    });
+    reworkCreated = true;
+  }
 
   const remaining = await db
     .select({
@@ -1497,5 +1763,8 @@ export async function finishOperationAsOperator(
   return {
     partCompleted,
     nextOperationName: remaining[0]?.name ?? null,
+    reworkCreated,
+    laborMinutes,
+    machineMinutes,
   };
 }

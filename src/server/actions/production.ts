@@ -377,14 +377,28 @@ export async function finishMyOperationAction(formData: FormData) {
   try {
     const { session } = await requirePermission(PERMISSION_IDS.productionView);
     const operationId = formData.get("operationId")?.toString() ?? "";
-    const notes = formData.get("notes")?.toString() || undefined;
     if (!operationId) {
       return { ok: false as const, error: "ID de proceso requerido." };
     }
-    const result = await finishOperationAsOperator(operationId, session.user.id);
+    const num = (key: string) => {
+      const raw = formData.get(key)?.toString();
+      if (!raw) return undefined;
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 0 ? n : undefined;
+    };
+    const result = await finishOperationAsOperator({
+      operationId,
+      operatorUserId: session.user.id,
+      goodQuantity: num("goodQuantity"),
+      scrapQuantity: num("scrapQuantity"),
+      reworkQuantity: num("reworkQuantity"),
+      rootCause: formData.get("rootCause")?.toString() || undefined,
+      notes: formData.get("notes")?.toString() || undefined,
+    });
     revalidatePath("/my-production");
     revalidatePath("/production");
     revalidatePath("/orders");
+    revalidatePath("/quality");
     return { ok: true as const, ...result };
   } catch (error) {
     return fail(error);

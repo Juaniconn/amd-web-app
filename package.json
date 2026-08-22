@@ -18,6 +18,7 @@
     "check:kpis": "tsx scripts/check-command-center.ts",
     "check:alerts": "tsx scripts/check-alerts-search.ts",
     "check:operator": "tsx scripts/check-operator-cycle.ts",
+    "check:machining": "tsx scripts/check-machining-scrap.ts",
     "db:start": "tsx scripts/start-embedded-postgres.ts",
     "db:verify": "tsx scripts/verify-db.ts"
   },

@@ -5,6 +5,7 @@ import { ProductionReworkPanel } from "@/features/production/production-rework-p
 import { ProductionStatusActions } from "@/features/production/production-status-actions";
 import { ProductionTimePanel } from "@/features/production/production-time-panel";
 import { ProductionOperationsTable } from "@/features/production/production-operations-table";
+import { ProductionRecordPanel } from "@/features/production/production-record-panel";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,7 @@ import { listProductionActivity } from "@/server/services/activity";
 import { listEngineeringDocuments, listQuoteDocuments } from "@/server/services/documents";
 import {
   getProductionOrderById,
+  getPartProductionRecord,
   listDowntimeReasons,
   listUsersForProduction,
 } from "@/server/services/production";
@@ -86,6 +88,7 @@ export default async function ProductionDetailPage({
   const machines = await listMachines({ activeOnly: true });
   const machineEntries = await listMachineHours(order.id);
   const rework = await listRework(order.id);
+  const record = await getPartProductionRecord(order.id);
   const attachedDocs = await listProductionOrderDocuments(order.id);
   const qualityState = await getQualityCloseState(order.id);
   const inspections = await listInspectionsForOrder(order.id);
@@ -300,6 +303,15 @@ export default async function ProductionDetailPage({
             operations={order.operations}
             canAssign={access.permissions.includes(PERMISSION_IDS.productionAssignOperator)}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Maquinado, Scrap y Retrabajo</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProductionRecordPanel record={record} />
         </CardContent>
       </Card>
 
