@@ -1,9 +1,4 @@
 import Link from "next/link";
-import { CustomerFilters } from "@/features/customers/customer-filters";
-import { EmptyTable, TableCard, TablePager } from "@/components/layout/data-table";
-import { PageHeader } from "@/components/layout/page-header";
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -12,6 +7,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Plus, Building2, Mail, Phone, MapPin } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import {
@@ -21,11 +19,6 @@ import {
   customerTypeSchema,
 } from "@/lib/validation/customers";
 import { listCustomers } from "@/server/services/customers";
-import { parsePage, parsePageSize } from "@/lib/ui/pagination";
-
-function first(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
 
 export default async function CustomersPage({
   searchParams,
@@ -40,121 +33,122 @@ export default async function CustomersPage({
 }) {
   const { access } = await requirePermission(PERMISSION_IDS.customersRead);
   const params = await searchParams;
-  const q = first(params.q)?.trim() || undefined;
-  const statusParsed = customerStatusSchema.safeParse(first(params.status));
-  const typeParsed = customerTypeSchema.safeParse(first(params.type));
-  const page = parsePage(first(params.page));
-  const pageSize = parsePageSize(first(params.perPage));
+  const q = Array.isArray(params.q) ? params.q[0] : params.q;
+  const status = Array.isArray(params.status) ? params.status[0] : params.status;
+  const type = Array.isArray(params.type) ? params.type[0] : params.type;
+  const page = Number(Array.isArray(params.page) ? params.page[0] : params.page) || 1;
+  const pageSize = Number(Array.isArray(params.perPage) ? params.perPage[0] : params.perPage) || 20;
+
   const canWrite = access.permissions.includes(PERMISSION_IDS.customersWrite);
-  const filtered = Boolean(q || statusParsed.success || typeParsed.success);
+  const filtered = Boolean(q || status || type);
 
   const result = await listCustomers({
-    q,
-    status: statusParsed.success ? statusParsed.data : undefined,
-    type: typeParsed.success ? typeParsed.data : undefined,
+    q: q?.trim() || undefined,
+    status: status as any,
+    type: type as any,
     page,
     pageSize,
   });
 
-  const query = new URLSearchParams();
-  if (q) query.set("q", q);
-  if (statusParsed.success) query.set("status", statusParsed.data);
-  if (typeParsed.success) query.set("type", typeParsed.data);
-  query.set("perPage", String(pageSize));
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Clientes"
-        description="Empresas, contactos y datos de envío para cotizar y entregar."
-        actions={
-          canWrite ? (
-            <Link href="/customers/new" className={buttonVariants()}>
-              Nuevo cliente
-            </Link>
-          ) : null
-        }
-      />
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold">Clientes</h1>
+          <p className="text-xs text-muted-foreground">
+            {result.total} clientes · {result.rows.filter((c) => c.status === "activo").length} activos
+          </p>
+        </div>
+        {canWrite && (
+          <Link href="/customers/new" className="inline-flex items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+            <Plus className="h-3 w-3" />
+            Nuevo Cliente
+          </Link>
+        )}
+      </div>
 
-      <CustomerFilters
-        q={q}
-        status={statusParsed.success ? statusParsed.data : undefined}
-        type={typeParsed.success ? typeParsed.data : undefined}
-        perPage={pageSize}
-      />
+      {/* Filters */}
+      <div className="flex items-center gap-2 rounded-md border bg-card p-2">
+        <Button variant="outline" size="xs" className={!status && !filtered ? "bg-muted" : ""}>
+          Todos
+        </Button>
+        <Button variant="outline" size="xs" className={status === "activo" ? "bg-muted" : ""}>
+          Activos
+        </Button>
+        <Button variant="outline" size="xs" className={status === "inactivo" ? "bg-muted" : ""}>
+          Inactivos
+        </Button>
+      </div>
 
-      <TableCard>
+      {/* Table */}
+      <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Código</TableHead>
-              <TableHead>Empresa</TableHead>
-              <TableHead>RFC</TableHead>
-              <TableHead>Teléfono</TableHead>
-              <TableHead>Contacto principal</TableHead>
+              <TableHead>Cliente</TableHead>
+              <TableHead>Contacto</TableHead>
+              <TableHead>Ubicación</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Estado</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {result.rows.length === 0 ? (
-              <EmptyTable
-                colSpan={7}
-                title={filtered ? "No hay clientes con esos filtros." : "Aún no hay clientes."}
-                description={
-                  filtered
-                    ? "Prueba otra búsqueda o limpia los filtros."
-                    : "Captura la empresa y el contacto de compras para cotizar."
-                }
-                href={!filtered && canWrite ? "/customers/new" : undefined}
-                actionLabel="Nuevo cliente"
-              />
+              <TableRow>
+                <TableCell colSpan={5} className="py-12 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {filtered ? "No se encontraron resultados" : "Aún no hay clientes"}
+                  </p>
+                  {!filtered && canWrite && (
+                    <Link href="/customers/new" className="mt-2 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90">
+                      <Plus className="h-3 w-3" />
+                      Crear primer cliente
+                    </Link>
+                  )}
+                </TableCell>
+              </TableRow>
             ) : (
               result.rows.map((customer) => (
                 <TableRow key={customer.id}>
-                  <TableCell className="font-mono text-xs">{customer.code}</TableCell>
                   <TableCell>
-                    <Link
-                      href={`/customers/${customer.id}`}
-                      className="font-medium hover:underline"
-                    >
+                    <Link href={`/customers/${customer.id}`} className="font-medium hover:underline">
                       {customer.legalName}
                     </Link>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {customer.tradeName ? (
-                        <span className="text-xs text-muted-foreground">
-                          {customer.tradeName}
-                        </span>
-                      ) : null}
-                      {customer.isDemo ? (
-                        <Badge variant="outline">DEMO</Badge>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell>{customer.rfc ?? "—"}</TableCell>
-                  <TableCell>{customer.phone ?? "—"}</TableCell>
-                  <TableCell>
-                    {customer.primaryContactName ? (
-                      <div>
-                        <p>{customer.primaryContactName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {customer.primaryContactPhone ||
-                            customer.primaryContactEmail ||
-                            ""}
-                        </p>
-                      </div>
-                    ) : (
-                      "—"
+                    {customer.code && (
+                      <div className="text-xs text-muted-foreground">{customer.code}</div>
                     )}
                   </TableCell>
-                  <TableCell>{CUSTOMER_TYPE_LABELS[customer.type]}</TableCell>
+                  <TableCell className="text-xs">
+                    {customer.primaryContactEmail && (
+                      <div className="flex items-center gap-1">
+                        <Mail className="h-3 w-3 text-muted-foreground" />
+                        {customer.primaryContactEmail}
+                      </div>
+                    )}
+                    {customer.phone && (
+                      <div className="flex items-center gap-1">
+                        <Phone className="h-3 w-3 text-muted-foreground" />
+                        {customer.phone}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {customer.city && (
+                      <div className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3 text-muted-foreground" />
+                        {customer.city}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        customer.status === "activo" ? "secondary" : "outline"
-                      }
-                    >
-                      {CUSTOMER_STATUS_LABELS[customer.status]}
+                    <Badge variant="outline" className="text-[10px]">
+                      {CUSTOMER_TYPE_LABELS[customer.type as keyof typeof CUSTOMER_TYPE_LABELS] || customer.type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={customer.status === "activo" ? "default" : "secondary"}>
+                      {CUSTOMER_STATUS_LABELS[customer.status as keyof typeof CUSTOMER_STATUS_LABELS]}
                     </Badge>
                   </TableCell>
                 </TableRow>
@@ -162,17 +156,14 @@ export default async function CustomersPage({
             )}
           </TableBody>
         </Table>
-      </TableCard>
+      </div>
 
-      <TablePager
-        total={result.total}
-        page={result.page}
-        pageCount={result.pageCount}
-        label={result.total === 1 ? "cliente" : "clientes"}
-        path="/customers"
-        query={query}
-        pageSize={pageSize}
-      />
+      {/* Pagination */}
+      {result.pageCount > 1 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{result.total} resultados · Página {page} de {result.pageCount}</span>
+        </div>
+      )}
     </div>
   );
 }
