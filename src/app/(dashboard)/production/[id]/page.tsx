@@ -298,7 +298,6 @@ export default async function ProductionDetailPage({
         <CardContent>
           <ProductionOperationsTable
             operations={order.operations}
-            operators={users}
             canAssign={access.permissions.includes(PERMISSION_IDS.productionAssignOperator)}
           />
         </CardContent>

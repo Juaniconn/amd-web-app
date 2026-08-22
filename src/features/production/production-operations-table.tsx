@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { assignOperationOperatorAction } from "@/server/actions/production";
+import { Lightbulb } from "lucide-react";
 
 type Operation = {
   id: string;
@@ -32,6 +33,8 @@ type Operation = {
 type Operator = {
   id: string;
   name: string;
+  email: string;
+  activeOperations: number;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -57,15 +60,22 @@ const KIND_LABELS: Record<string, string> = {
 
 export function ProductionOperationsTable({
   operations,
-  operators,
   canAssign,
 }: {
   operations: Operation[];
-  operators: Operator[];
   canAssign: boolean;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
+  const [operators, setOperators] = useState<Operator[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/production/available-operators")
+      .then((res) => res.json())
+      .then(setOperators)
+      .catch(console.error);
+  }, []);
 
   const progress =
     operations.length > 0
@@ -86,10 +96,14 @@ export function ProductionOperationsTable({
     router.refresh();
   }
 
-  // Filter operators by work center if specified
-  function getOperatorsForOperation(operation: Operation) {
-    // If we had work center data per operator, we'd filter here
-    return operators;
+  function handleSuggest(operationId: string) {
+    // Find first available operator (least loaded)
+    const suggested = operators.find(
+      (op) => op.activeOperations < 3 && op.id !== operators.find(o => o.id === operators[0]?.id)?.id
+    ) || operators[0];
+    if (suggested) {
+      handleAssign(operationId, suggested.id);
+    }
   }
 
   return (
@@ -111,6 +125,27 @@ export function ProductionOperationsTable({
         </div>
       </div>
 
+      {/* Operators status */}
+      {operators.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">Operadores disponibles:</span>
+          {operators.slice(0, 4).map((op) => (
+            <Badge key={op.id} variant={op.activeOperations < 2 ? "default" : "outline"} className="text-[10px]">
+              {op.name.split(" ")[0]} ({op.activeOperations} ops)
+            </Badge>
+          ))}
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => setShowSuggestions(!showSuggestions)}
+            className="ml-auto text-xs"
+          >
+            <Lightbulb className="h-3 w-3 mr-1" />
+            {showSuggestions ? "Ocultar sugerencias" : "Sugerir operadores"}
+          </Button>
+        </div>
+      )}
+
       {/* Operations table */}
       {operations.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -131,7 +166,6 @@ export function ProductionOperationsTable({
           <TableBody>
             {operations.map((operation) => {
               const isPending = pending === operation.id;
-              const opOperators = getOperatorsForOperation(operation);
 
               return (
                 <TableRow
@@ -151,33 +185,41 @@ export function ProductionOperationsTable({
                     {operation.workCenterName ?? "—"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_VARIANT[operation.status]}>
-                      {STATUS_LABELS[operation.status]}
+                    <Badge variant={STATUS_VARIANT[operation.status as keyof typeof STATUS_VARIANT]}>
+                      {STATUS_LABELS[operation.status] ?? operation.status}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     {canAssign ? (
-                      <select
-                        className="h-8 w-40 rounded-lg border border-input bg-transparent px-2 text-sm"
-                        value={operation.operatorUserId ?? "none"}
-                        onChange={(event) => {
-                          handleAssign(operation.id, event.target.value === "none" ? "" : event.target.value);
-                        }}
-                      >
-                        <option value="none">Sin asignar</option>
-                        {opOperators.map((op) => (
-                          <option key={op.id} value={op.id}>
-                            {op.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-1">
+                        <select
+                          className="h-7 w-32 rounded border border-input bg-transparent px-1 text-xs"
+                          value={operation.operatorUserId ?? "none"}
+                          onChange={(event) =>
+                            handleAssign(operation.id, event.target.value === "none" ? "" : event.target.value)
+                          }
+                        >
+                          <option value="none">Sin asignar</option>
+                          {operators.map((op) => (
+                            <option key={op.id} value={op.id}>
+                              {op.name.split(" ")[0]} ({op.activeOperations})
+                            </option>
+                          ))}
+                        </select>
+                        {showSuggestions && !operation.operatorUserId && (
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => handleSuggest(operation.id)}
+                            title="Asignar operador sugerido"
+                          >
+                            <Lightbulb className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">
-                        {operation.operatorUserId
-                          ? operators.find(
-                              (o) => o.id === operation.operatorUserId
-                            )?.name ?? "Asignado"
-                          : "Sin asignar"}
+                        {operation.operatorName ?? "Sin asignar"}
                       </span>
                     )}
                   </TableCell>

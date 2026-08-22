@@ -44,6 +44,8 @@ export const TERMINAL_PRODUCTION_STATUSES: ProductionStatus[] = [
   "cancelada",
 ];
 
+export const OPERATION_ACTIVE_STATUSES = ["pendiente", "en_proceso"] as const;
+
 export const ACTIVE_PRODUCTION_STATUSES: ProductionStatus[] = [
   "pendiente",
   "liberada",
