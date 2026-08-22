@@ -1017,6 +1017,7 @@ export async function listProductionOrders(input: {
       origin: productionOrders.origin,
       description: productionOrders.description,
       quantity: productionOrders.quantity,
+      unit: productionOrders.unit,
       promisedDate: productionOrders.promisedDate,
       priority: productionOrders.priority,
       status: productionOrders.status,
@@ -1039,6 +1040,27 @@ export async function listProductionOrders(input: {
         where production_operations.production_order_id = ${productionOrders.id}
           and production_operations.status = 'en_proceso'
       ), 0)`,
+      currentOperationName: sql<string | null>`(
+        select po.name from production_operations po
+        where po.production_order_id = ${productionOrders.id}
+          and po.status in ('en_proceso','pendiente')
+        order by case when po.status = 'en_proceso' then 0 else 1 end, po.position
+        limit 1
+      )`,
+      currentOperationStatus: sql<string | null>`(
+        select po.status from production_operations po
+        where po.production_order_id = ${productionOrders.id}
+          and po.status in ('en_proceso','pendiente')
+        order by case when po.status = 'en_proceso' then 0 else 1 end, po.position
+        limit 1
+      )`,
+      currentOperationPosition: sql<number | null>`(
+        select po.position from production_operations po
+        where po.production_order_id = ${productionOrders.id}
+          and po.status in ('en_proceso','pendiente')
+        order by case when po.status = 'en_proceso' then 0 else 1 end, po.position
+        limit 1
+      )`,
     })
     .from(productionOrders)
     .innerJoin(customers, eq(productionOrders.customerId, customers.id))

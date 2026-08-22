@@ -345,80 +345,152 @@ export default async function OrderDetailPage({
               )}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>PN Plano</TableHead>
-                  <TableHead>Número de Parte</TableHead>
-                  <TableHead>Descripción</TableHead>
-                  <TableHead>Cantidad</TableHead>
-                  <TableHead>Prioridad</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Centro</TableHead>
-                  <TableHead>Máquina</TableHead>
-                  <TableHead>Operador</TableHead>
-                  <TableHead>Progreso</TableHead>
-                  <TableHead>Fecha prometida</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {order.productionOrders.map((ot) => (
-                  <TableRow key={ot.id}>
-                    <TableCell className="font-mono font-bold">
-                      {canReadProduction && ot.partNumber ? (
-                        <Link
-                          href={`/production/${ot.id}`}
-                          className="text-blue-600 hover:underline"
-                        >
-                          {ot.partNumber}
-                        </Link>
-                      ) : (
-                        <span>{ot.partNumber ?? "—"}</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {ot.number}
-                    </TableCell>
-                    <TableCell>{ot.quantity} {ot.unit}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {ot.priority === "urgente" ? "Urgente" :
-                         ot.priority === "compromiso_inmediato" ? "Compromiso" :
-                         ot.priority === "programada" ? "Programada" : "Normal"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={ot.status === "cancelada" ? "destructive" : "secondary"}>
+            <div className="grid gap-3 md:grid-cols-2">
+              {order.productionOrders.map((ot) => {
+                const progress =
+                  ot.operationsTotal > 0
+                    ? Math.round((ot.operationsDone / ot.operationsTotal) * 100)
+                    : 0;
+                const isClosed = ot.status === "terminada" || ot.status === "entregada";
+                const isCancelled = ot.status === "cancelada";
+                const priorityLabel =
+                  ot.priority === "urgente"
+                    ? "Urgente"
+                    : ot.priority === "compromiso_inmediato"
+                      ? "Compromiso"
+                      : ot.priority === "programada"
+                        ? "Programada"
+                        : "Normal";
+                const priorityColor =
+                  ot.priority === "urgente"
+                    ? "bg-red-100 text-red-700"
+                    : ot.priority === "compromiso_inmediato"
+                      ? "bg-amber-100 text-amber-700"
+                      : ot.priority === "programada"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-gray-100 text-gray-600";
+
+                return (
+                  <div
+                    key={ot.id}
+                    className={`rounded-lg border bg-card p-3 transition-shadow hover:shadow-sm ${
+                      isCancelled ? "opacity-60" : ""
+                    }`}
+                  >
+                    {/* Fila 1: PN + prioridad */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        {canReadProduction ? (
+                          <Link
+                            href={`/production/${ot.id}`}
+                            className="font-mono text-sm font-bold text-blue-600 hover:underline"
+                          >
+                            {ot.partNumber ?? ot.number}
+                          </Link>
+                        ) : (
+                          <span className="font-mono text-sm font-bold">
+                            {ot.partNumber ?? ot.number}
+                          </span>
+                        )}
+                        <p className="truncate text-xs text-muted-foreground">
+                          {ot.description}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${priorityColor}`}
+                      >
+                        {priorityLabel}
+                      </span>
+                    </div>
+
+                    {/* Fila 2: cantidad + estado */}
+                    <div className="mt-2 flex items-center gap-3 text-xs">
+                      <span className="text-muted-foreground">
+                        Cant:{" "}
+                        <span className="font-medium text-foreground">
+                          {Number(ot.quantity)} {ot.unit}
+                        </span>
+                      </span>
+                      <Badge
+                        variant={isCancelled ? "destructive" : isClosed ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
                         {PRODUCTION_STATUS_LABELS[ot.status as ProductionStatus]}
                       </Badge>
-                    </TableCell>
-                    <TableCell>{ot.workCenterName ?? "—"}</TableCell>
-                    <TableCell>{ot.machineName ?? "—"}</TableCell>
-                    <TableCell>{ot.operatorName ?? "—"}</TableCell>
-                    <TableCell>
+                    </div>
+
+                    {/* Fila 3: proceso actual */}
+                    <div className="mt-2 rounded-md bg-muted/50 px-2 py-1.5">
+                      {ot.currentOperationName ? (
+                        <>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            Proceso actual
+                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${
+                                ot.currentOperationStatus === "en_proceso"
+                                  ? "bg-amber-500"
+                                  : "bg-gray-400"
+                              }`}
+                            />
+                            <span className="text-xs font-medium">
+                              {ot.currentOperationPosition}. {ot.currentOperationName}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {ot.currentOperationStatus === "en_proceso"
+                                ? "en curso"
+                                : "pendiente"}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            {ot.currentOperationWorkCenter ?? "Sin centro"}
+                            {ot.currentOperationOperator
+                              ? ` · ${ot.currentOperationOperator}`
+                              : " · sin operador"}
+                          </p>
+                        </>
+                      ) : ot.operationsTotal > 0 ? (
+                        <p className="text-xs font-medium text-green-600">
+                          Todos los procesos terminados
+                        </p>
+                      ) : (
+                        <p className="text-xs italic text-muted-foreground">
+                          Sin procesos definidos
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Fila 4: progreso + fecha */}
+                    <div className="mt-2 flex items-center justify-between gap-2">
                       {ot.operationsTotal > 0 ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="flex flex-1 items-center gap-2">
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                             <div
-                              className="h-full bg-green-500"
-                              style={{ width: `${Math.round((ot.operationsDone / ot.operationsTotal) * 100)}%` }}
+                              className={`h-full transition-all ${
+                                progress === 100 ? "bg-green-500" : "bg-blue-500"
+                              }`}
+                              style={{ width: `${progress}%` }}
                             />
                           </div>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-[10px] font-medium">
                             {ot.operationsDone}/{ot.operationsTotal}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {progress}%
                           </span>
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="flex-1 text-[10px] text-muted-foreground">—</span>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(ot.promisedDate).toLocaleDateString("es-MX")}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        {new Date(ot.promisedDate).toLocaleDateString("es-MX")}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>

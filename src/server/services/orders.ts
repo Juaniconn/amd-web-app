@@ -389,23 +389,38 @@ export async function getOrderById(id: string) {
 
   const otsWithOps = await Promise.all(
     ots.map(async (ot) => {
-      const [totalOp] = await db
-        .select({ value: sql<number>`count(*)::int` })
+      const ops = await db
+        .select({
+          id: productionOperations.id,
+          position: productionOperations.position,
+          name: productionOperations.name,
+          status: productionOperations.status,
+          workCenterName: workCenters.name,
+          operatorName: users.name,
+        })
         .from(productionOperations)
-        .where(eq(productionOperations.productionOrderId, ot.id));
-      const [doneOp] = await db
-        .select({ value: sql<number>`count(*)::int` })
-        .from(productionOperations)
-        .where(
-          and(
-            eq(productionOperations.productionOrderId, ot.id),
-            eq(productionOperations.status, "terminada"),
-          ),
-        );
+        .leftJoin(workCenters, eq(productionOperations.workCenterId, workCenters.id))
+        .leftJoin(users, eq(productionOperations.operatorUserId, users.id))
+        .where(eq(productionOperations.productionOrderId, ot.id))
+        .orderBy(asc(productionOperations.position));
+
+      const counted = ops.filter((op) => op.status !== "omitida");
+      const done = counted.filter((op) => op.status === "terminada");
+      // Proceso actual = el que está en proceso, o el primer pendiente
+      const current =
+        counted.find((op) => op.status === "en_proceso") ??
+        counted.find((op) => op.status === "pendiente") ??
+        null;
+
       return {
         ...ot,
-        operationsTotal: totalOp?.value ?? 0,
-        operationsDone: doneOp?.value ?? 0,
+        operationsTotal: counted.length,
+        operationsDone: done.length,
+        currentOperationName: current?.name ?? null,
+        currentOperationStatus: current?.status ?? null,
+        currentOperationPosition: current?.position ?? null,
+        currentOperationWorkCenter: current?.workCenterName ?? null,
+        currentOperationOperator: current?.operatorName ?? null,
       };
     }),
   );

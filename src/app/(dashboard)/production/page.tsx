@@ -14,10 +14,7 @@ import {
   LayoutGrid,
   List,
   Calendar,
-  BarChart3,
   Plus,
-  Settings,
-  MapPin,
   Clock,
 } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
@@ -143,13 +140,13 @@ export default async function ProductionPage({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>OT / Parte</TableHead>
-              <TableHead>Estado</TableHead>
+              <TableHead>Número de Parte</TableHead>
+              <TableHead>OT / Cliente</TableHead>
+              <TableHead>Cantidad</TableHead>
               <TableHead>Prioridad</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Proceso Actual</TableHead>
               <TableHead>Progreso</TableHead>
-              <TableHead>Centro / Máquina</TableHead>
-              <TableHead>Operador</TableHead>
               <TableHead>Prometida</TableHead>
             </TableRow>
           </TableHeader>
@@ -177,37 +174,75 @@ export default async function ProductionPage({
 
                 return (
                 <TableRow key={row.id}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {row.number.replace("OT-", "")}
-                  </TableCell>
                   <TableCell>
                     <Link
                       href={`/production/${row.id}`}
-                      className="font-medium hover:underline"
+                      className="font-mono text-sm font-medium text-blue-600 hover:underline"
                     >
                       {row.partNumber || row.number}
+                    </Link>
+                    <div className="truncate text-xs text-muted-foreground max-w-[220px]">
+                      {row.description}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/orders/${row.orderId}`}
+                      className="font-mono text-xs hover:underline"
+                    >
+                      {row.number}
                     </Link>
                     <div className="text-xs text-muted-foreground">
                       {row.customerName}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant(row.status as ProductionStatus)}>
-                      {PRODUCTION_STATUS_LABELS[row.status as ProductionStatus]}
-                    </Badge>
+                  <TableCell className="text-xs">
+                    <span className="font-medium">{Number(row.quantity)}</span>{" "}
+                    <span className="text-muted-foreground">{row.unit}</span>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={productionPriorityVariant(row.priority as ProductionPriority)}>
+                    <Badge variant={productionPriorityVariant(row.priority as ProductionPriority)} className="text-[10px]">
                       {PRODUCTION_PRIORITY_LABELS[row.priority as ProductionPriority]}
                     </Badge>
                   </TableCell>
                   <TableCell>
+                    <Badge variant={statusVariant(row.status as ProductionStatus)} className="text-[10px]">
+                      {PRODUCTION_STATUS_LABELS[row.status as ProductionStatus]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {row.currentOperationName ? (
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                            row.currentOperationStatus === "en_proceso"
+                              ? "bg-amber-500"
+                              : "bg-gray-400"
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-medium max-w-[150px]">
+                            {row.currentOperationPosition}. {row.currentOperationName}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {row.currentOperationStatus === "en_proceso" ? "en curso" : "pendiente"}
+                            {row.operatorName ? ` · ${row.operatorName}` : ""}
+                          </div>
+                        </div>
+                      </div>
+                    ) : row.operationsTotal > 0 ? (
+                      <span className="text-xs font-medium text-green-600">Completado</span>
+                    ) : (
+                      <span className="text-xs italic text-muted-foreground">Sin procesos</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {row.operationsTotal === 0 ? (
-                      <span className="text-xs text-muted-foreground">Sin procesos</span>
+                      <span className="text-xs text-muted-foreground">—</span>
                     ) : (
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                          <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
                             <div
                               className={`h-full transition-all ${progress === 100 ? "bg-green-500" : "bg-blue-500"}`}
                               style={{ width: `${progress}%` }}
@@ -217,29 +252,8 @@ export default async function ProductionPage({
                         </div>
                         <div className="text-[10px] text-muted-foreground">
                           {row.operationsDone}/{row.operationsTotal} procesos
-                          {row.operationsInProgress > 0 && (
-                            <span className="ml-1 text-amber-600">
-                              · {row.operationsInProgress} activo
-                            </span>
-                          )}
                         </div>
                       </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    <div className="flex items-center gap-1">
-                      <Settings className="h-3 w-3 text-muted-foreground" />
-                      {row.workCenterName}
-                    </div>
-                    {row.machineName && (
-                      <div className="text-xs text-muted-foreground">
-                        {row.machineName}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {row.operatorName || (
-                      <span className="text-muted-foreground">Sin asignar</span>
                     )}
                   </TableCell>
                   <TableCell className="text-xs">
