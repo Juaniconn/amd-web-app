@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Calendar, DollarSign, User } from "lucide-react";
+import { Plus, FileText, Calendar } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import { RFQ_TYPE_LABELS } from "@/lib/quotes/rfq";
@@ -49,6 +49,22 @@ export default async function QuotesPage({
     pageSize,
   });
 
+  function filterHref(nextStatus?: string) {
+    const sp = new URLSearchParams();
+    if (q) sp.set("q", q);
+    if (nextStatus) sp.set("status", nextStatus);
+    const s = sp.toString();
+    return s ? `/quotes?${s}` : "/quotes";
+  }
+
+  const FILTERS = [
+    { label: "Todas", value: undefined },
+    { label: "Borrador", value: "borrador" },
+    { label: "Enviadas", value: "enviada" },
+    { label: "Aprobadas", value: "aprobada" },
+    { label: "Convertidas", value: "convertida" },
+  ];
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -68,22 +84,20 @@ export default async function QuotesPage({
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2 rounded-md border bg-card p-2">
-        <button className={`rounded px-2 py-1 text-xs ${!status ? "bg-muted" : "hover:bg-muted"}`}>
-          Todas
-        </button>
-        <button className={`rounded px-2 py-1 text-xs ${status === "borrador" ? "bg-muted" : "hover:bg-muted"}`}>
-          Borrador
-        </button>
-        <button className={`rounded px-2 py-1 text-xs ${status === "enviada" ? "bg-muted" : "hover:bg-muted"}`}>
-          Enviadas
-        </button>
-        <button className={`rounded px-2 py-1 text-xs ${status === "aprobada" ? "bg-muted" : "hover:bg-muted"}`}>
-          Aprobadas
-        </button>
-        <button className={`rounded px-2 py-1 text-xs ${status === "convertida" ? "bg-muted" : "hover:bg-muted"}`}>
-          Convertidas
-        </button>
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2">
+        {FILTERS.map((f) => (
+          <Link
+            key={f.label}
+            href={filterHref(f.value)}
+            className={`rounded px-2 py-1 text-xs ${
+              status === f.value || (!status && !f.value)
+                ? "bg-muted font-medium"
+                : "hover:bg-muted"
+            }`}
+          >
+            {f.label}
+          </Link>
+        ))}
       </div>
 
       {/* Table */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
@@ -49,6 +49,38 @@ export function AppShell({
   const pathname = usePathname();
   const [commandOpen, setCommandOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [alertCount, setAlertCount] = useState(0);
+
+  // Atajo global ⌘K / Ctrl+K para abrir la búsqueda
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCommandOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Conteo de alertas: al montar y cada 60s
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      fetch("/api/alerts")
+        .then((res) => res.json())
+        .then((data) => {
+          if (active) setAlertCount((data.alerts ?? []).length);
+        })
+        .catch(() => {});
+    };
+    load();
+    const interval = setInterval(load, 60000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [pathname]);
 
   const title =
     TITLES[pathname] ??
@@ -89,6 +121,7 @@ export function AppShell({
           userName={userName}
           userEmail={userEmail}
           roles={roles}
+          alertCount={alertCount}
           onSearch={() => setCommandOpen(true)}
           onNotifications={() => setNotifOpen(true)}
         />

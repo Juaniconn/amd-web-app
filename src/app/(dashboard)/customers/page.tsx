@@ -8,15 +8,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Plus, Building2, Mail, Phone, MapPin } from "lucide-react";
+import { Plus, Mail, Phone, MapPin } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import {
   CUSTOMER_STATUS_LABELS,
   CUSTOMER_TYPE_LABELS,
-  customerStatusSchema,
-  customerTypeSchema,
 } from "@/lib/validation/customers";
 import { listCustomers } from "@/server/services/customers";
 
@@ -69,16 +66,28 @@ export default async function CustomersPage({
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2 rounded-md border bg-card p-2">
-        <Button variant="outline" size="xs" className={!status && !filtered ? "bg-muted" : ""}>
-          Todos
-        </Button>
-        <Button variant="outline" size="xs" className={status === "activo" ? "bg-muted" : ""}>
-          Activos
-        </Button>
-        <Button variant="outline" size="xs" className={status === "inactivo" ? "bg-muted" : ""}>
-          Inactivos
-        </Button>
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2">
+        {[
+          { label: "Todos", status: undefined },
+          { label: "Activos", status: "activo" },
+          { label: "Inactivos", status: "inactivo" },
+        ].map((f) => {
+          const sp = new URLSearchParams();
+          if (q) sp.set("q", q);
+          if (type) sp.set("type", type);
+          if (f.status) sp.set("status", f.status);
+          const s = sp.toString();
+          const active = status === f.status;
+          return (
+            <Link
+              key={f.label}
+              href={s ? `/customers?${s}` : "/customers"}
+              className={`rounded px-2 py-1 text-xs ${active ? "bg-muted font-medium" : "hover:bg-muted"}`}
+            >
+              {f.label}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Table */}

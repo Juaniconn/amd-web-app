@@ -9,7 +9,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   LayoutGrid,
   List,
@@ -114,25 +113,56 @@ export default async function ProductionPage({
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2 rounded-md border bg-card p-2">
-        <Button variant="outline" size="xs" className={!status && !filtered ? "bg-muted" : ""}>
-          Todos
-        </Button>
-        <Button variant="outline" size="xs" className={status === "en_produccion" ? "bg-muted" : ""}>
-          En Producción
-        </Button>
-        <Button variant="outline" size="xs" className={status === "pendiente" ? "bg-muted" : ""}>
-          Pendientes
-        </Button>
-        <Button variant="outline" size="xs" className={status === "terminada" ? "bg-muted" : ""}>
-          Terminadas
-        </Button>
-        <Button variant="outline" size="xs" className={delayed ? "bg-muted" : ""}>
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2">
+        {[
+          { label: "Todos", status: undefined, delayed: false, mine: false },
+          { label: "En Producción", status: "en_produccion", delayed: false, mine: false },
+          { label: "Pendientes", status: "pendiente", delayed: false, mine: false },
+          { label: "En Calidad", status: "calidad", delayed: false, mine: false },
+          { label: "Terminadas", status: "terminada", delayed: false, mine: false },
+        ].map((f) => {
+          const sp = new URLSearchParams();
+          if (q) sp.set("q", q);
+          if (f.status) sp.set("status", f.status);
+          const s = sp.toString();
+          const active = status === f.status && !delayed && !mine;
+          return (
+            <Link
+              key={f.label}
+              href={s ? `/production?${s}` : "/production"}
+              className={`rounded px-2 py-1 text-xs ${active ? "bg-muted font-medium" : "hover:bg-muted"}`}
+            >
+              {f.label}
+            </Link>
+          );
+        })}
+        <span className="mx-1 h-4 w-px bg-border" />
+        <Link
+          href={(() => {
+            const sp = new URLSearchParams();
+            if (q) sp.set("q", q);
+            if (status) sp.set("status", status);
+            if (!delayed) sp.set("delayed", "1");
+            const s = sp.toString();
+            return s ? `/production?${s}` : "/production";
+          })()}
+          className={`rounded px-2 py-1 text-xs ${delayed ? "bg-red-100 font-medium text-red-700" : "hover:bg-muted"}`}
+        >
           Atrasados
-        </Button>
-        <Button variant="outline" size="xs" className={mine ? "bg-muted" : ""}>
-          Mis OT
-        </Button>
+        </Link>
+        <Link
+          href={(() => {
+            const sp = new URLSearchParams();
+            if (q) sp.set("q", q);
+            if (status) sp.set("status", status);
+            if (!mine) sp.set("mine", "1");
+            const s = sp.toString();
+            return s ? `/production?${s}` : "/production";
+          })()}
+          className={`rounded px-2 py-1 text-xs ${mine ? "bg-blue-100 font-medium text-blue-700" : "hover:bg-muted"}`}
+        >
+          Mis Partes
+        </Link>
       </div>
 
       {/* Table */}

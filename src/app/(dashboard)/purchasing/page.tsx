@@ -23,6 +23,7 @@ export default async function PurchasingPage({
 }: {
   searchParams: Promise<{
     q?: string | string[];
+    status?: string | string[];
     page?: string | string[];
     perPage?: string | string[];
   }>;
@@ -31,11 +32,17 @@ export default async function PurchasingPage({
   const canWrite = access.permissions.includes(PERMISSION_IDS.purchasingWrite);
   const params = await searchParams;
   const q = Array.isArray(params.q) ? params.q[0] : params.q;
+  const statusFilter = Array.isArray(params.status) ? params.status[0] : params.status;
   const page = Number(Array.isArray(params.page) ? params.page[0] : params.page) || 1;
   const pageSize = Number(Array.isArray(params.perPage) ? params.perPage[0] : params.perPage) || 20;
 
   const [result, requests] = await Promise.all([
-    listPurchaseOrders({ q: q?.trim() || undefined, page, pageSize }),
+    listPurchaseOrders({
+      q: q?.trim() || undefined,
+      status: statusFilter as any,
+      page,
+      pageSize,
+    }),
     listPurchaseRequests({ q: q?.trim() || undefined, page: 1, pageSize: 10 }),
   ]);
 
@@ -56,11 +63,30 @@ export default async function PurchasingPage({
         )}
       </div>
 
-      <div className="flex items-center gap-2 rounded-md border bg-card p-2">
-        <button className="rounded bg-muted px-2 py-1 text-xs">Todas</button>
-        <button className="rounded px-2 py-1 text-xs hover:bg-muted">Pendientes</button>
-        <button className="rounded px-2 py-1 text-xs hover:bg-muted">Recibidas</button>
-        <button className="rounded px-2 py-1 text-xs hover:bg-muted">Urgentes</button>
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2">
+        {[
+          { label: "Todas", status: undefined },
+          { label: "Borrador", status: "borrador" },
+          { label: "Enviadas", status: "enviada" },
+          { label: "Confirmadas", status: "confirmada" },
+          { label: "Parciales", status: "parcial" },
+          { label: "Recibidas", status: "recibida" },
+        ].map((f) => {
+          const sp = new URLSearchParams();
+          if (q) sp.set("q", q);
+          if (f.status) sp.set("status", f.status);
+          const s = sp.toString();
+          const active = statusFilter === f.status;
+          return (
+            <Link
+              key={f.label}
+              href={s ? `/purchasing?${s}` : "/purchasing"}
+              className={`rounded px-2 py-1 text-xs ${active ? "bg-muted font-medium" : "hover:bg-muted"}`}
+            >
+              {f.label}
+            </Link>
+          );
+        })}
       </div>
 
       <div className="rounded-lg border bg-card">

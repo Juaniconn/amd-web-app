@@ -8,8 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Plus, Package, AlertTriangle, Box } from "lucide-react";
+import { Plus, Package, AlertTriangle } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import {
@@ -66,19 +65,36 @@ export default async function InventoryPage({
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2 rounded-md border bg-card p-2">
-        <button className={`rounded px-2 py-1 text-xs ${!category && !criticalOnly ? "bg-muted" : "hover:bg-muted"}`}>
-          Todos
-        </button>
-        <button className={`rounded px-2 py-1 text-xs ${criticalOnly ? "bg-muted" : "hover:bg-muted"}`}>
-          Críticos
-        </button>
-        <button className={`rounded px-2 py-1 text-xs ${category === "materia_prima" ? "bg-muted" : "hover:bg-muted"}`}>
-          Materia Prima
-        </button>
-        <button className={`rounded px-2 py-1 text-xs ${category === "consumibles" ? "bg-muted" : "hover:bg-muted"}`}>
-          Consumibles
-        </button>
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2">
+        {[
+          { label: "Todos", category: undefined, critical: false },
+          { label: "Bajo mínimo / Críticos", category: undefined, critical: true },
+          { label: "Materia Prima", category: "materia_prima", critical: false },
+          { label: "Consumibles", category: "consumibles", critical: false },
+          { label: "Herramientas", category: "herramientas", critical: false },
+        ].map((f) => {
+          const sp = new URLSearchParams();
+          if (q) sp.set("q", q);
+          if (f.category) sp.set("category", f.category);
+          if (f.critical) sp.set("critical", "1");
+          const s = sp.toString();
+          const active = category === f.category && criticalOnly === f.critical;
+          return (
+            <Link
+              key={f.label}
+              href={s ? `/inventory?${s}` : "/inventory"}
+              className={`rounded px-2 py-1 text-xs ${
+                active
+                  ? f.critical
+                    ? "bg-amber-100 font-medium text-amber-700"
+                    : "bg-muted font-medium"
+                  : "hover:bg-muted"
+              }`}
+            >
+              {f.label}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Table */}
