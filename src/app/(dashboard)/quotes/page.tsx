@@ -1,9 +1,4 @@
 import Link from "next/link";
-import { QuoteFilters } from "@/features/quotes/quote-filters";
-import { EmptyTable, TableCard, TablePager } from "@/components/layout/data-table";
-import { PageHeader } from "@/components/layout/page-header";
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -12,31 +7,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Plus, FileText, Calendar, DollarSign, User } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
-import {
-  QUOTE_ENGINEERING_STATUS_LABELS,
-  RFQ_TYPE_LABELS,
-  type QuoteEngineeringStatus,
-  type RfqType,
-} from "@/lib/quotes/rfq";
+import { RFQ_TYPE_LABELS } from "@/lib/quotes/rfq";
 import { QUOTE_STATUS_LABELS, type QuoteStatus } from "@/lib/quotes/status";
 import { displayMoney } from "@/lib/quotes/money";
-import {
-  quoteEngineeringStatusSchema,
-  quoteStatusSchema,
-  rfqTypeSchema,
-} from "@/lib/validation/quotes";
 import { listQuotes } from "@/server/services/quotes";
-import { parsePage, parsePageSize } from "@/lib/ui/pagination";
-
-function first(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
 
 function statusVariant(status: QuoteStatus) {
   if (status === "rechazada" || status === "expirada") return "destructive" as const;
   if (status === "borrador") return "outline" as const;
+  if (status === "aprobada" || status === "convertida") return "default" as const;
   return "secondary" as const;
 }
 
@@ -46,140 +29,149 @@ export default async function QuotesPage({
   searchParams: Promise<{
     q?: string | string[];
     status?: string | string[];
-    rfqType?: string | string[];
-    engineeringStatus?: string | string[];
     page?: string | string[];
     perPage?: string | string[];
   }>;
 }) {
   const { access } = await requirePermission(PERMISSION_IDS.quotesRead);
   const params = await searchParams;
-  const q = first(params.q)?.trim() || undefined;
-  const statusParsed = quoteStatusSchema.safeParse(first(params.status));
-  const rfqTypeParsed = rfqTypeSchema.safeParse(first(params.rfqType));
-  const engineeringParsed = quoteEngineeringStatusSchema.safeParse(
-    first(params.engineeringStatus),
-  );
-  const page = parsePage(first(params.page));
-  const pageSize = parsePageSize(first(params.perPage));
+  const q = Array.isArray(params.q) ? params.q[0] : params.q;
+  const status = Array.isArray(params.status) ? params.status[0] : params.status;
+  const page = Number(Array.isArray(params.page) ? params.page[0] : params.page) || 1;
+  const pageSize = Number(Array.isArray(params.perPage) ? params.perPage[0] : params.perPage) || 20;
+
   const canWrite = access.permissions.includes(PERMISSION_IDS.quotesWrite);
-  const filtered = Boolean(
-    q || statusParsed.success || rfqTypeParsed.success || engineeringParsed.success,
-  );
 
   const result = await listQuotes({
-    q,
-    status: statusParsed.success ? statusParsed.data : undefined,
-    rfqType: rfqTypeParsed.success ? rfqTypeParsed.data : undefined,
-    engineeringStatus: engineeringParsed.success ? engineeringParsed.data : undefined,
+    q: q?.trim() || undefined,
+    status: status as any,
     page,
     pageSize,
   });
 
-  const query = new URLSearchParams();
-  if (q) query.set("q", q);
-  if (statusParsed.success) query.set("status", statusParsed.data);
-  if (rfqTypeParsed.success) query.set("rfqType", rfqTypeParsed.data);
-  if (engineeringParsed.success) {
-    query.set("engineeringStatus", engineeringParsed.data);
-  }
-  query.set("perPage", String(pageSize));
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Cotizaciones"
-        description="RFQ y cotizaciones. Al aprobarse se convierten en orden de trabajo."
-        actions={
-          canWrite ? (
-            <Link href="/quotes/new" className={buttonVariants()}>
-              Nueva cotización
-            </Link>
-          ) : null
-        }
-      />
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold">Cotizaciones</h1>
+          <p className="text-xs text-muted-foreground">
+            {result.total} cotizaciones · {result.rows.filter((r) => r.status === "enviada").length} enviadas
+          </p>
+        </div>
+        {canWrite && (
+          <Link href="/quotes/new" className="inline-flex items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+            <Plus className="h-3 w-3" />
+            Nueva Cotización
+          </Link>
+        )}
+      </div>
 
-      <QuoteFilters
-        q={q}
-        status={statusParsed.success ? statusParsed.data : undefined}
-        rfqType={rfqTypeParsed.success ? rfqTypeParsed.data : undefined}
-        engineeringStatus={engineeringParsed.success ? engineeringParsed.data : undefined}
-        perPage={pageSize}
-      />
+      {/* Filters */}
+      <div className="flex items-center gap-2 rounded-md border bg-card p-2">
+        <button className={`rounded px-2 py-1 text-xs ${!status ? "bg-muted" : "hover:bg-muted"}`}>
+          Todas
+        </button>
+        <button className={`rounded px-2 py-1 text-xs ${status === "borrador" ? "bg-muted" : "hover:bg-muted"}`}>
+          Borrador
+        </button>
+        <button className={`rounded px-2 py-1 text-xs ${status === "enviada" ? "bg-muted" : "hover:bg-muted"}`}>
+          Enviadas
+        </button>
+        <button className={`rounded px-2 py-1 text-xs ${status === "aprobada" ? "bg-muted" : "hover:bg-muted"}`}>
+          Aprobadas
+        </button>
+        <button className={`rounded px-2 py-1 text-xs ${status === "convertida" ? "bg-muted" : "hover:bg-muted"}`}>
+          Convertidas
+        </button>
+      </div>
 
-      <TableCard>
+      {/* Table */}
+      <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Número</TableHead>
+              <TableHead>Cotización</TableHead>
               <TableHead>Cliente</TableHead>
-              <TableHead>Tipo RFQ</TableHead>
+              <TableHead>Total</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead>Ingeniería</TableHead>
-              <TableHead>Fecha</TableHead>
-              <TableHead className="text-right">Total</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Vigencia</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {result.rows.length === 0 ? (
-              <EmptyTable
-                colSpan={7}
-                title={
-                  filtered ? "No hay cotizaciones con esos filtros." : "Aún no hay cotizaciones."
-                }
-                description={
-                  filtered
-                    ? "Prueba otro estado o limpia los filtros."
-                    : "Crea una RFQ desde un cliente para empezar a cotizar."
-                }
-                href={!filtered && canWrite ? "/quotes/new" : undefined}
-                actionLabel="Nueva cotización"
-              />
+              <TableRow>
+                <TableCell colSpan={6} className="py-12 text-center">
+                  <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {q ? "No se encontraron resultados" : "Aún no hay cotizaciones"}
+                  </p>
+                  {!q && canWrite && (
+                    <Link href="/quotes/new" className="mt-2 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90">
+                      <Plus className="h-3 w-3" />
+                      Crear primera cotización
+                    </Link>
+                  )}
+                </TableCell>
+              </TableRow>
             ) : (
-              result.rows.map((row) => (
-                <TableRow key={row.id}>
+              result.rows.map((quote) => (
+                <TableRow key={quote.id}>
                   <TableCell>
-                    <Link href={`/quotes/${row.id}`} className="font-medium hover:underline">
-                      {row.number}
+                    <Link href={`/quotes/${quote.id}`} className="font-medium hover:underline">
+                      {quote.number}
                     </Link>
-                    {row.isDemo ? (
-                      <Badge variant="outline" className="ml-2">
-                        DEMO
-                      </Badge>
-                    ) : null}
+                    <div className="text-xs text-muted-foreground">
+                      {1} partes
+                    </div>
                   </TableCell>
                   <TableCell>
-                    <Link href={`/customers/${row.customerId}`} className="hover:underline">
-                      {row.customerName}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs">
+                        {quote.customerName.charAt(0)}
+                      </div>
+                      <span className="text-sm">{quote.customerName}</span>
+                    </div>
                   </TableCell>
-                  <TableCell>{RFQ_TYPE_LABELS[row.rfqType as RfqType]}</TableCell>
                   <TableCell>
-                    <Badge variant={statusVariant(row.status)}>{QUOTE_STATUS_LABELS[row.status]}</Badge>
+                    <span className="font-medium">
+                      {displayMoney(quote.total, quote.currency)}
+                    </span>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={row.requiresEngineering ? "secondary" : "outline"}>
-                      {QUOTE_ENGINEERING_STATUS_LABELS[row.engineeringStatus as QuoteEngineeringStatus]}
+                    <Badge variant={statusVariant(quote.status as QuoteStatus)}>
+                      {QUOTE_STATUS_LABELS[quote.status as QuoteStatus]}
                     </Badge>
                   </TableCell>
-                  <TableCell>{row.issueDate.toLocaleDateString("es-MX")}</TableCell>
-                  <TableCell className="text-right">{displayMoney(row.total, row.currency)}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-[10px]">
+                      {RFQ_TYPE_LABELS[quote.rfqType as keyof typeof RFQ_TYPE_LABELS]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {quote.validUntil ? (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3 text-muted-foreground" />
+                        {new Date(quote.validUntil).toLocaleDateString("es-MX")}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
-      </TableCard>
+      </div>
 
-      <TablePager
-        total={result.total}
-        page={result.page}
-        pageCount={result.pageCount}
-        label={result.total === 1 ? "cotización" : "cotizaciones"}
-        path="/quotes"
-        query={query}
-        pageSize={pageSize}
-      />
+      {/* Pagination */}
+      {result.pageCount > 1 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{result.total} resultados · Página {page} de {result.pageCount}</span>
+        </div>
+      )}
     </div>
   );
 }
