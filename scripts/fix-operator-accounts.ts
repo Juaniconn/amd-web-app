@@ -1,7 +1,13 @@
 /**
- * Corrige los correos de operadores demo que quedaron con guion
- * (maria-lopez@ -> maria.lopez@) y repone el password conocido.
- * No borra ni recrea datos de la demo.
+ * Aplica a la base la separación de roles Jefe de Producción / Operador:
+ *   1. Crea el rol 'operador' con su permiso production:my_work
+ *   2. Agrega production:my_work al rol 'produccion' (jefe)
+ *   3. Renombra 'produccion' a "Jefe de Producción"
+ *   4. Mueve a los operadores demo de 'produccion' a 'operador'
+ *   5. Deja a Ramiro Sánchez como Jefe de Producción (alguien debe poder asignar)
+ *   6. Corrige correos y repone passwords
+ *
+ * Idempotente: se puede correr varias veces.
  */
 import { config } from "dotenv";
 import postgres from "postgres";
@@ -22,30 +28,79 @@ const OPERATORS = [
   { id: "op-patricia-ramirez", name: "Patricia Ramírez", email: "patricia.ramirez@amd-demo.local" },
 ];
 
+/** Ramiro es el jefe de piso: puede programar y asignar a los demás. */
+const SUPERVISOR_ID = "op-ramiro-sanchez";
+
 async function main() {
   const hashed = await hashPassword("operador123");
-  let fixedEmails = 0;
-  let fixedPasswords = 0;
-  let fixedRoles = 0;
 
+  // 1. Permiso production:my_work
+  await client`
+    insert into permissions (id, name, description)
+    values (
+      'production:my_work',
+      'Ver y cerrar mis procesos',
+      'Vista de piso: solo los procesos asignados al propio usuario, sin clientes ni costos. Permite iniciar y cerrar su trabajo.'
+    )
+    on conflict (id) do update
+      set name = excluded.name, description = excluded.description
+  `;
+  console.log("✓ permiso production:my_work registrado");
+
+  // 2. Rol operador
+  await client`
+    insert into roles (id, name, description)
+    values (
+      'operador',
+      'Operador',
+      'Solo ve y cierra los procesos que le fueron asignados. Sin acceso a clientes, costos, programación ni listados generales.'
+    )
+    on conflict (id) do update
+      set name = excluded.name, description = excluded.description
+  `;
+  await client`
+    insert into role_permissions (role_id, permission_id)
+    values ('operador', 'production:my_work')
+    on conflict do nothing
+  `;
+  console.log("✓ rol 'operador' creado con 1 permiso (production:my_work)");
+
+  // 3. Jefe de Producción
+  await client`
+    update roles
+    set name = 'Jefe de Producción',
+        description = 'Programa números de parte, asigna operadores y máquinas, y cierra administrativamente.'
+    where id = 'produccion'
+  `;
+  await client`
+    insert into role_permissions (role_id, permission_id)
+    values ('produccion', 'production:my_work')
+    on conflict do nothing
+  `;
+  // El admin debe tener todo
+  await client`
+    insert into role_permissions (role_id, permission_id)
+    values ('administrador', 'production:my_work')
+    on conflict do nothing
+  `;
+  console.log("✓ rol 'produccion' renombrado a 'Jefe de Producción'");
+
+  // 4-6. Usuarios
+  let toOperator = 0;
   for (const op of OPERATORS) {
     const [user] = await client`select id, email from users where id = ${op.id} limit 1`;
     if (!user) {
-      console.log(`  SALTADO ${op.id} — no existe en la base`);
+      console.log(`  SALTADO ${op.id} — no existe`);
       continue;
     }
 
     if (user.email !== op.email) {
-      // Liberar el correo destino si lo ocupa otro registro huerfano
-      await client`
-        delete from users where email = ${op.email} and id <> ${op.id}
-      `;
+      await client`delete from users where email = ${op.email} and id <> ${op.id}`;
       await client`
         update users set email = ${op.email}, name = ${op.name}, email_verified = true, updated_at = now()
         where id = ${op.id}
       `;
-      console.log(`  EMAIL  ${user.email} -> ${op.email}`);
-      fixedEmails++;
+      console.log(`  EMAIL ${user.email} -> ${op.email}`);
     }
 
     const [acc] = await client`
@@ -59,39 +114,43 @@ async function main() {
         values (${`acc-${op.id}`}, ${op.id}, 'credential', ${op.id}, ${hashed}, now(), now())
       `;
     }
-    fixedPasswords++;
 
-    const [role] = await client`
-      select user_id from user_roles where user_id = ${op.id} and role_id = 'produccion' limit 1
+    const targetRole = op.id === SUPERVISOR_ID ? "produccion" : "operador";
+    const removeRole = op.id === SUPERVISOR_ID ? "operador" : "produccion";
+
+    await client`
+      insert into user_roles (user_id, role_id, created_at)
+      values (${op.id}, ${targetRole}, now())
+      on conflict do nothing
     `;
-    if (!role) {
-      await client`
-        insert into user_roles (user_id, role_id, created_at)
-        values (${op.id}, 'produccion', now())
-      `;
-      console.log(`  ROL    ${op.email} -> produccion`);
-      fixedRoles++;
-    }
+    await client`
+      delete from user_roles where user_id = ${op.id} and role_id = ${removeRole}
+    `;
+    if (targetRole === "operador") toOperator++;
   }
 
-  console.log(`\n✓ ${fixedEmails} correos corregidos`);
-  console.log(`✓ ${fixedPasswords} passwords repuestos a 'operador123'`);
-  console.log(`✓ ${fixedRoles} roles asignados`);
+  console.log(`✓ ${toOperator} usuarios con rol 'operador'`);
+  console.log(`✓ 1 usuario con rol 'Jefe de Producción' (Ramiro Sánchez)`);
 
-  console.log("\n=== CUENTAS DE OPERADOR LISTAS ===");
+  // Resumen
+  console.log("\n=== CUENTAS DEMO ===");
   const rows = await client`
-    select u.email, u.name,
+    select u.email, u.name, r.name as role_name,
+      (select count(*)::int from role_permissions rp where rp.role_id = r.id) as perms,
       (select count(*)::int from production_operations po
-        where po.operator_user_id = u.id and po.status in ('pendiente','en_proceso')) as pendientes
+        where po.operator_user_id = u.id and po.status in ('pendiente','en_proceso')) as abiertos
     from users u
     join user_roles ur on ur.user_id = u.id
-    where ur.role_id = 'produccion'
-    order by u.email
+    join roles r on r.id = ur.role_id
+    where r.id in ('operador','produccion','administrador')
+    order by r.id, u.email
   `;
   for (const r of rows) {
-    console.log(`  ${r.email.padEnd(38)} ${r.name.padEnd(20)} ${r.pendientes} procesos abiertos`);
+    console.log(
+      `  ${r.email.padEnd(36)} ${r.role_name.padEnd(20)} ${String(r.perms).padStart(2)} permisos  ${r.abiertos} procesos`,
+    );
   }
-  console.log("\n  Password para todos: operador123");
+  console.log("\n  Password operadores: operador123");
 
   await client.end();
   process.exit(0);

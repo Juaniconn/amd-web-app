@@ -355,7 +355,7 @@ export async function assignOperationOperatorAction(formData: FormData) {
  */
 export async function startMyOperationAction(formData: FormData) {
   try {
-    const { session } = await requirePermission(PERMISSION_IDS.productionView);
+    const { session } = await requirePermission(PERMISSION_IDS.productionMyWork);
     const operationId = formData.get("operationId")?.toString() ?? "";
     if (!operationId) {
       return { ok: false as const, error: "ID de proceso requerido." };
@@ -375,7 +375,7 @@ export async function startMyOperationAction(formData: FormData) {
  */
 export async function finishMyOperationAction(formData: FormData) {
   try {
-    const { session } = await requirePermission(PERMISSION_IDS.productionView);
+    const { session } = await requirePermission(PERMISSION_IDS.productionMyWork);
     const operationId = formData.get("operationId")?.toString() ?? "";
     if (!operationId) {
       return { ok: false as const, error: "ID de proceso requerido." };

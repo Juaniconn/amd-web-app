@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/auth";
-import type { PermissionId } from "@/lib/permissions/catalog";
+import { PERMISSION_IDS, type PermissionId } from "@/lib/permissions/catalog";
 import { getUserAccess } from "@/server/services/access";
 
 export async function getSession() {
@@ -22,11 +22,24 @@ export async function requireSession() {
   return session;
 }
 
+/**
+ * Ruta de aterrizaje según lo que el usuario realmente puede ver.
+ *
+ * Un operador de piso NO tiene dashboard:read, así que mandarlo a /dashboard
+ * lo rebotaría de vuelta y crearía un bucle de redirecciones. Su home es la
+ * vista de piso.
+ */
+export function landingPathFor(permissions: readonly string[]): string {
+  if (permissions.includes(PERMISSION_IDS.dashboardRead)) return "/dashboard";
+  if (permissions.includes(PERMISSION_IDS.productionMyWork)) return "/my-production";
+  return "/sin-acceso";
+}
+
 export async function requirePermission(permission: PermissionId) {
   const session = await requireSession();
   const access = await getUserAccess(session.user.id);
   if (!access.permissions.includes(permission)) {
-    redirect("/dashboard");
+    redirect(landingPathFor(access.permissions));
   }
   return { session, access };
 }
@@ -35,7 +48,7 @@ export async function requireAnyPermission(...permissions: PermissionId[]) {
   const session = await requireSession();
   const access = await getUserAccess(session.user.id);
   if (!permissions.some((permission) => access.permissions.includes(permission))) {
-    redirect("/dashboard");
+    redirect(landingPathFor(access.permissions));
   }
   return { session, access };
 }

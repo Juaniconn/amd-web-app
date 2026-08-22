@@ -56,7 +56,10 @@ export function proxy(request: NextRequest) {
     if (searchParams.has("reauth")) {
       return clearSessionCookies(NextResponse.next());
     }
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    // A "/" y no a "/dashboard": el middleware no puede leer permisos (no tiene
+    // acceso a la base), y un operador de piso no tiene dashboard:read. La raíz
+    // resuelve el destino por rol y evita el rebote /dashboard -> /my-production.
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return NextResponse.next();

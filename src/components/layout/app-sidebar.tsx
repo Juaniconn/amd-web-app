@@ -151,7 +151,7 @@ export function AppSidebar({ pathname, permissions, onSearch }: AppSidebarProps)
       </nav>
 
       {/* Operator shortcut */}
-      {permissions.includes(PERMISSION_IDS.productionView) && (
+      {permissions.includes(PERMISSION_IDS.productionMyWork) && (
         <div className="border-t border-gray-800 p-2">
           <Link
             href="/my-production"

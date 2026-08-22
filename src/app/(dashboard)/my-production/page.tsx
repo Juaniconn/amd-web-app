@@ -15,7 +15,7 @@ export default async function MyProductionPage() {
   if (!session) redirect("/login");
 
   const access = await getUserAccess(session.user.id);
-  if (!access.permissions.includes(PERMISSION_IDS.productionView)) {
+  if (!access.permissions.includes(PERMISSION_IDS.productionMyWork)) {
     redirect("/dashboard");
   }
 

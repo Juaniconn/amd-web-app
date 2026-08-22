@@ -1,5 +1,6 @@
 /**
- * Simula el acceso de un operador: que permisos tiene y que rutas puede ver.
+ * Verifica la separacion de roles: Operador vs Jefe de Produccion.
+ * Compara permisos reales de la base para ambos perfiles.
  */
 import { config } from "dotenv";
 import postgres from "postgres";
@@ -8,70 +9,84 @@ config({ path: [".env.local", ".env"], quiet: true });
 
 const client = postgres(process.env.DATABASE_URL!, { max: 1 });
 
-async function main() {
-  const [op] = await client`
-    select u.id, u.email, u.name
+const CHECKS: Array<[string, string]> = [
+  ["production:my_work", "Ver y cerrar SUS procesos"],
+  ["production:view", "Ver toda la produccion (expone clientes)"],
+  ["production:create", "Crear numeros de parte"],
+  ["production:schedule", "Programar produccion"],
+  ["production:assign_operator", "Asignar operadores"],
+  ["production:assign_machine", "Asignar maquinas"],
+  ["production:cancel", "Cancelar numeros de parte"],
+  ["dashboard:read", "Dashboard con KPIs"],
+  ["orders:view", "Ordenes de Trabajo"],
+  ["customers:read", "Clientes"],
+  ["quotes:read", "Cotizaciones y costos"],
+  ["billing:read", "Facturacion"],
+  ["inventory:read", "Inventario"],
+];
+
+async function permsOf(email: string) {
+  const rows = await client`
+    select distinct p.id
     from users u
     join user_roles ur on ur.user_id = u.id
-    where ur.role_id = 'produccion' and u.email = 'maria.lopez@amd-demo.local'
-    limit 1
-  `;
-
-  if (!op) {
-    console.log("No se encontro el operador de prueba.");
-    await client.end();
-    return;
-  }
-
-  const perms = await client`
-    select distinct p.id
-    from user_roles ur
     join role_permissions rp on rp.role_id = ur.role_id
     join permissions p on p.id = rp.permission_id
-    where ur.user_id = ${op.id}
-    order by p.id
+    where u.email = ${email}
   `;
+  return new Set(rows.map((r) => r.id as string));
+}
 
-  const ids = perms.map((p) => p.id as string);
+async function main() {
+  const opEmail = "maria.lopez@amd-demo.local";
+  const bossEmail = "ramiro.sanchez@amd-demo.local";
 
-  console.log(`=== ACCESO DE ${op.name} (${op.email}) ===\n`);
-  console.log(`Permisos totales: ${ids.length}\n`);
+  const op = await permsOf(opEmail);
+  const boss = await permsOf(bossEmail);
 
-  const checks: Array<[string, string]> = [
-    ["dashboard:read", "Dashboard (/dashboard)"],
-    ["production:view", "Numeros de Parte + Mis Procesos"],
-    ["production:create", "Crear numeros de parte"],
-    ["production:assign_operator", "Asignar operadores"],
-    ["customers:read", "Clientes (dato sensible)"],
-    ["quotes:read", "Cotizaciones (costos)"],
-    ["billing:read", "Facturacion (dinero)"],
-    ["reports:read", "Reportes"],
-  ];
-
-  console.log("Puede acceder a:");
-  for (const [perm, label] of checks) {
-    const has = ids.includes(perm);
-    console.log(`  ${has ? "SI" : "NO"}  ${label.padEnd(38)} (${perm})`);
+  console.log("=== OPERADOR vs JEFE DE PRODUCCION ===\n");
+  console.log(`  Operador: Maria Lopez (${op.size} permisos)`);
+  console.log(`  Jefe:     Ramiro Sanchez (${boss.size} permisos)\n`);
+  console.log(`  ${"CAPACIDAD".padEnd(42)} OPERADOR   JEFE`);
+  console.log(`  ${"-".repeat(42)} --------   ----`);
+  for (const [perm, label] of CHECKS) {
+    const o = op.has(perm) ? "SI" : "no";
+    const b = boss.has(perm) ? "SI" : "no";
+    console.log(`  ${label.padEnd(42)} ${o.padEnd(10)} ${b}`);
   }
 
-  const sensitive = ["customers:read", "quotes:read", "billing:read"].filter((p) =>
-    ids.includes(p),
-  );
-  console.log(
-    `\n${sensitive.length === 0 ? "OK — el operador NO ve clientes, costos ni facturacion." : "ATENCION — el operador ve datos sensibles: " + sensitive.join(", ")}`,
-  );
+  // Reglas que deben cumplirse
+  const rules: Array<[boolean, string]> = [
+    [op.has("production:my_work"), "operador puede ver y cerrar sus procesos"],
+    [!op.has("production:view"), "operador NO ve el listado general de produccion"],
+    [!op.has("production:create"), "operador NO puede crear numeros de parte"],
+    [!op.has("production:assign_operator"), "operador NO puede asignar operadores"],
+    [!op.has("production:schedule"), "operador NO puede programar"],
+    [!op.has("customers:read"), "operador NO ve clientes"],
+    [!op.has("quotes:read"), "operador NO ve cotizaciones ni costos"],
+    [!op.has("billing:read"), "operador NO ve facturacion"],
+    [!op.has("dashboard:read"), "operador NO entra al dashboard de KPIs"],
+    [boss.has("production:create"), "jefe SI puede crear numeros de parte"],
+    [boss.has("production:assign_operator"), "jefe SI puede asignar operadores"],
+    [boss.has("production:view"), "jefe SI ve toda la produccion"],
+    [boss.has("dashboard:read"), "jefe SI entra al dashboard"],
+    [!boss.has("quotes:read"), "jefe NO ve cotizaciones ni costos"],
+    [!boss.has("billing:read"), "jefe NO ve facturacion"],
+  ];
 
-  const [ops] = await client`
-    select
-      count(*) filter (where status = 'en_proceso')::int as en_curso,
-      count(*) filter (where status = 'pendiente')::int as pendientes
-    from production_operations
-    where operator_user_id = ${op.id}
-  `;
-  console.log(`\nAl entrar vera: ${ops.en_curso} en curso, ${ops.pendientes} pendientes`);
+  console.log("\n=== VALIDACIONES ===");
+  let allOk = true;
+  for (const [ok, label] of rules) {
+    if (!ok) allOk = false;
+    console.log(`  ${ok ? "OK   " : "FALLO"} ${label}`);
+  }
+
+  console.log(
+    `\n${allOk ? "Separacion de roles correcta." : "Hay reglas que NO se cumplen."}`,
+  );
 
   await client.end();
-  process.exit(0);
+  process.exit(allOk ? 0 : 1);
 }
 
 main().catch(async (e) => {

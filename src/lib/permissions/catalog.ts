@@ -5,6 +5,7 @@ export const ROLE_IDS = {
   ingenieria: "ingenieria",
   compras: "compras",
   produccion: "produccion",
+  operador: "operador",
   calidad: "calidad",
   almacen: "almacen",
 } as const;
@@ -32,6 +33,8 @@ export const PERMISSION_IDS = {
   engineeringRelease: "engineering:release",
   engineeringDelete: "engineering:delete",
   productionView: "production:view",
+  /** Ver y cerrar SOLO los procesos asignados a mí (piso). No expone clientes ni costos. */
+  productionMyWork: "production:my_work",
   productionCreate: "production:create",
   productionUpdate: "production:update",
   productionCancel: "production:cancel",
@@ -108,6 +111,7 @@ const PROJECTS_ALL: PermissionId[] = [
 
 const PRODUCTION_ALL: PermissionId[] = [
   PERMISSION_IDS.productionView,
+  PERMISSION_IDS.productionMyWork,
   PERMISSION_IDS.productionCreate,
   PERMISSION_IDS.productionUpdate,
   PERMISSION_IDS.productionCancel,
@@ -204,9 +208,9 @@ export const ROLES: Record<
     ],
   },
   produccion: {
-    name: "Producción",
+    name: "Jefe de Producción",
     description:
-      "Números de parte en producción, máquinas, programación y cierre administrativo.",
+      "Programa números de parte, asigna operadores y máquinas, y cierra administrativamente.",
     permissions: [
       PERMISSION_IDS.dashboardRead,
       PERMISSION_IDS.branchesRead,
@@ -219,6 +223,14 @@ export const ROLES: Record<
       PERMISSION_IDS.inventoryConsume,
       PERMISSION_IDS.qualityRead,
       PERMISSION_IDS.deliveriesRead,
+    ],
+  },
+  operador: {
+    name: "Operador",
+    description:
+      "Solo ve y cierra los procesos que le fueron asignados. Sin acceso a clientes, costos, programación ni listados generales.",
+    permissions: [
+      PERMISSION_IDS.productionMyWork,
     ],
   },
   calidad: {
@@ -343,6 +355,11 @@ export const PERMISSIONS: Record<
   "production:view": {
     name: "Ver producción",
     description: "Consultar números de parte en producción, máquinas, tiempos y KPIs de piso.",
+  },
+  "production:my_work": {
+    name: "Ver y cerrar mis procesos",
+    description:
+      "Vista de piso: solo los procesos asignados al propio usuario, sin clientes ni costos. Permite iniciar y cerrar su trabajo.",
   },
   "production:create": {
     name: "Crear número de parte",

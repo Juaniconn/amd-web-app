@@ -190,22 +190,27 @@ export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
         .where(eq(accounts.id, `acc-${op.id}`));
     }
 
-    // Asegurar rol de producción
+    // Asegurar rol de operador de piso (NO jefe de producción)
     const role = await db
       .select({ userId: userRoles.userId })
       .from(userRoles)
-      .where(and(eq(userRoles.userId, op.id), eq(userRoles.roleId, "produccion")))
+      .where(and(eq(userRoles.userId, op.id), eq(userRoles.roleId, "operador")))
       .limit(1);
 
     if (role.length === 0) {
       await db.insert(userRoles).values({
         userId: op.id,
-        roleId: "produccion",
+        roleId: "operador",
         createdAt: now,
       });
     }
+
+    // Quitar el rol de jefe si lo tenía de una siembra anterior
+    await db
+      .delete(userRoles)
+      .where(and(eq(userRoles.userId, op.id), eq(userRoles.roleId, "produccion")));
   }
-  console.log(`✓ ${OPERATORS.length} operadores listos (password: operador123)`);
+  console.log(`✓ ${OPERATORS.length} operadores listos (rol: operador, password: operador123)`);
 
   // ==========================================
   // 2. SUPPLIERS

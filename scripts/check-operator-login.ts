@@ -12,11 +12,12 @@ const client = postgres(process.env.DATABASE_URL!, { max: 1 });
 
 async function main() {
   const rows = await client`
-    select u.email, u.name, a.password
+    select u.email, u.name, a.password, r.name as role_name
     from users u
     join accounts a on a.user_id = u.id and a.provider_id = 'credential'
     join user_roles ur on ur.user_id = u.id
-    where ur.role_id = 'produccion'
+    join roles r on r.id = ur.role_id
+    where ur.role_id in ('operador','produccion')
     order by u.email
   `;
 
@@ -28,7 +29,9 @@ async function main() {
       password: "operador123",
     });
     if (!ok) allOk = false;
-    console.log(`  ${ok ? "OK   " : "FALLO"} ${r.email.padEnd(38)} ${r.name}`);
+    console.log(
+      `  ${ok ? "OK   " : "FALLO"} ${r.email.padEnd(36)} ${String(r.role_name).padEnd(20)} ${r.name}`,
+    );
   }
 
   console.log(

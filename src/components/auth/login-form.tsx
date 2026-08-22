@@ -39,7 +39,9 @@ export function LoginForm() {
         return;
       }
 
-      window.location.assign("/dashboard");
+      // A "/" y no a "/dashboard": la raíz decide el destino según el rol.
+      // Un operador de piso no tiene dashboard:read y debe caer en /my-production.
+      window.location.assign("/");
     } catch {
       setError("No se pudo conectar con el servidor. Inténtalo de nuevo.");
     } finally {

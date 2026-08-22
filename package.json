@@ -22,6 +22,7 @@
     "check:users": "tsx scripts/check-users.ts",
     "check:login": "tsx scripts/check-operator-login.ts",
     "check:access": "tsx scripts/check-operator-access.ts",
+    "check:landing": "tsx scripts/check-landing.ts",
     "fix:operators": "tsx scripts/fix-operator-accounts.ts",
     "db:start": "tsx scripts/start-embedded-postgres.ts",
     "db:verify": "tsx scripts/verify-db.ts"
