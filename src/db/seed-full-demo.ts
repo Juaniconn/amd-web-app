@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { formatQty } from "@/lib/inventory/catalog";
 import { calculateLineTotals, calculateQuoteTotals, formatMoney } from "@/lib/quotes/money";
@@ -84,14 +84,14 @@ const MATERIALS_POOL = [
 ];
 
 const OPERATORS = [
-  { id: "op-juan-martinez", name: "Juan Martínez" },
-  { id: "op-ramiro-sanchez", name: "Ramiro Sánchez" },
-  { id: "op-luis-hernandez", name: "Luis Hernández" },
-  { id: "op-ana-torres", name: "Ana Torres" },
-  { id: "op-carlos-diaz", name: "Carlos Díaz" },
-  { id: "op-maria-lopez", name: "María López" },
-  { id: "op-roberto-garcia", name: "Roberto García" },
-  { id: "op-patricia-ramirez", name: "Patricia Ramírez" },
+  { id: "op-juan-martinez", name: "Juan Martínez", email: "juan.martinez@amd-demo.local" },
+  { id: "op-ramiro-sanchez", name: "Ramiro Sánchez", email: "ramiro.sanchez@amd-demo.local" },
+  { id: "op-luis-hernandez", name: "Luis Hernández", email: "luis.hernandez@amd-demo.local" },
+  { id: "op-ana-torres", name: "Ana Torres", email: "ana.torres@amd-demo.local" },
+  { id: "op-carlos-diaz", name: "Carlos Díaz", email: "carlos.diaz@amd-demo.local" },
+  { id: "op-maria-lopez", name: "María López", email: "maria.lopez@amd-demo.local" },
+  { id: "op-roberto-garcia", name: "Roberto García", email: "roberto.garcia@amd-demo.local" },
+  { id: "op-patricia-ramirez", name: "Patricia Ramírez", email: "patricia.ramirez@amd-demo.local" },
 ];
 
 const PROCESS_NAMES = [
@@ -142,17 +142,38 @@ export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
   // 1. OPERATORS (users with role produccion)
   // ==========================================
   for (const op of OPERATORS) {
-    const existing = await db.select({ id: users.id }).from(users).where(eq(users.id, op.id)).limit(1);
+    const hashed = await hashPassword("operador123");
+    const existing = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, op.id))
+      .limit(1);
+
     if (existing.length === 0) {
-      const hashed = await hashPassword("operador123");
       await db.insert(users).values({
         id: op.id,
         name: op.name,
-        email: `${op.id.replace("op-", "")}@amd-demo.local`,
+        email: op.email,
         emailVerified: true,
         createdAt: now,
         updatedAt: now,
       });
+    } else {
+      // Corregir email/nombre si cambiaron (ej. correos viejos con guion)
+      await db
+        .update(users)
+        .set({ name: op.name, email: op.email, emailVerified: true, updatedAt: now })
+        .where(eq(users.id, op.id));
+    }
+
+    // Asegurar credencial con password conocido
+    const account = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.id, `acc-${op.id}`))
+      .limit(1);
+
+    if (account.length === 0) {
       await db.insert(accounts).values({
         id: `acc-${op.id}`,
         accountId: op.id,
@@ -162,6 +183,21 @@ export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
         createdAt: now,
         updatedAt: now,
       });
+    } else {
+      await db
+        .update(accounts)
+        .set({ password: hashed, updatedAt: now })
+        .where(eq(accounts.id, `acc-${op.id}`));
+    }
+
+    // Asegurar rol de producción
+    const role = await db
+      .select({ userId: userRoles.userId })
+      .from(userRoles)
+      .where(and(eq(userRoles.userId, op.id), eq(userRoles.roleId, "produccion")))
+      .limit(1);
+
+    if (role.length === 0) {
       await db.insert(userRoles).values({
         userId: op.id,
         roleId: "produccion",
@@ -169,7 +205,7 @@ export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
       });
     }
   }
-  console.log(`✓ ${OPERATORS.length} operadores creados`);
+  console.log(`✓ ${OPERATORS.length} operadores listos (password: operador123)`);
 
   // ==========================================
   // 2. SUPPLIERS
