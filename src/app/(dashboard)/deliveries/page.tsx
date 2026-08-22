@@ -1,7 +1,4 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { EmptyTable, TableCard, TablePager } from "@/components/layout/data-table";
-import { ListSearchForm } from "@/components/layout/list-search-form";
 import {
   Table,
   TableBody,
@@ -10,14 +7,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Truck, MapPin, Calendar } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
-import {
-  DELIVERY_STATUS_LABELS,
-  type DeliveryStatus,
-} from "@/lib/deliveries/catalog";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
-import { workOrderNumber } from "@/lib/production/ot-number";
-import { firstSearchParam, parsePage, parsePageSize } from "@/lib/ui/pagination";
+import { DELIVERY_STATUS_LABELS } from "@/lib/deliveries/catalog";
 import { listDeliveries } from "@/server/services/deliveries";
 
 export default async function DeliveriesPage({
@@ -29,90 +23,87 @@ export default async function DeliveriesPage({
     perPage?: string | string[];
   }>;
 }) {
-  await requirePermission(PERMISSION_IDS.deliveriesRead);
+  const { access } = await requirePermission(PERMISSION_IDS.deliveriesRead);
+  const canWrite = access.permissions.includes(PERMISSION_IDS.deliveriesWrite);
   const params = await searchParams;
-  const q = firstSearchParam(params.q)?.trim() || undefined;
-  const page = parsePage(firstSearchParam(params.page));
-  const pageSize = parsePageSize(firstSearchParam(params.perPage));
-  const result = await listDeliveries({ q, page, pageSize });
-  const query = new URLSearchParams();
-  if (q) query.set("q", q);
-  query.set("perPage", String(pageSize));
+  const q = Array.isArray(params.q) ? params.q[0] : params.q;
+  const page = Number(Array.isArray(params.page) ? params.page[0] : params.page) || 1;
+  const pageSize = Number(Array.isArray(params.perPage) ? params.perPage[0] : params.perPage) || 20;
+
+  const result = await listDeliveries({ q: q?.trim() || undefined, page, pageSize });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Entregas</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Folios que salen de una OT cuando todos sus números de parte están terminados.
-            Aquí solo se programa fecha y transportista.
-          </p>
+          <h1 className="text-lg font-semibold">Entregas</h1>
+          <p className="text-xs text-muted-foreground">{result.total} entregas</p>
         </div>
+        {canWrite && (
+          <Link href="/deliveries/new" className="inline-flex items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+            <Plus className="h-3 w-3" />
+            Nueva Entrega
+          </Link>
+        )}
       </div>
-      <ListSearchForm
-        action="/deliveries"
-        q={q}
-        perPage={pageSize}
-        placeholder="Folio, orden de trabajo, cliente o guía"
-      />
-      <TableCard>
+
+      <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Folio</TableHead>
-              <TableHead>Orden de trabajo</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Guía</TableHead>
+              <TableHead>Entrega</TableHead>
+              <TableHead>Pedido</TableHead>
+              <TableHead>Destino</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead>Fecha</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {result.rows.length === 0 ? (
-              <EmptyTable
-                colSpan={5}
-                title={q ? "No hay entregas con esos filtros." : "No hay entregas."}
-                description={
-                  q
-                    ? "Prueba otra búsqueda o limpia los filtros."
-                    : "Cuando una OT tenga todos los números de parte terminados, el administrador de OT pulsa Enviar a Entregas."
-                }
-              />
+              <TableRow>
+                <TableCell colSpan={5} className="py-12 text-center">
+                  <Truck className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <p className="mt-2 text-sm text-muted-foreground">Sin entregas</p>
+                </TableCell>
+              </TableRow>
             ) : (
-              result.rows.map((row) => (
-                <TableRow key={row.id}>
+              result.rows.map((delivery) => (
+                <TableRow key={delivery.id}>
                   <TableCell>
-                    <Link href={`/deliveries/${row.id}`} className="font-medium hover:underline">
-                      {row.number}
+                    <Link href={`/deliveries/${delivery.id}`} className="font-medium hover:underline">
+                      {delivery.number}
                     </Link>
                   </TableCell>
-                  <TableCell>
-                    <Link href={`/orders/${row.orderId}`} className="hover:underline">
-                      {workOrderNumber(row.orderNumber)}
-                    </Link>
+                  <TableCell className="font-mono text-xs">{delivery.orderNumber}</TableCell>
+                  <TableCell className="text-xs">
+                    {delivery.shippingCity && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3 text-muted-foreground" />
+                        {delivery.shippingCity}
+                      </span>
+                    )}
                   </TableCell>
-                  <TableCell>{row.customerName}</TableCell>
-                  <TableCell>{row.trackingNumber ?? "—"}</TableCell>
                   <TableCell>
-                    <Badge variant={row.status === "incidencia" ? "outline" : "secondary"}>
-                      {DELIVERY_STATUS_LABELS[row.status as DeliveryStatus]}
+                    <Badge variant={delivery.status === "entregado" ? "default" : delivery.status === "enviado" ? "secondary" : "outline"}>
+                      {DELIVERY_STATUS_LABELS[delivery.status as keyof typeof DELIVERY_STATUS_LABELS]}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {delivery.scheduledDate ? (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3 text-muted-foreground" />
+                        {new Date(delivery.scheduledDate).toLocaleDateString("es-MX")}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
-      </TableCard>
-      <TablePager
-        total={result.total}
-        page={result.page}
-        pageCount={result.pageCount}
-        label={result.total === 1 ? "entrega" : "entregas"}
-        path="/deliveries"
-        query={query}
-        pageSize={pageSize}
-      />
+      </div>
     </div>
   );
 }

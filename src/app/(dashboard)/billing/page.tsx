@@ -1,7 +1,4 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { EmptyTable, TableCard, TablePager } from "@/components/layout/data-table";
-import { ListSearchForm } from "@/components/layout/list-search-form";
 import {
   Table,
   TableBody,
@@ -10,12 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { CreditCard, Calendar } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
-import { INVOICE_STATUS_LABELS, type InvoiceStatus } from "@/lib/billing/catalog";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
+import { INVOICE_STATUS_LABELS } from "@/lib/billing/catalog";
 import { displayMoney } from "@/lib/quotes/money";
-import { workOrderNumber } from "@/lib/production/ot-number";
-import { firstSearchParam, parsePage, parsePageSize } from "@/lib/ui/pagination";
 import { listInvoices } from "@/server/services/billing";
 
 export default async function BillingPage({
@@ -29,100 +26,79 @@ export default async function BillingPage({
 }) {
   await requirePermission(PERMISSION_IDS.billingRead);
   const params = await searchParams;
-  const q = firstSearchParam(params.q)?.trim() || undefined;
-  const page = parsePage(firstSearchParam(params.page));
-  const pageSize = parsePageSize(firstSearchParam(params.perPage));
-  const result = await listInvoices({ q, page, pageSize });
-  const query = new URLSearchParams();
-  if (q) query.set("q", q);
-  query.set("perPage", String(pageSize));
+  const q = Array.isArray(params.q) ? params.q[0] : params.q;
+  const page = Number(Array.isArray(params.page) ? params.page[0] : params.page) || 1;
+  const pageSize = Number(Array.isArray(params.perPage) ? params.perPage[0] : params.perPage) || 20;
+
+  const result = await listInvoices({ q: q?.trim() || undefined, page, pageSize });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Facturación</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Solicitudes de facturación de OT entregadas. CONTPAQi emite el CFDI; aquí
-            solo se gestiona el folio de borrador a enviada al cliente.
-          </p>
+          <h1 className="text-lg font-semibold">Facturación</h1>
+          <p className="text-xs text-muted-foreground">{result.total} facturas</p>
         </div>
       </div>
-      <ListSearchForm
-        action="/billing"
-        q={q}
-        perPage={pageSize}
-        placeholder="Folio, orden de trabajo o cliente"
-      />
-      <TableCard>
+
+      <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Folio</TableHead>
-              <TableHead>Orden de trabajo</TableHead>
-              <TableHead>Cotización</TableHead>
+              <TableHead>Factura</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Total</TableHead>
+              <TableHead>Pagado</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead>Vencimiento</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {result.rows.length === 0 ? (
-              <EmptyTable
-                colSpan={6}
-                title={q ? "No hay solicitudes con esos filtros." : "No hay solicitudes de facturación."}
-                description={
-                  q
-                    ? "Prueba otra búsqueda o limpia los filtros."
-                    : "Cuando Entregas marca una OT como entregada, aquí llega el borrador con los datos de la cotización."
-                }
-              />
+              <TableRow>
+                <TableCell colSpan={6} className="py-12 text-center">
+                  <CreditCard className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <p className="mt-2 text-sm text-muted-foreground">Sin facturas</p>
+                </TableCell>
+              </TableRow>
             ) : (
-              result.rows.map((row) => (
-                <TableRow key={row.id}>
+              result.rows.map((invoice) => (
+                <TableRow key={invoice.id}>
                   <TableCell>
-                    <Link href={`/billing/${row.id}`} className="font-medium hover:underline">
-                      {row.number}
+                    <Link href={`/billing/${invoice.id}`} className="font-medium hover:underline">
+                      {invoice.number}
                     </Link>
                   </TableCell>
+                  <TableCell>{invoice.customerName}</TableCell>
                   <TableCell>
-                    <Link href={`/orders/${row.orderId}`} className="hover:underline">
-                      {workOrderNumber(row.orderNumber)}
-                    </Link>
+                    <span className="font-medium">
+                      {displayMoney(invoice.total, invoice.currency)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {displayMoney(invoice.paidTotal, invoice.currency)}
                   </TableCell>
                   <TableCell>
-                    {row.quoteId ? (
-                      <Link href={`/quotes/${row.quoteId}`} className="hover:underline">
-                        {row.quoteNumber}
-                      </Link>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell>{row.customerName}</TableCell>
-                  <TableCell>
-                    {displayMoney(row.total, row.currency)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">
-                      {INVOICE_STATUS_LABELS[row.status as InvoiceStatus]}
+                    <Badge variant={invoice.status === "pagada" ? "default" : invoice.status === "emitida" ? "secondary" : "outline"}>
+                      {INVOICE_STATUS_LABELS[invoice.status as keyof typeof INVOICE_STATUS_LABELS]}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {invoice.dueDate ? (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3 text-muted-foreground" />
+                        {new Date(invoice.dueDate).toLocaleDateString("es-MX")}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
-      </TableCard>
-      <TablePager
-        total={result.total}
-        page={result.page}
-        pageCount={result.pageCount}
-        label={result.total === 1 ? "factura" : "facturas"}
-        path="/billing"
-        query={query}
-        pageSize={pageSize}
-      />
+      </div>
     </div>
   );
 }

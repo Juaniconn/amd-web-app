@@ -1,9 +1,4 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TablePager } from "@/components/layout/data-table";
-import { ListSearchForm } from "@/components/layout/list-search-form";
 import {
   Table,
   TableBody,
@@ -12,19 +7,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Plus, CheckCircle } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
-import { partIdentity } from "@/lib/production/ot-number";
 import {
   INSPECTION_RESULT_LABELS,
   INSPECTION_TYPE_LABELS,
-  NCR_STATUS_LABELS,
-  type InspectionResult,
-  type InspectionType,
-  type NcrStatus,
 } from "@/lib/quality/catalog";
-import { firstSearchParam, parsePage, parsePageSize } from "@/lib/ui/pagination";
-import { listInspections, listNcrs } from "@/server/services/quality";
+import { listInspections } from "@/server/services/quality";
 
 export default async function QualityPage({
   searchParams,
@@ -32,170 +23,74 @@ export default async function QualityPage({
   searchParams: Promise<{
     q?: string | string[];
     page?: string | string[];
-    ncrPage?: string | string[];
     perPage?: string | string[];
   }>;
 }) {
   const { access } = await requirePermission(PERMISSION_IDS.qualityRead);
   const canInspect = access.permissions.includes(PERMISSION_IDS.qualityInspect);
-  const canNcr = access.permissions.includes(PERMISSION_IDS.qualityNcr);
   const params = await searchParams;
-  const q = firstSearchParam(params.q)?.trim() || undefined;
-  const page = parsePage(firstSearchParam(params.page));
-  const ncrPage = parsePage(firstSearchParam(params.ncrPage));
-  const pageSize = parsePageSize(firstSearchParam(params.perPage));
-  const [inspections, ncrs] = await Promise.all([
-    listInspections({ q, page, pageSize }),
-    listNcrs({ q, page: ncrPage, pageSize }),
-  ]);
-  const query = new URLSearchParams();
-  if (q) query.set("q", q);
-  query.set("perPage", String(pageSize));
-  if (page > 1) query.set("page", String(page));
-  if (ncrPage > 1) query.set("ncrPage", String(ncrPage));
+  const q = Array.isArray(params.q) ? params.q[0] : params.q;
+  const page = Number(Array.isArray(params.page) ? params.page[0] : params.page) || 1;
+  const pageSize = Number(Array.isArray(params.perPage) ? params.perPage[0] : params.perPage) || 20;
+
+  const inspections = await listInspections({ q: q?.trim() || undefined, page, pageSize });
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Calidad</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Solicitudes en borrador de números de parte que ya terminaron proceso. Entra al
-            folio, revisa los datos y aprueba o rechaza para retrabajo.
-          </p>
+          <h1 className="text-lg font-semibold">Calidad</h1>
+          <p className="text-xs text-muted-foreground">{inspections.total} inspecciones</p>
         </div>
-        <div className="flex gap-2">
-          {canInspect ? (
-            <Link href="/quality/inspections/new" className={buttonVariants()}>
-              Nueva inspección
-            </Link>
-          ) : null}
-          {canNcr ? (
-            <Link href="/quality/ncrs/new" className={buttonVariants({ variant: "outline" })}>
-              Nuevo NCR
-            </Link>
-          ) : null}
-        </div>
+        {canInspect && (
+          <Link href="/quality/inspections/new" className="inline-flex items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+            <Plus className="h-3 w-3" />
+            Inspección
+          </Link>
+        )}
       </div>
 
-      <ListSearchForm
-        action="/quality"
-        q={q}
-        perPage={pageSize}
-        placeholder="Folio, OT o cliente"
-      />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Solicitudes de inspección</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Table>
-            <TableHeader>
+      <div className="rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Parte</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Resultado</TableHead>
+              <TableHead>Fecha</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {inspections.rows.length === 0 ? (
               <TableRow>
-                <TableHead>Folio</TableHead>
-                <TableHead>Número de parte</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Resultado</TableHead>
+                <TableCell colSpan={4} className="py-12 text-center">
+                  <CheckCircle className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <p className="mt-2 text-sm text-muted-foreground">Sin inspecciones</p>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {inspections.rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
-                    No hay solicitudes. Cuando Producción envía un número de parte a Calidad llega un borrador aquí.
+            ) : (
+              inspections.rows.map((insp) => (
+                <TableRow key={insp.id}>
+                  <TableCell>{insp.partNumber}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-[10px]">
+                      {INSPECTION_TYPE_LABELS[insp.type as keyof typeof INSPECTION_TYPE_LABELS]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={insp.result === "aprobado" ? "default" : insp.result === "rechazado" ? "destructive" : "secondary"}>
+                      {INSPECTION_RESULT_LABELS[insp.result as keyof typeof INSPECTION_RESULT_LABELS]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {new Date(insp.inspectedAt).toLocaleDateString("es-MX")}
                   </TableCell>
                 </TableRow>
-              ) : (
-                inspections.rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>
-                      <Link
-                        href={`/quality/inspections/${row.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {row.number}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Link href={`/production/${row.productionOrderId}`} className="hover:underline">
-                        {partIdentity(row.partNumber, row.otNumber)}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      {INSPECTION_TYPE_LABELS[row.type as InspectionType]}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={row.result === "rechazado" ? "outline" : "secondary"}>
-                        {INSPECTION_RESULT_LABELS[row.result as InspectionResult]}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-          <TablePager
-            total={inspections.total}
-            page={inspections.page}
-            pageCount={inspections.pageCount}
-            label={inspections.total === 1 ? "inspección" : "inspecciones"}
-            path="/quality"
-            query={query}
-            pageSize={pageSize}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>NCR</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Folio</TableHead>
-                <TableHead>Número de parte</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Causa</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {ncrs.rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
-                    No hay no conformidades abiertas.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                ncrs.rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>
-                      <Link href={`/quality/ncrs/${row.id}`} className="font-medium hover:underline">
-                        {row.number}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{partIdentity(row.partNumber, row.otNumber)}</TableCell>
-                    <TableCell>{NCR_STATUS_LABELS[row.status as NcrStatus]}</TableCell>
-                    <TableCell className="max-w-xs truncate">{row.cause ?? "—"}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-          <TablePager
-            total={ncrs.total}
-            page={ncrs.page}
-            pageCount={ncrs.pageCount}
-            label={ncrs.total === 1 ? "NCR" : "NCR"}
-            path="/quality"
-            query={query}
-            pageSize={pageSize}
-            pageParam="ncrPage"
-          />
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
