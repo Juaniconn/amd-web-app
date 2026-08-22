@@ -155,10 +155,14 @@ export function AppSidebar({ pathname, permissions, onSearch }: AppSidebarProps)
         <div className="border-t border-gray-800 p-2">
           <Link
             href="/my-production"
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs ${
+              pathname === "/my-production"
+                ? "bg-blue-600/20 text-blue-400"
+                : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+            }`}
           >
             <Settings className="h-4 w-4" />
-            Mis Tareas
+            Mis Procesos
           </Link>
         </div>
       )}

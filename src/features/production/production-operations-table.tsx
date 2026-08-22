@@ -12,7 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { assignOperationOperatorAction } from "@/server/actions/production";
+import {
+  assignOperationOperatorAction,
+  updateOperationAction,
+} from "@/server/actions/production";
 import { Lightbulb } from "lucide-react";
 
 type Operation = {
@@ -96,6 +99,16 @@ export function ProductionOperationsTable({
     router.refresh();
   }
 
+  async function handleStatus(operationId: string, status: string) {
+    setPending(operationId);
+    const formData = new FormData();
+    formData.set("id", operationId);
+    formData.set("status", status);
+    await updateOperationAction(formData);
+    setPending(null);
+    router.refresh();
+  }
+
   function handleSuggest(operationId: string) {
     // Find first available operator (least loaded)
     const suggested = operators.find(
@@ -161,6 +174,7 @@ export function ProductionOperationsTable({
               <TableHead>Centro</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Operador</TableHead>
+              <TableHead className="text-right">Acción</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -221,6 +235,42 @@ export function ProductionOperationsTable({
                       <span className="text-xs text-muted-foreground">
                         {operation.operatorName ?? "Sin asignar"}
                       </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {operation.status === "terminada" ? (
+                      <span className="text-[10px] text-green-600">✓ Cerrado</span>
+                    ) : operation.status === "omitida" ? (
+                      <span className="text-[10px] text-muted-foreground">Omitido</span>
+                    ) : canAssign ? (
+                      <div className="flex justify-end gap-1">
+                        {operation.status === "pendiente" && (
+                          <button
+                            onClick={() => handleStatus(operation.id, "en_proceso")}
+                            disabled={isPending}
+                            className="rounded border px-2 py-0.5 text-[10px] hover:bg-muted disabled:opacity-50"
+                          >
+                            Iniciar
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleStatus(operation.id, "terminada")}
+                          disabled={isPending}
+                          className="rounded bg-green-600 px-2 py-0.5 text-[10px] text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          Terminar
+                        </button>
+                        <button
+                          onClick={() => handleStatus(operation.id, "omitida")}
+                          disabled={isPending}
+                          className="rounded border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted disabled:opacity-50"
+                          title="Omitir este proceso"
+                        >
+                          Omitir
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">—</span>
                     )}
                   </TableCell>
                 </TableRow>

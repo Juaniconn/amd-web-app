@@ -16,6 +16,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
     "check:kpis": "tsx scripts/check-command-center.ts",
+    "check:alerts": "tsx scripts/check-alerts-search.ts",
+    "check:operator": "tsx scripts/check-operator-cycle.ts",
     "db:start": "tsx scripts/start-embedded-postgres.ts",
     "db:verify": "tsx scripts/verify-db.ts"
   },

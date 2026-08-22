@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { AppError, toUserMessage } from "@/lib/errors";
 import { PERMISSION_IDS, type PermissionId } from "@/lib/permissions/catalog";
 import { requirePermission } from "@/lib/auth/session";
@@ -31,6 +32,8 @@ import {
   assignOperationOperator,
   changeProductionStatus,
   createProductionOrder,
+  finishOperationAsOperator,
+  startOperationAsOperator,
   updateOperation,
   updateProductionOrder,
 } from "@/server/services/production";
@@ -341,6 +344,48 @@ export async function assignOperationOperatorAction(formData: FormData) {
     }
     await assignOperationOperator(operationId, operatorUserId, actorFrom(session));
     return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * El operador inicia SU proceso. Solo requiere production:view porque
+ * el servicio valida que el proceso esté asignado a él.
+ */
+export async function startMyOperationAction(formData: FormData) {
+  try {
+    const { session } = await requirePermission(PERMISSION_IDS.productionView);
+    const operationId = formData.get("operationId")?.toString() ?? "";
+    if (!operationId) {
+      return { ok: false as const, error: "ID de proceso requerido." };
+    }
+    await startOperationAsOperator(operationId, session.user.id);
+    revalidatePath("/my-production");
+    revalidatePath("/production");
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * El operador termina SU proceso. Si era el último del número de parte,
+ * el número de parte pasa a 'calidad' automáticamente.
+ */
+export async function finishMyOperationAction(formData: FormData) {
+  try {
+    const { session } = await requirePermission(PERMISSION_IDS.productionView);
+    const operationId = formData.get("operationId")?.toString() ?? "";
+    const notes = formData.get("notes")?.toString() || undefined;
+    if (!operationId) {
+      return { ok: false as const, error: "ID de proceso requerido." };
+    }
+    const result = await finishOperationAsOperator(operationId, session.user.id);
+    revalidatePath("/my-production");
+    revalidatePath("/production");
+    revalidatePath("/orders");
+    return { ok: true as const, ...result };
   } catch (error) {
     return fail(error);
   }

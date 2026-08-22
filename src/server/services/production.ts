@@ -10,6 +10,7 @@ import {
   inArray,
   lt,
   ne,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -1244,7 +1245,12 @@ export async function updateOperation(
   actor: Actor,
 ): Promise<void> {
   const [existing] = await db
-    .select({ id: productionOperations.id })
+    .select({
+      id: productionOperations.id,
+      status: productionOperations.status,
+      startedAt: productionOperations.startedAt,
+      productionOrderId: productionOperations.productionOrderId,
+    })
     .from(productionOperations)
     .where(eq(productionOperations.id, input.id))
     .limit(1);
@@ -1253,12 +1259,77 @@ export async function updateOperation(
     throw new AppError("Operación no encontrada.", "OP_NOT_FOUND", 404);
   }
 
-  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  const now = new Date();
+  const updates: Record<string, unknown> = { updatedAt: now };
   if (input.status) updates.status = input.status;
   if (input.operatorUserId !== undefined) updates.operatorUserId = input.operatorUserId || null;
   if (input.machineId !== undefined) updates.machineId = input.machineId || null;
 
+  // Sellar tiempos según la transición
+  if (input.status === "en_proceso" && !existing.startedAt) {
+    updates.startedAt = now;
+  }
+  if (input.status === "terminada") {
+    updates.finishedAt = now;
+    if (!existing.startedAt) updates.startedAt = now;
+  }
+
   await db.update(productionOperations).set(updates).where(eq(productionOperations.id, input.id));
+
+  // Cascada al número de parte cuando cambia el estado del proceso
+  if (input.status) {
+    await syncPartStatusFromOperations(existing.productionOrderId, now);
+  }
+}
+
+/**
+ * Sincroniza el estado del número de parte con el avance de sus procesos.
+ * - Si hay algún proceso en curso y la parte estaba liberada/programada → en_produccion
+ * - Si todos los procesos están cerrados → calidad
+ */
+async function syncPartStatusFromOperations(
+  productionOrderId: string,
+  now: Date,
+): Promise<void> {
+  const [part] = await db
+    .select({ id: productionOrders.id, status: productionOrders.status })
+    .from(productionOrders)
+    .where(eq(productionOrders.id, productionOrderId))
+    .limit(1);
+
+  if (!part) return;
+  // No tocar partes ya cerradas administrativamente
+  if (["entregada", "cancelada"].includes(part.status)) return;
+
+  const ops = await db
+    .select({ status: productionOperations.status })
+    .from(productionOperations)
+    .where(eq(productionOperations.productionOrderId, productionOrderId));
+
+  if (ops.length === 0) return;
+
+  const open = ops.filter(
+    (o) => o.status !== "terminada" && o.status !== "omitida",
+  );
+  const anyInProgress = ops.some((o) => o.status === "en_proceso");
+
+  if (open.length === 0 && part.status !== "calidad" && part.status !== "terminada") {
+    await db
+      .update(productionOrders)
+      .set({ status: "calidad", qualityAt: now, updatedAt: now })
+      .where(eq(productionOrders.id, productionOrderId));
+    return;
+  }
+
+  if (
+    anyInProgress &&
+    ["pendiente", "liberada", "programada", "pausada"].includes(part.status)
+  ) {
+    await db
+      .update(productionOrders)
+      .set({ status: "en_produccion", startedAt: now, updatedAt: now })
+      .where(eq(productionOrders.id, productionOrderId));
+  }
 }
 
 export async function assignOperationOperator(
@@ -1283,4 +1354,148 @@ export async function assignOperationOperator(
       updatedAt: new Date(),
     })
     .where(eq(productionOperations.id, operationId));
+}
+
+/**
+ * El operador inicia su propio proceso.
+ * Valida que le pertenezca y que los procesos anteriores estén cerrados.
+ * Si el número de parte no estaba en producción, entra a 'en_produccion'.
+ */
+export async function startOperationAsOperator(
+  operationId: string,
+  operatorUserId: string,
+): Promise<void> {
+  const [op] = await db
+    .select({
+      id: productionOperations.id,
+      position: productionOperations.position,
+      status: productionOperations.status,
+      operatorUserId: productionOperations.operatorUserId,
+      productionOrderId: productionOperations.productionOrderId,
+      partStatus: productionOrders.status,
+    })
+    .from(productionOperations)
+    .innerJoin(
+      productionOrders,
+      eq(productionOperations.productionOrderId, productionOrders.id),
+    )
+    .where(eq(productionOperations.id, operationId))
+    .limit(1);
+
+  if (!op) {
+    throw new AppError("El proceso no existe.", "OP_NOT_FOUND", 404);
+  }
+  if (op.operatorUserId !== operatorUserId) {
+    throw new AppError("Este proceso no está asignado a ti.", "OP_FORBIDDEN", 403);
+  }
+  if (op.status === "terminada") {
+    throw new AppError("Este proceso ya está terminado.", "OP_CLOSED", 409);
+  }
+  if (op.status === "en_proceso") return;
+
+  const [blocking] = await db
+    .select({ value: count() })
+    .from(productionOperations)
+    .where(
+      and(
+        eq(productionOperations.productionOrderId, op.productionOrderId),
+        lt(productionOperations.position, op.position),
+        notInArray(productionOperations.status, ["terminada", "omitida"]),
+      ),
+    );
+
+  if (Number(blocking?.value ?? 0) > 0) {
+    throw new AppError(
+      "Hay procesos anteriores sin terminar. Espera a que se cierren.",
+      "OP_BLOCKED",
+      409,
+    );
+  }
+
+  const now = new Date();
+
+  await db
+    .update(productionOperations)
+    .set({ status: "en_proceso", startedAt: now, updatedAt: now })
+    .where(eq(productionOperations.id, operationId));
+
+  if (["liberada", "programada", "pausada"].includes(op.partStatus)) {
+    await db
+      .update(productionOrders)
+      .set({ status: "en_produccion", startedAt: now, updatedAt: now })
+      .where(eq(productionOrders.id, op.productionOrderId));
+  }
+}
+
+/**
+ * El operador termina su proceso.
+ * Si era el último pendiente del número de parte, este pasa a 'calidad'.
+ */
+export async function finishOperationAsOperator(
+  operationId: string,
+  operatorUserId: string,
+  notes?: string,
+): Promise<{ partCompleted: boolean; nextOperationName: string | null }> {
+  const [op] = await db
+    .select({
+      id: productionOperations.id,
+      position: productionOperations.position,
+      name: productionOperations.name,
+      status: productionOperations.status,
+      operatorUserId: productionOperations.operatorUserId,
+      productionOrderId: productionOperations.productionOrderId,
+    })
+    .from(productionOperations)
+    .where(eq(productionOperations.id, operationId))
+    .limit(1);
+
+  if (!op) {
+    throw new AppError("El proceso no existe.", "OP_NOT_FOUND", 404);
+  }
+  if (op.operatorUserId !== operatorUserId) {
+    throw new AppError("Este proceso no está asignado a ti.", "OP_FORBIDDEN", 403);
+  }
+  if (op.status === "terminada") {
+    return { partCompleted: false, nextOperationName: null };
+  }
+
+  const now = new Date();
+
+  await db
+    .update(productionOperations)
+    .set({
+      status: "terminada",
+      finishedAt: now,
+      ...(op.status === "pendiente" ? { startedAt: now } : {}),
+      updatedAt: now,
+    })
+    .where(eq(productionOperations.id, operationId));
+
+  const remaining = await db
+    .select({
+      id: productionOperations.id,
+      name: productionOperations.name,
+    })
+    .from(productionOperations)
+    .where(
+      and(
+        eq(productionOperations.productionOrderId, op.productionOrderId),
+        notInArray(productionOperations.status, ["terminada", "omitida"]),
+      ),
+    )
+    .orderBy(asc(productionOperations.position));
+
+  const partCompleted = remaining.length === 0;
+
+  if (partCompleted) {
+    await db
+      .update(productionOrders)
+      .set({ status: "calidad", qualityAt: now, updatedAt: now })
+      .where(eq(productionOrders.id, op.productionOrderId));
+  }
+
+  return {
+    partCompleted,
+    nextOperationName: remaining[0]?.name ?? null,
+  };
 }
