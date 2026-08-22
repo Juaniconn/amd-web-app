@@ -39,6 +39,7 @@ export type MyOperationCard = {
   totalStepsInPart: number;
   doneStepsInPart: number;
   isUnblocked: boolean;
+  reportedLoss: number;
 };
 
 const PRIORITY_STYLES: Record<string, string> = {
@@ -85,7 +86,26 @@ export function OperationCard({ op }: { op: MyOperationCard }) {
 
   const scrapN = Number(scrap) || 0;
   const reworkN = Number(rework) || 0;
+  const goodN = Number(good) || 0;
   const needsCause = scrapN > 0 || reworkN > 0;
+
+  // ── Control de cantidades contra el total del número de parte ──
+  const partQty = Number(op.quantity) || 0;
+  const alreadyLost = op.reportedLoss;
+  const disponible = Math.max(0, partQty - alreadyLost);
+  const reportado = goodN + scrapN + reworkN;
+  const excedeTotal = partQty > 0 && reportado > partQty;
+  const excedeDisponible = partQty > 0 && scrapN + reworkN > disponible;
+  const sobra = reportado - partQty;
+
+  /** Rellena "Buenas" con lo que falta para completar el total */
+  function completarBuenas() {
+    const restante = Math.max(0, partQty - scrapN - reworkN);
+    setGood(String(restante));
+  }
+
+  const puedeCerrar =
+    !excedeTotal && !excedeDisponible && (!needsCause || rootCause.trim().length > 0);
 
   function start() {
     setError(null);
@@ -103,6 +123,18 @@ export function OperationCard({ op }: { op: MyOperationCard }) {
 
   function finish() {
     setError(null);
+    if (excedeTotal) {
+      setError(
+        `Estás reportando ${reportado} piezas pero el número de parte tiene ${partQty} ${op.unit}. Sobran ${sobra}.`,
+      );
+      return;
+    }
+    if (excedeDisponible) {
+      setError(
+        `Ya se reportaron ${alreadyLost} piezas entre scrap y retrabajo. Solo quedan ${disponible} disponibles.`,
+      );
+      return;
+    }
     if (needsCause && !rootCause.trim()) {
       setError("Indica la causa raíz del scrap o retrabajo.");
       return;
@@ -227,20 +259,39 @@ export function OperationCard({ op }: { op: MyOperationCard }) {
       ) : working ? (
         closing ? (
           <div className="mt-3 space-y-2 rounded-lg border bg-muted/30 p-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Reporte de producción
-            </p>
+            <div className="flex items-baseline justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Reporte de producción
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Total del N/P:{" "}
+                <span className="font-bold text-foreground">
+                  {partQty} {op.unit}
+                </span>
+              </p>
+            </div>
+
+            {alreadyLost > 0 && (
+              <p className="rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-800">
+                Ya se reportaron {alreadyLost} piezas entre scrap y retrabajo en esta
+                pieza. Quedan {disponible} disponibles.
+              </p>
+            )}
+
             <div className="grid grid-cols-3 gap-2">
               <label className="space-y-0.5">
                 <span className="block text-[10px] text-muted-foreground">Buenas</span>
                 <input
                   type="number"
                   min="0"
+                  max={partQty || undefined}
                   inputMode="numeric"
                   value={good}
                   onChange={(e) => setGood(e.target.value)}
-                  placeholder={String(Number(op.quantity))}
-                  className="h-9 w-full rounded border bg-background px-2 text-sm"
+                  placeholder="0"
+                  className={`h-9 w-full rounded border bg-background px-2 text-sm ${
+                    excedeTotal ? "border-red-400" : ""
+                  }`}
                 />
               </label>
               <label className="space-y-0.5">
@@ -248,12 +299,13 @@ export function OperationCard({ op }: { op: MyOperationCard }) {
                 <input
                   type="number"
                   min="0"
+                  max={disponible || undefined}
                   inputMode="numeric"
                   value={scrap}
                   onChange={(e) => setScrap(e.target.value)}
                   placeholder="0"
                   className={`h-9 w-full rounded border bg-background px-2 text-sm ${
-                    scrapN > 0 ? "border-red-400" : ""
+                    scrapN > 0 || excedeTotal ? "border-red-400" : ""
                   }`}
                 />
               </label>
@@ -264,16 +316,58 @@ export function OperationCard({ op }: { op: MyOperationCard }) {
                 <input
                   type="number"
                   min="0"
+                  max={disponible || undefined}
                   inputMode="numeric"
                   value={rework}
                   onChange={(e) => setRework(e.target.value)}
                   placeholder="0"
                   className={`h-9 w-full rounded border bg-background px-2 text-sm ${
-                    reworkN > 0 ? "border-amber-400" : ""
+                    reworkN > 0 || excedeTotal ? "border-amber-400" : ""
                   }`}
                 />
               </label>
             </div>
+
+            {/* Contador en vivo */}
+            <div className="flex items-center justify-between text-[10px]">
+              <span
+                className={
+                  excedeTotal
+                    ? "font-semibold text-red-600"
+                    : reportado === partQty
+                      ? "font-semibold text-green-600"
+                      : "text-muted-foreground"
+                }
+              >
+                Reportado: {reportado} de {partQty} {op.unit}
+                {reportado === partQty && partQty > 0 && " ✓"}
+              </span>
+              {reportado !== partQty && partQty > 0 && (
+                <button
+                  type="button"
+                  onClick={completarBuenas}
+                  className="text-blue-600 underline hover:text-blue-700"
+                >
+                  Completar el total
+                </button>
+              )}
+            </div>
+
+            {/* Aviso de exceso — bloquea el cierre */}
+            {excedeTotal && (
+              <p className="flex items-start gap-1 rounded bg-red-50 px-2 py-1.5 text-[10px] font-medium text-red-700">
+                <AlertTriangle className="mt-0.5 h-2.5 w-2.5 shrink-0" />
+                No puedes reportar más de {partQty} {op.unit}. Sobran {sobra}{" "}
+                {sobra === 1 ? "pieza" : "piezas"}.
+              </p>
+            )}
+            {!excedeTotal && excedeDisponible && (
+              <p className="flex items-start gap-1 rounded bg-red-50 px-2 py-1.5 text-[10px] font-medium text-red-700">
+                <AlertTriangle className="mt-0.5 h-2.5 w-2.5 shrink-0" />
+                Scrap + retrabajo no puede pasar de {disponible} (ya se reportaron{" "}
+                {alreadyLost}).
+              </p>
+            )}
 
             {needsCause && (
               <label className="block space-y-0.5">
@@ -294,8 +388,13 @@ export function OperationCard({ op }: { op: MyOperationCard }) {
             <div className="flex gap-2 pt-1">
               <button
                 onClick={finish}
-                disabled={isPending}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                disabled={isPending || !puedeCerrar}
+                title={
+                  !puedeCerrar
+                    ? "Corrige las cantidades antes de cerrar"
+                    : "Cerrar el proceso"
+                }
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

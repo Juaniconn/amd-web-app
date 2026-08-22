@@ -39,6 +39,8 @@ export type MyOperation = {
   doneStepsInPart: number;
   /** true si todos los procesos anteriores ya están terminados */
   isUnblocked: boolean;
+  /** piezas ya reportadas como scrap o retrabajo en esta pieza */
+  reportedLoss: number;
 };
 
 /**
@@ -89,6 +91,12 @@ export async function listMyOperations(
         where po4.production_order_id = ${productionOrders.id}
           and po4.position < ${productionOperations.position}
           and po4.status not in ('terminada','omitida')
+      ), 0)`,
+      /** Piezas ya reportadas como scrap o retrabajo en esta pieza */
+      reportedLoss: sql<string>`coalesce((
+        select sum(pr.scrap_quantity + pr.quantity)
+        from production_rework pr
+        where pr.production_order_id = ${productionOrders.id}
       ), 0)`,
     })
     .from(productionOperations)
@@ -142,6 +150,7 @@ export async function listMyOperations(
     totalStepsInPart: Number(row.totalStepsInPart ?? 0),
     doneStepsInPart: Number(row.doneStepsInPart ?? 0),
     isUnblocked: Number(row.pendingBefore ?? 0) === 0,
+    reportedLoss: Number(row.reportedLoss ?? 0),
   }));
 }
 

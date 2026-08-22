@@ -24,6 +24,8 @@
     "check:access": "tsx scripts/check-operator-access.ts",
     "check:landing": "tsx scripts/check-landing.ts",
     "check:balance": "tsx scripts/check-seed-balance.ts",
+    "check:qty": "tsx scripts/check-quantity-guard.ts",
+    "check:qty-e2e": "tsx scripts/check-quantity-e2e.ts",
     "fix:operators": "tsx scripts/fix-operator-accounts.ts",
     "fix:rebalance": "tsx scripts/rebalance-operators.ts",
     "db:start": "tsx scripts/start-embedded-postgres.ts",

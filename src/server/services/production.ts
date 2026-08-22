@@ -1607,6 +1607,7 @@ export async function finishOperationAsOperator(
   const { operationId, operatorUserId } = input;
   const scrap = Math.max(0, input.scrapQuantity ?? 0);
   const rework = Math.max(0, input.reworkQuantity ?? 0);
+  const good = Math.max(0, input.goodQuantity ?? 0);
 
   if ((scrap > 0 || rework > 0) && !input.rootCause?.trim()) {
     throw new AppError(
@@ -1625,6 +1626,8 @@ export async function finishOperationAsOperator(
       operatorUserId: productionOperations.operatorUserId,
       productionOrderId: productionOperations.productionOrderId,
       partNumber: productionOrders.partNumber,
+      partQuantity: productionOrders.quantity,
+      partUnit: productionOrders.unit,
     })
     .from(productionOperations)
     .innerJoin(
@@ -1648,6 +1651,42 @@ export async function finishOperationAsOperator(
       laborMinutes: 0,
       machineMinutes: 0,
     };
+  }
+
+  // ── Validación de cantidades contra el número de parte ──
+  // No se puede reportar más piezas de las que tiene la orden. Se cuenta lo ya
+  // reportado en procesos anteriores para que la suma no rebase el total.
+  const partQty = Number(op.partQuantity ?? 0);
+  const reported = good + scrap + rework;
+
+  if (partQty > 0 && reported > partQty) {
+    throw new AppError(
+      `No puedes reportar ${reported} piezas: el número de parte ${op.partNumber ?? ""} tiene ${partQty} ${op.partUnit ?? "pza"}. ` +
+        `Ajusta las cantidades (buenas + scrap + retrabajo no puede pasar de ${partQty}).`,
+      "OP_QTY_EXCEEDED",
+      400,
+    );
+  }
+
+  if (partQty > 0) {
+    const [already] = await db
+      .select({
+        scrap: sql<string>`coalesce(sum(${productionRework.scrapQuantity}), 0)`,
+        rework: sql<string>`coalesce(sum(${productionRework.quantity}), 0)`,
+      })
+      .from(productionRework)
+      .where(eq(productionRework.productionOrderId, op.productionOrderId));
+
+    const previousLoss = Number(already?.scrap ?? 0) + Number(already?.rework ?? 0);
+    if (previousLoss + scrap + rework > partQty) {
+      const disponible = Math.max(0, partQty - previousLoss);
+      throw new AppError(
+        `Ya se reportaron ${previousLoss} piezas entre scrap y retrabajo en este número de parte (total ${partQty} ${op.partUnit ?? "pza"}). ` +
+          `Solo puedes reportar ${disponible} más.`,
+        "OP_QTY_EXCEEDED",
+        400,
+      );
+    }
   }
 
   const now = new Date();
