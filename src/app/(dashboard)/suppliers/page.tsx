@@ -1,8 +1,4 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import { EmptyTable, TableCard, TablePager } from "@/components/layout/data-table";
-import { ListSearchForm } from "@/components/layout/list-search-form";
 import {
   Table,
   TableBody,
@@ -11,13 +7,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Factory, MapPin } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
-import {
-  SUPPLIER_STATUS_LABELS,
-  type SupplierStatus,
-} from "@/lib/purchasing/catalog";
-import { firstSearchParam, parsePage, parsePageSize } from "@/lib/ui/pagination";
+import { SUPPLIER_STATUS_LABELS } from "@/lib/purchasing/catalog";
 import { listSuppliers } from "@/server/services/purchasing";
 
 export default async function SuppliersPage({
@@ -25,7 +19,6 @@ export default async function SuppliersPage({
 }: {
   searchParams: Promise<{
     q?: string | string[];
-    calculator?: string | string[];
     page?: string | string[];
     perPage?: string | string[];
   }>;
@@ -33,111 +26,81 @@ export default async function SuppliersPage({
   const { access } = await requirePermission(PERMISSION_IDS.purchasingRead);
   const canWrite = access.permissions.includes(PERMISSION_IDS.purchasingWrite);
   const params = await searchParams;
-  const q = firstSearchParam(params.q)?.trim() || undefined;
-  const calculator = firstSearchParam(params.calculator) === "1";
-  const page = parsePage(firstSearchParam(params.page));
-  const pageSize = parsePageSize(firstSearchParam(params.perPage));
+  const q = Array.isArray(params.q) ? params.q[0] : params.q;
+  const page = Number(Array.isArray(params.page) ? params.page[0] : params.page) || 1;
+  const pageSize = Number(Array.isArray(params.perPage) ? params.perPage[0] : params.perPage) || 20;
+
   const result = await listSuppliers({
-    q,
-    calculator: calculator || undefined,
+    q: q?.trim() || undefined,
     page,
     pageSize,
   });
-  const query = new URLSearchParams();
-  if (q) query.set("q", q);
-  if (calculator) query.set("calculator", "1");
-  query.set("perPage", String(pageSize));
-  const filtered = Boolean(q || calculator);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Proveedores</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Maestro de proveedores de AMD México. Las partidas de material alimentan la calculadora.
-          </p>
+          <h1 className="text-lg font-semibold">Proveedores</h1>
+          <p className="text-xs text-muted-foreground">{result.total} proveedores</p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/purchasing" className={buttonVariants({ variant: "outline" })}>
-            Órdenes de compra
+        {canWrite && (
+          <Link href="/suppliers/new" className="inline-flex items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+            <Plus className="h-3 w-3" />
+            Nuevo Proveedor
           </Link>
-          {canWrite ? (
-            <Link href="/suppliers/new" className={buttonVariants()}>
-              Nuevo proveedor
-            </Link>
-          ) : null}
-        </div>
+        )}
       </div>
-      <ListSearchForm
-        action="/suppliers"
-        q={q}
-        perPage={pageSize}
-        placeholder="Código, proveedor o RFC"
-      />
-      <TableCard>
+
+      <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Código</TableHead>
               <TableHead>Proveedor</TableHead>
-              <TableHead>RFC</TableHead>
               <TableHead>Contacto</TableHead>
-              <TableHead>Estatus</TableHead>
+              <TableHead>Ubicación</TableHead>
+              <TableHead>Estado</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {result.rows.length === 0 ? (
-              <EmptyTable
-                colSpan={5}
-                title={filtered ? "No hay proveedores con esos filtros." : "Aún no hay proveedores."}
-                description={
-                  filtered
-                    ? "Prueba otra búsqueda o limpia los filtros."
-                    : "Alta el primero para comenzar a emitir órdenes de compra."
-                }
-                href={!filtered && canWrite ? "/suppliers/new" : undefined}
-                actionLabel="Capturar proveedor"
-              />
+              <TableRow>
+                <TableCell colSpan={4} className="py-12 text-center">
+                  <Factory className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <p className="mt-2 text-sm text-muted-foreground">Aún no hay proveedores</p>
+                </TableCell>
+              </TableRow>
             ) : (
-              result.rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="font-mono text-xs">{row.code}</TableCell>
+              result.rows.map((supplier) => (
+                <TableRow key={supplier.id}>
                   <TableCell>
-                    <Link href={`/suppliers/${row.id}`} className="font-medium hover:underline">
-                      {row.legalName}
+                    <Link href={`/suppliers/${supplier.id}`} className="font-medium hover:underline">
+                      {supplier.legalName}
                     </Link>
-                    {row.isDemo ? (
-                      <Badge variant="outline" className="ml-2">
-                        DEMO
-                      </Badge>
-                    ) : null}
-                    {row.usedInCalculator ? (
-                      <Badge variant="outline" className="ml-2">
-                        Calculadora
-                      </Badge>
-                    ) : null}
+                    <div className="text-xs text-muted-foreground">{supplier.code}</div>
                   </TableCell>
-                  <TableCell>{row.rfc ?? "—"}</TableCell>
-                  <TableCell>{row.contactName ?? row.phone ?? "—"}</TableCell>
+                  <TableCell className="text-xs">
+                    {supplier.contactName}
+                    <div className="text-xs text-muted-foreground">{supplier.email}</div>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {supplier.city && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3 text-muted-foreground" />
+                        {supplier.city}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>
-                    {SUPPLIER_STATUS_LABELS[row.status as SupplierStatus]}
+                    <Badge variant={supplier.status === "activo" ? "default" : "secondary"}>
+                      {SUPPLIER_STATUS_LABELS[supplier.status as keyof typeof SUPPLIER_STATUS_LABELS]}
+                    </Badge>
                   </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
-      </TableCard>
-      <TablePager
-        total={result.total}
-        page={result.page}
-        pageCount={result.pageCount}
-        label={result.total === 1 ? "proveedor" : "proveedores"}
-        path="/suppliers"
-        query={query}
-        pageSize={pageSize}
-      />
+      </div>
     </div>
   );
 }

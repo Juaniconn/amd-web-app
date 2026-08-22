@@ -1,8 +1,4 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import { EmptyTable, TableCard, TablePager } from "@/components/layout/data-table";
-import { ListSearchForm } from "@/components/layout/list-search-form";
 import {
   Table,
   TableBody,
@@ -11,16 +7,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Plus, ShoppingCart, Truck } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import {
   PURCHASE_ORDER_STATUS_LABELS,
   PURCHASE_REQUEST_STATUS_LABELS,
-  type PurchaseOrderStatus,
-  type PurchaseRequestStatus,
 } from "@/lib/purchasing/catalog";
 import { displayMoney } from "@/lib/quotes/money";
-import { firstSearchParam, parsePage, parsePageSize } from "@/lib/ui/pagination";
 import { listPurchaseOrders, listPurchaseRequests } from "@/server/services/purchasing";
 
 export default async function PurchasingPage({
@@ -35,141 +30,82 @@ export default async function PurchasingPage({
   const { access } = await requirePermission(PERMISSION_IDS.purchasingRead);
   const canWrite = access.permissions.includes(PERMISSION_IDS.purchasingWrite);
   const params = await searchParams;
-  const q = firstSearchParam(params.q)?.trim() || undefined;
-  const page = parsePage(firstSearchParam(params.page));
-  const pageSize = parsePageSize(firstSearchParam(params.perPage));
+  const q = Array.isArray(params.q) ? params.q[0] : params.q;
+  const page = Number(Array.isArray(params.page) ? params.page[0] : params.page) || 1;
+  const pageSize = Number(Array.isArray(params.perPage) ? params.perPage[0] : params.perPage) || 20;
+
   const [result, requests] = await Promise.all([
-    listPurchaseOrders({ q, page, pageSize }),
-    listPurchaseRequests({ q, page: 1, pageSize: 10 }),
+    listPurchaseOrders({ q: q?.trim() || undefined, page, pageSize }),
+    listPurchaseRequests({ q: q?.trim() || undefined, page: 1, pageSize: 10 }),
   ]);
-  const query = new URLSearchParams();
-  if (q) query.set("q", q);
-  query.set("perPage", String(pageSize));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Compras</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Solicitudes de material desde la OT y órdenes de compra. La recepción
-            incrementa inventario.
+          <h1 className="text-lg font-semibold">Compras</h1>
+          <p className="text-xs text-muted-foreground">
+            {result.total} OC · {requests.total} solicitudes
           </p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/suppliers" className={buttonVariants({ variant: "outline" })}>
-            Proveedores
+        {canWrite && (
+          <Link href="/purchasing/new" className="inline-flex items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+            <Plus className="h-3 w-3" />
+            Nueva OC
           </Link>
-          {canWrite ? (
-            <Link href="/purchasing/new" className={buttonVariants()}>
-              Nueva OC
-            </Link>
-          ) : null}
-        </div>
+        )}
       </div>
-      <ListSearchForm
-        action="/purchasing"
-        q={q}
-        perPage={pageSize}
-        placeholder="OC, SR, proveedor o código"
-      />
 
-      {requests.rows.length > 0 ? (
-        <TableCard>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Solicitud</TableHead>
-                <TableHead>Orden de trabajo</TableHead>
-                <TableHead>Estado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {requests.rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>
-                    <Link
-                      href={`/purchasing/requests/${row.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {row.number}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <Link href={`/orders/${row.orderId}`} className="hover:underline">
-                      {row.workOrderNumber}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    {PURCHASE_REQUEST_STATUS_LABELS[row.status as PurchaseRequestStatus]}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableCard>
-      ) : null}
+      <div className="flex items-center gap-2 rounded-md border bg-card p-2">
+        <button className="rounded bg-muted px-2 py-1 text-xs">Todas</button>
+        <button className="rounded px-2 py-1 text-xs hover:bg-muted">Pendientes</button>
+        <button className="rounded px-2 py-1 text-xs hover:bg-muted">Recibidas</button>
+        <button className="rounded px-2 py-1 text-xs hover:bg-muted">Urgentes</button>
+      </div>
 
-      <TableCard>
+      <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>OC</TableHead>
               <TableHead>Proveedor</TableHead>
-              <TableHead>Sucursal</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead>Fecha</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {result.rows.length === 0 ? (
-              <EmptyTable
-                colSpan={5}
-                title={q ? "No hay órdenes de compra con esos filtros." : "No hay órdenes de compra."}
-                description={
-                  q
-                    ? "Prueba otra búsqueda o limpia los filtros."
-                    : "Crea la primera OC cuando exista un proveedor y un material."
-                }
-                href={!q && canWrite ? "/purchasing/new" : undefined}
-                actionLabel="Capturar OC"
-              />
+              <TableRow>
+                <TableCell colSpan={5} className="py-12 text-center">
+                  <ShoppingCart className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <p className="mt-2 text-sm text-muted-foreground">Aún no hay OC</p>
+                </TableCell>
+              </TableRow>
             ) : (
-              result.rows.map((row) => (
-                <TableRow key={row.id}>
+              result.rows.map((po) => (
+                <TableRow key={po.id}>
                   <TableCell>
-                    <Link href={`/purchasing/${row.id}`} className="font-medium hover:underline">
-                      {row.number}
+                    <Link href={`/purchasing/${po.id}`} className="font-medium hover:underline">
+                      {po.number}
                     </Link>
-                    {row.isUrgent ? (
-                      <Badge variant="outline" className="ml-2">
-                        Urgente
-                      </Badge>
-                    ) : null}
                   </TableCell>
+                  <TableCell>{po.supplierName}</TableCell>
+                  <TableCell>{displayMoney(po.total, po.currency)}</TableCell>
                   <TableCell>
-                    {row.supplierCode} · {row.supplierName}
+                    <Badge variant={po.isUrgent ? "destructive" : "secondary"}>
+                      {PURCHASE_ORDER_STATUS_LABELS[po.status as keyof typeof PURCHASE_ORDER_STATUS_LABELS]}
+                    </Badge>
                   </TableCell>
-                  <TableCell>{row.branchCode ?? "—"}</TableCell>
-                  <TableCell>{displayMoney(row.total, row.currency)}</TableCell>
-                  <TableCell>
-                    {PURCHASE_ORDER_STATUS_LABELS[row.status as PurchaseOrderStatus]}
-                  </TableCell>
+                  <TableCell className="text-xs">
+                    {po.expectedDate ? new Date(po.expectedDate).toLocaleDateString("es-MX") : "—"}
+                   </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
-      </TableCard>
-      <TablePager
-        total={result.total}
-        page={result.page}
-        pageCount={result.pageCount}
-        label={result.total === 1 ? "orden de compra" : "órdenes de compra"}
-        path="/purchasing"
-        query={query}
-        pageSize={pageSize}
-      />
+      </div>
     </div>
   );
 }
