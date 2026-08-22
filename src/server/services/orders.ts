@@ -138,6 +138,18 @@ export async function listOrders(query: {
         where production_orders.order_id = ${orders.id}
           and production_orders.status = 'en_produccion'
       ), 0)`,
+      opsTotal: sql<number>`coalesce((
+        select count(*)::int from production_operations po
+        join production_orders pr on pr.id = po.production_order_id
+        where pr.order_id = ${orders.id}
+          and po.status <> 'omitida'
+      ), 0)`,
+      opsDone: sql<number>`coalesce((
+        select count(*)::int from production_operations po
+        join production_orders pr on pr.id = po.production_order_id
+        where pr.order_id = ${orders.id}
+          and po.status = 'terminada'
+      ), 0)`,
       status: orders.status,
       origin: orders.origin,
       total: orders.total,
@@ -174,6 +186,8 @@ export async function listOrders(query: {
       partsTotal: Number(row.partsTotal ?? 0),
       partsDone: Number(row.partsDone ?? 0),
       partsInProduction: Number(row.partsInProduction ?? 0),
+      opsTotal: Number(row.opsTotal ?? 0),
+      opsDone: Number(row.opsDone ?? 0),
       workOrderNumber: workOrderNumber(row.number),
     })),
     total,

@@ -169,7 +169,13 @@ export default async function ProductionPage({
               </TableCell>
             </TableRow>
             ) : (
-              result.rows.map((row) => (
+              result.rows.map((row) => {
+                const progress =
+                  row.operationsTotal > 0
+                    ? Math.round((row.operationsDone / row.operationsTotal) * 100)
+                    : 0;
+
+                return (
                 <TableRow key={row.id}>
                   <TableCell className="font-mono text-xs text-muted-foreground">
                     {row.number.replace("OT-", "")}
@@ -196,10 +202,29 @@ export default async function ProductionPage({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden" />
-                      <span className="text-xs text-muted-foreground">Ver</span>
-                    </div>
+                    {row.operationsTotal === 0 ? (
+                      <span className="text-xs text-muted-foreground">Sin procesos</span>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={`h-full transition-all ${progress === 100 ? "bg-green-500" : "bg-blue-500"}`}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-medium">{progress}%</span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {row.operationsDone}/{row.operationsTotal} procesos
+                          {row.operationsInProgress > 0 && (
+                            <span className="ml-1 text-amber-600">
+                              · {row.operationsInProgress} activo
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-xs">
                     <div className="flex items-center gap-1">
@@ -224,7 +249,8 @@ export default async function ProductionPage({
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>

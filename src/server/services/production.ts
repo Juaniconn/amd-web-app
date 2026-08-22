@@ -11,6 +11,7 @@ import {
   lt,
   ne,
   or,
+  sql,
 } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -1023,6 +1024,21 @@ export async function listProductionOrders(input: {
       machineName: machines.name,
       operatorName: users.name,
       isDemo: productionOrders.isDemo,
+      operationsTotal: sql<number>`coalesce((
+        select count(*)::int from production_operations
+        where production_operations.production_order_id = ${productionOrders.id}
+          and production_operations.status <> 'omitida'
+      ), 0)`,
+      operationsDone: sql<number>`coalesce((
+        select count(*)::int from production_operations
+        where production_operations.production_order_id = ${productionOrders.id}
+          and production_operations.status = 'terminada'
+      ), 0)`,
+      operationsInProgress: sql<number>`coalesce((
+        select count(*)::int from production_operations
+        where production_operations.production_order_id = ${productionOrders.id}
+          and production_operations.status = 'en_proceso'
+      ), 0)`,
     })
     .from(productionOrders)
     .innerJoin(customers, eq(productionOrders.customerId, customers.id))
@@ -1039,6 +1055,9 @@ export async function listProductionOrders(input: {
   return {
     rows: rows.map((row) => ({
       ...row,
+      operationsTotal: Number(row.operationsTotal ?? 0),
+      operationsDone: Number(row.operationsDone ?? 0),
+      operationsInProgress: Number(row.operationsInProgress ?? 0),
       monitoring: productionMonitoring(row.promisedDate, row.status),
     })),
     total,

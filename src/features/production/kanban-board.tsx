@@ -33,6 +33,7 @@ type PartSummary = {
   promisedDate: Date;
   operationsTotal: number;
   operationsDone: number;
+  operationsInProgress: number;
   isDelayed: boolean;
 };
 
@@ -110,16 +111,26 @@ function OrderCard({ part }: { part: PartSummary }) {
           </span>
         </div>
 
-        {part.operationsTotal > 0 && (
+        {part.operationsTotal > 0 ? (
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>{part.operationsDone}/{part.operationsTotal}</span>
-              <span>{progress}%</span>
+              <span>
+                {part.operationsDone}/{part.operationsTotal} procesos
+                {part.operationsInProgress > 0 && (
+                  <span className="ml-1 text-amber-600">· {part.operationsInProgress} activo</span>
+                )}
+              </span>
+              <span className="font-medium">{progress}%</span>
             </div>
-            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-              <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
+            <div className="h-1.5 w-full rounded-full bg-white/60 overflow-hidden">
+              <div
+                className={`h-full transition-all ${progress === 100 ? "bg-green-500" : "bg-blue-500"}`}
+                style={{ width: `${progress}%` }}
+              />
             </div>
           </div>
+        ) : (
+          <p className="text-[10px] italic text-muted-foreground">Sin procesos definidos</p>
         )}
       </CardContent>
     </Card>
@@ -173,16 +184,26 @@ function PartCard({ part }: { part: PartSummary }) {
           </span>
         </div>
 
-        {part.operationsTotal > 0 && (
+        {part.operationsTotal > 0 ? (
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>{part.operationsDone}/{part.operationsTotal}</span>
-              <span>{progress}%</span>
+              <span>
+                {part.operationsDone}/{part.operationsTotal} procesos
+                {part.operationsInProgress > 0 && (
+                  <span className="ml-1 text-amber-600">· {part.operationsInProgress} activo</span>
+                )}
+              </span>
+              <span className="font-medium">{progress}%</span>
             </div>
-            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-              <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
+            <div className="h-1.5 w-full rounded-full bg-white/60 overflow-hidden">
+              <div
+                className={`h-full transition-all ${progress === 100 ? "bg-green-500" : "bg-blue-500"}`}
+                style={{ width: `${progress}%` }}
+              />
             </div>
           </div>
+        ) : (
+          <p className="text-[10px] italic text-muted-foreground">Sin procesos definidos</p>
         )}
       </CardContent>
     </Card>

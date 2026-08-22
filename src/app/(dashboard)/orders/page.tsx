@@ -190,10 +190,13 @@ export default async function OrdersPage({
               </TableRow>
             ) : (
               result.rows.map((row) => {
+                // Progreso de la OT = procesos terminados de TODOS sus números de parte
                 const progress =
-                  row.partsTotal > 0
-                    ? Math.round((row.partsDone / row.partsTotal) * 100)
-                    : 0;
+                  row.opsTotal > 0
+                    ? Math.round((row.opsDone / row.opsTotal) * 100)
+                    : row.partsTotal > 0
+                      ? Math.round((row.partsDone / row.partsTotal) * 100)
+                      : 0;
                 const isDelayed =
                   row.promisedDate !== null &&
                   new Date(row.promisedDate) < now &&
@@ -248,16 +251,21 @@ export default async function OrdersPage({
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className={`h-full ${progress === 100 ? "bg-green-500" : "bg-blue-500"}`}
-                            style={{ width: `${progress}%` }}
-                          />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={`h-full transition-all ${progress === 100 ? "bg-green-500" : "bg-blue-500"}`}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-medium">{progress}%</span>
                         </div>
-                        <span className="text-xs text-muted-foreground">
-                          {row.partsDone}/{row.partsTotal}
-                        </span>
+                        <div className="text-[10px] text-muted-foreground">
+                          {row.opsTotal > 0
+                            ? `${row.opsDone}/${row.opsTotal} procesos`
+                            : `${row.partsDone}/${row.partsTotal} partes`}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
