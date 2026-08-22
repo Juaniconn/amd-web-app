@@ -26,6 +26,7 @@
     "check:balance": "tsx scripts/check-seed-balance.ts",
     "check:qty": "tsx scripts/check-quantity-guard.ts",
     "check:qty-e2e": "tsx scripts/check-quantity-e2e.ts",
+    "accounts": "tsx scripts/list-test-accounts.ts",
     "fix:operators": "tsx scripts/fix-operator-accounts.ts",
     "fix:rebalance": "tsx scripts/rebalance-operators.ts",
     "db:start": "tsx scripts/start-embedded-postgres.ts",
