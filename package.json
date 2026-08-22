@@ -23,7 +23,9 @@
     "check:login": "tsx scripts/check-operator-login.ts",
     "check:access": "tsx scripts/check-operator-access.ts",
     "check:landing": "tsx scripts/check-landing.ts",
+    "check:balance": "tsx scripts/check-seed-balance.ts",
     "fix:operators": "tsx scripts/fix-operator-accounts.ts",
+    "fix:rebalance": "tsx scripts/rebalance-operators.ts",
     "db:start": "tsx scripts/start-embedded-postgres.ts",
     "db:verify": "tsx scripts/verify-db.ts"
   },

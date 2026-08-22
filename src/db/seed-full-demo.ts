@@ -94,6 +94,26 @@ const OPERATORS = [
   { id: "op-patricia-ramirez", name: "Patricia Ramírez", email: "patricia.ramirez@amd-demo.local" },
 ];
 
+/** Ids de operador para el round-robin de asignacion de procesos. */
+const OPERATOR_POOL = OPERATORS.map((o) => o.id);
+
+/** Maquinas reales por centro de trabajo (ver seed-production.ts). */
+const LASER_MACHINES = ["m-laser-1", "m-laser-2"];
+const CNC_MACHINES = [
+  "m-vmc-1",
+  "m-vmc-2",
+  "m-vmc-3",
+  "m-vmc-4",
+  "m-vmc-5",
+  "m-torno-1",
+  "m-torno-2",
+  "m-press-brake",
+  "m-wire-edm",
+  "m-grinder",
+  "m-router",
+  "m-weld",
+];
+
 const PROCESS_NAMES = [
   "Corte láser",
   "Plegado / Press brake",
@@ -126,6 +146,13 @@ const PART_TEMPLATES = [
 
 export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
   console.log("🚀 Iniciando seed completo de demo...");
+
+  /**
+   * Cursor global de round-robin para repartir procesos entre operadores.
+   * Vive fuera de los bucles para que el reparto sea parejo a lo largo de
+   * TODA la demo, no dentro de cada cotizacion.
+   */
+  let operatorCursor = 0;
 
   // ==========================================
   // 0. UPDATE MACHINE STATUSES (for demo)
@@ -627,18 +654,44 @@ export async function seedFullDemo(db: PostgresJsDatabase, actor: Actor) {
         // Create operations (processes) for this OT
         const numProcesses = 3 + Math.floor(Math.random() * 6);
         for (let proc = 0; proc < numProcesses; proc++) {
-          const procStatus = proc < numProcesses - 2 ? "terminada" : proc === numProcesses - 2 ? (p % 5 === 0 ? "en_proceso" : "pendiente") : "pendiente";
+          const isLast = proc === numProcesses - 1;
+          const procStatus =
+            proc < numProcesses - 2
+              ? "terminada"
+              : proc === numProcesses - 2
+                ? p % 5 === 0
+                  ? "en_proceso"
+                  : "pendiente"
+                : "pendiente";
+
+          // Centro de trabajo del proceso
+          const workCenterId = proc === 0 ? "wc-laser" : isLast ? "wc-calidad" : "wc-cnc";
+
+          // TODO proceso lleva operador asignado (modelo AMD: un operador por
+          // proceso). Round-robin con cursor GLOBAL para repartir parejo entre
+          // los 8 operadores; antes se usaba el indice de la partida (0..3) y
+          // los ultimos operadores se quedaban siempre sin trabajo.
+          const operatorUserId = OPERATOR_POOL[operatorCursor % OPERATOR_POOL.length];
+          operatorCursor++;
+
+          // Maquina segun el centro (calidad no usa maquina)
+          const machineId =
+            workCenterId === "wc-laser"
+              ? LASER_MACHINES[operatorCursor % LASER_MACHINES.length]
+              : workCenterId === "wc-cnc"
+                ? CNC_MACHINES[operatorCursor % CNC_MACHINES.length]
+                : null;
 
           await db.insert(productionOperations).values({
             id: `${otId}-op-${proc + 1}`,
             productionOrderId: otId,
             position: proc + 1,
-            kind: proc === numProcesses - 1 ? "calidad" : proc === 0 ? "produccion" : "produccion",
-            workCenterId: proc === 0 ? "wc-laser" : proc < numProcesses - 1 ? "wc-cnc" : "wc-calidad",
+            kind: isLast ? "calidad" : "produccion",
+            workCenterId,
             name: PROCESS_NAMES[proc % PROCESS_NAMES.length],
             status: procStatus as any,
-            machineId: proc === 0 ? "m-laser-1" : proc < numProcesses - 1 ? "m-vmc-1" : null,
-            operatorUserId: proc === 0 ? OPERATORS[p % OPERATORS.length].id : proc === 1 ? OPERATORS[(p + 1) % OPERATORS.length].id : null,
+            machineId,
+            operatorUserId,
             startedAt: proc < numProcesses - 1 ? daysFromNow(-Math.floor(Math.random() * 3)) : null,
             finishedAt: proc < numProcesses - 2 ? daysFromNow(-Math.floor(Math.random() * 2)) : null,
             createdAt: now,
