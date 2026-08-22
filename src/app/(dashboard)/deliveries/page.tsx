@@ -76,10 +76,10 @@ export default async function DeliveriesPage({
                   </TableCell>
                   <TableCell className="font-mono text-xs">{delivery.orderNumber}</TableCell>
                   <TableCell className="text-xs">
-                    {delivery.shippingCity && (
+                    {delivery.city && (
                       <span className="flex items-center gap-1">
                         <MapPin className="h-3 w-3 text-muted-foreground" />
-                        {delivery.shippingCity}
+                        {delivery.city}
                       </span>
                     )}
                   </TableCell>
