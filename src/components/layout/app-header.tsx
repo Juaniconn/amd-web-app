@@ -25,7 +25,6 @@ export function AppHeader({
 }: AppHeaderProps) {
   const [dark, setDark] = useState(false);
 
-  // Recuperar preferencia guardada
   useEffect(() => {
     const saved = localStorage.getItem("amd-theme");
     if (saved === "dark") {
@@ -42,38 +41,40 @@ export function AppHeader({
   }
 
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between border-b bg-card px-4">
-      <h1 className="text-sm font-semibold">{title}</h1>
+    <header className="flex h-12 shrink-0 items-center justify-between border-b border-white/5 bg-[#0b0d12] px-4">
+      <h1 className="text-sm font-semibold text-white">{title}</h1>
       <div className="flex items-center gap-1">
         <button
           onClick={onSearch}
-          className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+          className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-1.5 text-xs text-gray-400 transition-all hover:border-white/10 hover:bg-white/[0.04] hover:text-gray-300"
           title="Buscar (⌘K)"
         >
-          <Search className="h-3 w-3" />
+          <Search className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Buscar</span>
-          <kbd className="hidden rounded bg-muted px-1 py-0.5 text-[10px] sm:inline">⌘K</kbd>
+          <kbd className="hidden rounded bg-white/5 px-1.5 py-0.5 text-[9px] text-gray-500 font-mono sm:inline">⌘K</kbd>
         </button>
         <button
           onClick={toggleDark}
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/[0.04] hover:text-gray-300"
           title={dark ? "Modo claro" : "Modo oscuro"}
         >
-          {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
         <button
           onClick={onNotifications}
-          className="relative rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+          className="relative rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/[0.04] hover:text-gray-300"
           title={alertCount > 0 ? `${alertCount} alertas` : "Sin alertas"}
         >
-          <Bell className="h-3.5 w-3.5" />
+          <Bell className="h-4 w-4" />
           {alertCount > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm">
               {alertCount > 99 ? "99+" : alertCount}
             </span>
           )}
         </button>
-        <UserMenu name={userName} email={userEmail} roles={roles} />
+        <div className="ml-1 pl-1 border-l border-white/5">
+          <UserMenu name={userName} email={userEmail} roles={roles} />
+        </div>
       </div>
     </header>
   );

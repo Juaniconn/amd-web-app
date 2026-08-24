@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,17 +18,24 @@ import {
   Hammer,
   Search,
   ChevronRight,
+  Zap,
+  Shield,
+  Building2,
+  Calculator,
 } from "lucide-react";
 import { PERMISSION_IDS, type PermissionId } from "@/lib/permissions/catalog";
 
+type NavItem = {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  permission?: PermissionId;
+  badge?: number;
+};
+
 type NavSection = {
   label: string;
-  items: {
-    href: string;
-    label: string;
-    icon: React.ReactNode;
-    permission?: PermissionId;
-  }[];
+  items: NavItem[];
 };
 
 const NAV_SECTIONS: NavSection[] = [
@@ -69,9 +78,9 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Sistema",
     items: [
       { href: "/settings/users", label: "Usuarios", icon: <Users className="h-4 w-4" />, permission: PERMISSION_IDS.usersRead },
-      { href: "/settings/roles", label: "Roles", icon: <Settings className="h-4 w-4" />, permission: PERMISSION_IDS.rolesRead },
-      { href: "/settings/branches", label: "Sucursales", icon: <Factory className="h-4 w-4" />, permission: PERMISSION_IDS.branchesRead },
-      { href: "/settings/calculator", label: "Calculadora", icon: <Settings className="h-4 w-4" />, permission: PERMISSION_IDS.quotesRead },
+      { href: "/settings/roles", label: "Roles", icon: <Shield className="h-4 w-4" />, permission: PERMISSION_IDS.rolesRead },
+      { href: "/settings/branches", label: "Sucursales", icon: <Building2 className="h-4 w-4" />, permission: PERMISSION_IDS.branchesRead },
+      { href: "/settings/calculator", label: "Calculadora", icon: <Calculator className="h-4 w-4" />, permission: PERMISSION_IDS.quotesRead },
     ],
   },
 ];
@@ -88,33 +97,35 @@ function canSee(permission: PermissionId | undefined, permissions: PermissionId[
 }
 
 export function AppSidebar({ pathname, permissions, onSearch }: AppSidebarProps) {
+  const router = useRouter();
+
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r bg-[#0f1117] text-sidebar-foreground">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3">
-        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-600 text-xs font-bold text-white">
-          AMD
+    <aside className="flex w-60 shrink-0 flex-col border-r border-white/5 bg-[#0b0d12] text-sidebar-foreground">
+      {/* Header con logo */}
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/20">
+          <Zap className="h-5 w-5 text-white" />
         </div>
-        <div>
-          <p className="text-xs font-semibold text-white">AMD México</p>
-          <p className="text-[10px] text-gray-400">Operations</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-white tracking-tight">AMD México</p>
+          <p className="text-[10px] text-gray-500 font-medium">Operations ERP</p>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="px-3 pb-2">
+      {/* Búsqueda */}
+      <div className="px-3 py-3">
         <button
           onClick={onSearch}
-          className="flex w-full items-center gap-2 rounded-md border border-gray-700 bg-gray-800/50 px-2 py-1.5 text-xs text-gray-400 hover:border-gray-600"
+          className="flex w-full items-center gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-xs text-gray-500 transition-all hover:border-white/10 hover:bg-white/[0.04] hover:text-gray-400"
         >
-          <Search className="h-3 w-3" />
-          <span>Buscar...</span>
-          <kbd className="ml-auto rounded bg-gray-700 px-1 py-0.5 text-[9px]">⌘K</kbd>
+          <Search className="h-3.5 w-3.5" />
+          <span className="flex-1 text-left">Buscar...</span>
+          <kbd className="rounded bg-white/5 px-1.5 py-0.5 text-[9px] text-gray-600 font-mono">⌘K</kbd>
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-1">
+      {/* Navegación */}
+      <nav className="flex-1 overflow-y-auto px-2 pb-4 space-y-1">
         {NAV_SECTIONS.map((section) => {
           const visibleItems = section.items.filter((item) =>
             canSee(item.permission, permissions)
@@ -122,8 +133,8 @@ export function AppSidebar({ pathname, permissions, onSearch }: AppSidebarProps)
           if (visibleItems.length === 0) return null;
 
           return (
-            <div key={section.label} className="mb-3">
-              <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+            <div key={section.label} className="mb-4">
+              <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-600">
                 {section.label}
               </p>
               <ul className="space-y-0.5">
@@ -134,14 +145,24 @@ export function AppSidebar({ pathname, permissions, onSearch }: AppSidebarProps)
                     <li key={item.href}>
                       <Link
                         href={item.href}
-                        className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors ${
+                        className={`group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150 ${
                           active
-                            ? "bg-blue-600/20 text-blue-400"
-                            : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+                            ? "bg-blue-500/10 text-blue-400 shadow-sm"
+                            : "text-gray-400 hover:bg-white/[0.03] hover:text-gray-200"
                         }`}
                       >
-                        {item.icon}
-                        {item.label}
+                        {active && (
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-blue-500" />
+                        )}
+                        <span className={`transition-colors ${active ? "text-blue-400" : "text-gray-500 group-hover:text-gray-400"}`}>
+                          {item.icon}
+                        </span>
+                        <span className="flex-1 truncate">{item.label}</span>
+                        {item.badge && item.badge > 0 ? (
+                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500/20 px-1.5 text-[10px] font-bold text-red-400">
+                            {item.badge > 99 ? "99+" : item.badge}
+                          </span>
+                        ) : null}
                       </Link>
                     </li>
                   );
@@ -152,6 +173,10 @@ export function AppSidebar({ pathname, permissions, onSearch }: AppSidebarProps)
         })}
       </nav>
 
+      {/* Footer con versión */}
+      <div className="border-t border-white/5 px-4 py-3">
+        <p className="text-[10px] text-gray-600 font-medium">v0.1.0 · AMD Operations</p>
+      </div>
     </aside>
   );
 }
