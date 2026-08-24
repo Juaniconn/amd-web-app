@@ -93,15 +93,18 @@ export default async function ProductionPage({
         </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border p-0.5">
-            <button className="rounded-sm bg-muted p-1">
+            <Link href="/production" className="rounded-sm bg-muted p-1" aria-label="Vista tabla">
               <List className="h-3.5 w-3.5" />
-            </button>
-            <button className="rounded-sm p-1 text-muted-foreground hover:bg-muted">
+            </Link>
+            <Link href="/production/kanban" className="rounded-sm p-1 text-muted-foreground hover:bg-muted" aria-label="Vista Kanban">
               <LayoutGrid className="h-3.5 w-3.5" />
-            </button>
-            <button className="rounded-sm p-1 text-muted-foreground hover:bg-muted">
+            </Link>
+            <Link href="/production/calendar" className="rounded-sm p-1 text-muted-foreground hover:bg-muted" aria-label="Vista Calendario">
               <Calendar className="h-3.5 w-3.5" />
-            </button>
+            </Link>
+            <Link href="/production/gantt" className="rounded-sm p-1 text-muted-foreground hover:bg-muted" aria-label="Vista Gantt">
+              <Clock className="h-3.5 w-3.5" />
+            </Link>
           </div>
           {canCreate && (
             <a href="/production/new" className="inline-flex items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">

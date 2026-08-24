@@ -147,3 +147,5 @@ export async function getPartsKanbanBoard(): Promise<PartsKanbanColumn[]> {
   }
   return columns;
 }
+
+export { loadParts, COLUMN_DEFS };
