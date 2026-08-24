@@ -13,6 +13,7 @@ import {
   CheckCircle,
   Truck,
   CreditCard,
+  Hammer,
   Search,
   ChevronRight,
 } from "lucide-react";
@@ -33,6 +34,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Principal",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+      { href: "/my-production", label: "Mis Procesos", icon: <Hammer className="h-4 w-4" />, permission: PERMISSION_IDS.productionMyWork },
     ],
   },
   {
@@ -45,8 +47,8 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "Producción",
     items: [
-      { href: "/orders", label: "Órdenes de Trabajo", icon: <ClipboardList className="h-4 w-4" />, permission: PERMISSION_IDS.ordersView },
       { href: "/engineering", label: "Ingeniería", icon: <Wrench className="h-4 w-4" />, permission: PERMISSION_IDS.engineeringRead },
+      { href: "/orders", label: "Órdenes de Trabajo", icon: <ClipboardList className="h-4 w-4" />, permission: PERMISSION_IDS.ordersView },
       { href: "/production", label: "Números de Parte", icon: <Settings className="h-4 w-4" />, permission: PERMISSION_IDS.productionView },
       { href: "/production/kanban", label: "Tablero Kanban", icon: <LayoutDashboard className="h-4 w-4" />, permission: PERMISSION_IDS.productionView },
       { href: "/inventory", label: "Inventario", icon: <Package className="h-4 w-4" />, permission: PERMISSION_IDS.inventoryRead },
@@ -150,22 +152,6 @@ export function AppSidebar({ pathname, permissions, onSearch }: AppSidebarProps)
         })}
       </nav>
 
-      {/* Operator shortcut */}
-      {permissions.includes(PERMISSION_IDS.productionMyWork) && (
-        <div className="border-t border-gray-800 p-2">
-          <Link
-            href="/my-production"
-            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs ${
-              pathname === "/my-production"
-                ? "bg-blue-600/20 text-blue-400"
-                : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
-            }`}
-          >
-            <Settings className="h-4 w-4" />
-            Mis Procesos
-          </Link>
-        </div>
-      )}
     </aside>
   );
 }
