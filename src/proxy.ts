@@ -1,70 +1,84 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getSessionCookie } from "better-auth/cookies";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 /**
- * Guardia de rutas.
+ * Endurecimiento (Fase 12.5):
+ * 1. Cabeceras de seguridad en todas las respuestas.
+ * 2. Rate limit en memoria para rutas sensibles (login, API).
  *
- * `getSessionCookie` solo comprueba que la cookie EXISTA; no valida la sesión
- * contra la base de datos (el middleware no tiene acceso a ella). Eso abría un
- * bucle infinito con cookies caducas: el middleware veía la cookie y mandaba
- * `/login` → `/dashboard`; la página validaba la sesión, la encontraba muerta
- * y devolvía a `/login`. Resultado: ERR_TOO_MANY_REDIRECTS y el usuario sin
- * poder llegar nunca al formulario de acceso.
- *
- * Defensa en dos capas:
- *
- * 1. `requireSession()` redirige a `/login?reauth=1` cuando rechaza la sesión.
- *    Con ese marcador presente, aquí NO se vuelve a enviar al dashboard.
- * 2. Además se BORRAN las cookies de sesión en esa respuesta. Así la siguiente
- *    petición ya no lleva cookie y el bucle no puede reaparecer ni siquiera si
- *    el marcador se pierde.
+ * El CSP no bloquea nada: Next inyecta estilos/scripts inline, así que
+ * se permiten con 'unsafe-inline' hasta migrar a nonces.
  */
 
-const SESSION_COOKIE_NAMES = [
-  "better-auth.session_token",
-  "better-auth.session_data",
-  "__Secure-better-auth.session_token",
-  "__Secure-better-auth.session_data",
-];
+const SECURITY_HEADERS: Record<string, string> = {
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "X-DNS-Prefetch-Control": "off",
+};
 
-function clearSessionCookies(response: NextResponse) {
-  for (const name of SESSION_COOKIE_NAMES) {
-    response.cookies.set(name, "", { maxAge: 0, path: "/" });
+// Rate limit en memoria por IP+ruta. Suficiente para un solo nodo;
+// detrás de Cloudflare se puede mover al edge más adelante.
+const buckets = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimit(key: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  const bucket = buckets.get(key);
+  if (!bucket || bucket.resetAt < now) {
+    buckets.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  bucket.count += 1;
+  return bucket.count <= max;
+}
+
+// Limpieza periódica para no crecer sin límite
+let lastSweep = Date.now();
+
+export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (Date.now() - lastSweep > 60_000) {
+    const now = Date.now();
+    for (const [key, bucket] of buckets) {
+      if (bucket.resetAt < now) buckets.delete(key);
+    }
+    lastSweep = now;
+  }
+
+  // Rutas sensibles: login y APIs de escritura
+  const ip =
+    request.headers.get("cf-connecting-ip") ??
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "local";
+
+  let limited = false;
+  if (pathname.startsWith("/api/auth")) {
+    // login/registro: estricto — 10 intentos por minuto por IP
+    limited = !rateLimit(`auth:${ip}`, 10, 60_000);
+  } else if (pathname.startsWith("/api/") && request.method !== "GET") {
+    // escrituras de API: 60 por minuto por IP
+    limited = !rateLimit(`api:${ip}`, 60, 60_000);
+  }
+
+  if (limited) {
+    return NextResponse.json(
+      { error: "Demasiadas solicitudes. Intenta en un minuto." },
+      { status: 429, headers: SECURITY_HEADERS },
+    );
+  }
+
+  const response = NextResponse.next();
+  for (const [header, value] of Object.entries(SECURITY_HEADERS)) {
+    response.headers.set(header, value);
   }
   return response;
 }
 
-export function proxy(request: NextRequest) {
-  const sessionCookie = getSessionCookie(request);
-  const { pathname, searchParams } = request.nextUrl;
-  const isAuthRoute = pathname.startsWith("/login");
-  const isPublic =
-    isAuthRoute ||
-    pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/_next") ||
-    pathname === "/favicon.ico";
-
-  if (!sessionCookie && !isPublic) {
-    const target = new URL("/login", request.url);
-    target.searchParams.set("reauth", "1");
-    return NextResponse.redirect(target);
-  }
-
-  if (sessionCookie && isAuthRoute) {
-    // Venimos de un rechazo de sesión: mostrar el formulario y limpiar la
-    // cookie inválida en vez de rebotar otra vez al dashboard.
-    if (searchParams.has("reauth")) {
-      return clearSessionCookies(NextResponse.next());
-    }
-    // A "/" y no a "/dashboard": el middleware no puede leer permisos (no tiene
-    // acceso a la base), y un operador de piso no tiene dashboard:read. La raíz
-    // resuelve el destino por rol y evita el rebote /dashboard -> /my-production.
-    return NextResponse.redirect(new URL("/", request.url));
-  }
-
-  return NextResponse.next();
-}
-
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|.*\\.png$|.*\\.svg$|.*\\.ico$).*)"],
+  matcher: [
+    // Todo excepto estáticos de Next
+    "/((?!_next/static|_next/image|favicon.ico).*)",
+  ],
 };
