@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
@@ -17,11 +16,11 @@ import {
   CreditCard,
   Hammer,
   Search,
-  ChevronRight,
   Zap,
   Shield,
   Building2,
   Calculator,
+  Layers,
 } from "lucide-react";
 import { PERMISSION_IDS, type PermissionId } from "@/lib/permissions/catalog";
 
@@ -56,10 +55,9 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "Producción",
     items: [
-      { href: "/engineering", label: "Ingeniería", icon: <Wrench className="h-4 w-4" />, permission: PERMISSION_IDS.engineeringRead },
-      { href: "/orders", label: "Órdenes de Trabajo", icon: <ClipboardList className="h-4 w-4" />, permission: PERMISSION_IDS.ordersView },
-      { href: "/production", label: "Números de Parte", icon: <Settings className="h-4 w-4" />, permission: PERMISSION_IDS.productionView },
+      { href: "/production", label: "Producción", icon: <Layers className="h-4 w-4" />, permission: PERMISSION_IDS.productionView },
       { href: "/production/kanban", label: "Tablero Kanban", icon: <LayoutDashboard className="h-4 w-4" />, permission: PERMISSION_IDS.productionView },
+      { href: "/engineering", label: "Ingeniería", icon: <Wrench className="h-4 w-4" />, permission: PERMISSION_IDS.engineeringRead },
       { href: "/inventory", label: "Inventario", icon: <Package className="h-4 w-4" />, permission: PERMISSION_IDS.inventoryRead },
       { href: "/purchasing", label: "Compras", icon: <ShoppingCart className="h-4 w-4" />, permission: PERMISSION_IDS.purchasingRead },
       { href: "/suppliers", label: "Proveedores", icon: <Factory className="h-4 w-4" />, permission: PERMISSION_IDS.purchasingRead },
@@ -97,8 +95,6 @@ function canSee(permission: PermissionId | undefined, permissions: PermissionId[
 }
 
 export function AppSidebar({ pathname, permissions, onSearch }: AppSidebarProps) {
-  const router = useRouter();
-
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-white/5 bg-[#0b0d12] text-sidebar-foreground">
       {/* Header con logo */}

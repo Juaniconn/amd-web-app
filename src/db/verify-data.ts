@@ -23,11 +23,11 @@ async function verify() {
   console.log("Production Orders:", productionOrders[0].count);
 
   const sampleOT = await db.execute(
-    sql`SELECT number, description, status, branch_id FROM production_orders LIMIT 5`
+    sql`SELECT number, description, status FROM production_orders LIMIT 5`
   );
-  console.log("\nMuestra de OTs:");
+  console.log("\nMuestra de Production Orders:");
   for (const row of sampleOT) {
-    console.log("  ", row.number, "-", row.description, "-", row.status, "-", row.branch_id);
+    console.log("  ", row.number, "-", row.description, "-", row.status);
   }
 
   await client.end({ timeout: 5 });

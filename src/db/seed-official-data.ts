@@ -3,31 +3,25 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { eq } from "drizzle-orm";
 import * as XLSX from "xlsx";
-import { customers, contacts, branches, quotes, quoteItems, orders, orderItems, productionOrders, users } from "./schema";
-import { PERMISSIONS, ROLES } from "../lib/permissions/catalog";
-import { hashPassword } from "better-auth/crypto";
+import { customers, contacts, branches, quotes, orders, orderItems, productionOrders, users } from "./schema";
 
 config({ path: ".env.local" });
 config();
 
-// ==========================================
-// CONFIGURACIÓN
-// ==========================================
-
-const CLIENT_CODE_MAP: Record<string, { code: string; isSpecial?: boolean }> = {
-  AMD: { code: "3300", isSpecial: true },
-  Align: { code: "3350" },
-  BOYD: { code: "3440" },
-  BRP: { code: "3360" },
-  "CC Electronics": { code: "3430" },
-  MAHLE: { code: "3390" },
-  PROD: { code: "4490" },
-  Sumitomo: { code: "3320" },
-  Termocontroles: { code: "3340" },
+const CLIENT_CODE_MAP: Record<string, string> = {
+  AMD: "3300",
+  Align: "3350",
+  BOYD: "3440",
+  BRP: "3360",
+  "CC Electronics": "3430",
+  MAHLE: "3390",
+  PROD: "4490",
+  Sumitomo: "3320",
+  Termocontroles: "3340",
 };
 
 const OFFICIAL_CUSTOMERS = [
-  { code: "3300", legalName: "AMD México", tradeName: "AMD", type: "industrial", isSpecial: true },
+  { code: "3300", legalName: "AMD México", tradeName: "AMD", type: "industrial" },
   { code: "3310", legalName: "STRATTEC", tradeName: "STRATTEC", type: "industrial" },
   { code: "3320", legalName: "SUMITOMO", tradeName: "Sumitomo", type: "industrial" },
   { code: "3330", legalName: "CONTITECH", tradeName: "ContiTech", type: "industrial" },
@@ -59,17 +53,6 @@ const OFFICIAL_CUSTOMERS = [
   { code: "4490", legalName: "PROD USA", tradeName: "PROD USA", type: "industrial" },
 ];
 
-// ==========================================
-// FUNCIONES AUXILIARES
-// ==========================================
-
-function excelDateToJSDate(excelDate: number): Date {
-  // Excel epoch: January 1, 1900 (with the Lotus 1-2-3 bug)
-  const epoch = new Date(1899, 11, 30);
-  const msPerDay = 24 * 60 * 60 * 1000;
-  return new Date(epoch.getTime() + excelDate * msPerDay);
-}
-
 function parseStatus(status: string): "pendiente" | "liberada" | "programada" | "en_produccion" | "pausada" | "esperando_material" | "calidad" | "terminada" | "entregada" | "cancelada" {
   switch (status?.toLowerCase()) {
     case "done": return "terminada";
@@ -83,10 +66,6 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
-// ==========================================
-// SCRIPT PRINCIPAL
-// ==========================================
-
 async function seedOfficialData() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set");
@@ -95,23 +74,10 @@ async function seedOfficialData() {
   const db = drizzle(client);
 
   try {
-    console.log("🚀 Iniciando carga de datos oficiales de AMD México...\n");
+    console.log("🚀 Iniciando carga de datos oficiales...\n");
 
-    // 1. Obtener sucursales
-    const cjsBranch = await db.select().from(branches).where(eq(branches.code, "CJS")).limit(1);
-    const gdlBranch = await db.select().from(branches).where(eq(branches.code, "GDL")).limit(1);
-    
-    if (cjsBranch.length === 0 || gdlBranch.length === 0) {
-      throw new Error("Sucursales CJS o GDL no encontradas. Ejecuta las migraciones primero.");
-    }
-
-    // 2. Obtener usuario admin para createdBy
-    const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@amd-operations.local";
-    const adminUser = await db.select().from(users).where(eq(users.email, adminEmail)).limit(1);
-    const adminId = adminUser[0]?.id ?? null;
-
-    // 3. Limpiar datos demo
-    console.log("🧹 Limpiando datos demo...");
+    // 1. Limpiar datos anteriores
+    console.log("🧹 Limpiando datos...");
     await db.execute(`TRUNCATE TABLE 
       invoice_payments, invoice_items, invoices, deliveries, ncrs, quality_inspections,
       purchase_receipt_items, purchase_receipts, purchase_order_items, purchase_orders,
@@ -123,7 +89,20 @@ async function seedOfficialData() {
     await db.execute(`DELETE FROM materials`);
     await db.execute(`DELETE FROM supplier_materials`);
     await db.execute(`DELETE FROM suppliers`);
-    console.log("✓ Datos demo eliminados\n");
+    console.log("✓ Datos limpios\n");
+
+    // 2. Obtener sucursales
+    const cjsBranch = await db.select().from(branches).where(eq(branches.code, "CJS")).limit(1);
+    const gdlBranch = await db.select().from(branches).where(eq(branches.code, "GDL")).limit(1);
+    
+    if (cjsBranch.length === 0 || gdlBranch.length === 0) {
+      throw new Error("Sucursales CJS o GDL no encontradas.");
+    }
+
+    // 3. Obtener usuario admin
+    const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@amd-operations.local";
+    const adminUser = await db.select().from(users).where(eq(users.email, adminEmail)).limit(1);
+    const adminId = adminUser[0]?.id ?? null;
 
     // 4. Cargar clientes oficiales
     console.log("👥 Cargando clientes oficiales...");
@@ -148,7 +127,6 @@ async function seedOfficialData() {
         updatedAt: new Date(),
       }).onConflictDoNothing();
 
-      // Crear contacto primario
       await db.insert(contacts).values({
         id: generateId(),
         customerId: id,
@@ -161,7 +139,7 @@ async function seedOfficialData() {
         updatedAt: new Date(),
       }).onConflictDoNothing();
     }
-    console.log(`✓ ${OFFICIAL_CUSTOMERS.length} clientes oficiales cargados\n`);
+    console.log(`✓ ${OFFICIAL_CUSTOMERS.length} clientes cargados\n`);
 
     // 5. Cargar OTs de Juárez
     console.log("🏭 Cargando OTs de Ciudad Juárez...");
@@ -185,16 +163,13 @@ async function seedOfficialData() {
       const avance = Number(row[11]) || 0;
       const comments = String(row[12]);
       
-      const clientInfo = CLIENT_CODE_MAP[planta];
-      if (!clientInfo) {
-        console.log(`  ⚠ Cliente no mapeado: ${planta}`);
-        continue;
-      }
+      const clientCode = CLIENT_CODE_MAP[planta];
+      if (!clientCode) continue;
 
       if (!juarezOTs.has(otNumber)) {
-        juarezOTs.set(otNumber, { customerCode: clientInfo.code, parts: [] });
+        juarezOTs.set(otNumber, { customerCode: clientCode, parts: [] });
       }
-      juarezOTs.get(otNumber)!.parts.push({ qty, partNumber, description, status, avance, comments, row: i });
+      juarezOTs.get(otNumber)!.parts.push({ qty, partNumber, description, status, avance, comments });
     }
 
     for (const [otNumber, otData] of juarezOTs) {
@@ -204,7 +179,7 @@ async function seedOfficialData() {
       const quoteId = generateId();
       const orderId = generateId();
 
-      // Crear Quote
+      // Crear Quote vacía (solo para relación)
       await db.insert(quotes).values({
         id: quoteId,
         number: `COT-${otNumber.replace("OT", "")}`,
@@ -217,7 +192,7 @@ async function seedOfficialData() {
         leadTime: "15 días hábiles",
         rfqType: "solo_fabricacion",
         engineeringStatus: "no_requerida",
-        status: "convertida",
+        status: "borrador",
         subtotal: "0",
         taxTotal: "0",
         total: "0",
@@ -253,9 +228,8 @@ async function seedOfficialData() {
 
       // Crear Production Orders (una por parte)
       for (const part of otData.parts) {
-        const productionOrderId = generateId();
         await db.insert(productionOrders).values({
-          id: productionOrderId,
+          id: generateId(),
           number: `${otNumber}-${part.partNumber}`,
           orderId,
           customerId,
@@ -269,7 +243,6 @@ async function seedOfficialData() {
           priority: "programada",
           status: parseStatus(part.status),
           notes: part.comments || null,
-          branchId: cjsBranch[0].id,
           isDemo: false,
           createdBy: adminId,
           updatedBy: adminId,
@@ -279,7 +252,7 @@ async function seedOfficialData() {
         juarezCount++;
       }
     }
-    console.log(`✓ ${juarezOTs.size} OTs de Juárez cargadas (${juarezCount} partes)\n`);
+    console.log(`✓ ${juarezOTs.size} OTs de Juárez (${juarezCount} partes)\n`);
 
     // 6. Cargar OTs de Guadalajara
     console.log("🏭 Cargando OTs de Guadalajara...");
@@ -297,27 +270,22 @@ async function seedOfficialData() {
       const otNumber = String(row[0]);
       const avance = Number(row[2]) || 0;
       const qty = Number(row[3]) || 1;
-      const maquina = String(row[5]);
       const partNumber = String(row[6]);
-      const encargado = String(row[7]);
-      const entrada = row[8];
-      const salida = row[9];
       const observaciones = String(row[11]);
       
       if (!gdlOTs.has(otNumber)) {
         gdlOTs.set(otNumber, { parts: [] });
       }
-      gdlOTs.get(otNumber)!.parts.push({ avance, qty, maquina, partNumber, encargado, entrada, salida, observaciones, row: i });
+      gdlOTs.get(otNumber)!.parts.push({ avance, qty, partNumber, observaciones });
     }
 
     for (const [otNumber, otData] of gdlOTs) {
-      const customerId = customerIdMap["4490"]; // PROD USA para Guadalajara
+      const customerId = customerIdMap["4490"]; // PROD USA
       if (!customerId) continue;
 
       const quoteId = generateId();
       const orderId = generateId();
 
-      // Crear Quote
       await db.insert(quotes).values({
         id: quoteId,
         number: `COT-GDL-${otNumber}`,
@@ -330,7 +298,7 @@ async function seedOfficialData() {
         leadTime: "15 días hábiles",
         rfqType: "solo_fabricacion",
         engineeringStatus: "no_requerida",
-        status: "convertida",
+        status: "borrador",
         subtotal: "0",
         taxTotal: "0",
         total: "0",
@@ -346,7 +314,6 @@ async function seedOfficialData() {
         updatedAt: new Date(),
       }).onConflictDoNothing();
 
-      // Crear Order
       await db.insert(orders).values({
         id: orderId,
         number: `AMD-GDL-${otNumber}`,
@@ -364,11 +331,9 @@ async function seedOfficialData() {
         updatedAt: new Date(),
       }).onConflictDoNothing();
 
-      // Crear Production Orders (una por parte)
       for (const part of otData.parts) {
-        const productionOrderId = generateId();
         await db.insert(productionOrders).values({
-          id: productionOrderId,
+          id: generateId(),
           number: `${otNumber}-${part.partNumber}`,
           orderId,
           customerId,
@@ -382,7 +347,6 @@ async function seedOfficialData() {
           priority: "programada",
           status: part.avance >= 1 ? "terminada" : "en_produccion",
           notes: part.observaciones || null,
-          branchId: gdlBranch[0].id,
           isDemo: false,
           createdBy: adminId,
           updatedBy: adminId,
@@ -392,9 +356,9 @@ async function seedOfficialData() {
         gdlCount++;
       }
     }
-    console.log(`✓ ${gdlOTs.size} OTs de Guadalajara cargadas (${gdlCount} partes)\n`);
+    console.log(`✓ ${gdlOTs.size} OTs de Guadalajara (${gdlCount} partes)\n`);
 
-    console.log("✅ Carga de datos oficiales completada!");
+    console.log("✅ Carga completada!");
     console.log(`   - ${OFFICIAL_CUSTOMERS.length} clientes oficiales`);
     console.log(`   - ${juarezOTs.size} OTs de Juárez (${juarezCount} partes)`);
     console.log(`   - ${gdlOTs.size} OTs de Guadalajara (${gdlCount} partes)`);
