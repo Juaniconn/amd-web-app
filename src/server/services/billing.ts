@@ -67,7 +67,12 @@ export async function listPendingToInvoice() {
     .where(ne(orders.status, "cancelado"))
     .orderBy(desc(deliveries.deliveredAt))
     .limit(100);
-  return rows.filter((row) => !invoicedIds.has(row.id));
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    if (invoicedIds.has(row.id) || seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
 }
 
 export async function listInvoices(input?: {
