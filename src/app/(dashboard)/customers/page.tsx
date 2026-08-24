@@ -8,7 +8,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Mail, Phone, MapPin } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { EmptyState, StatCard, StatRow } from "@/components/shared/ui-patterns";
+import { PageHeader } from "@/components/layout/page-header";
+import { Plus, Users, Mail, Phone, MapPin, UserCheck, UserX } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import {
@@ -47,26 +50,34 @@ export default async function CustomersPage({
     pageSize,
   });
 
+  // KPIs sobre la página actual (datos reales visibles)
+  const activeCount = result.rows.filter((c) => c.status === "activo").length;
+  const inactiveCount = result.rows.length - activeCount;
+
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Clientes</h1>
-          <p className="text-xs text-muted-foreground">
-            {result.total} clientes · {result.rows.filter((c) => c.status === "activo").length} activos
-          </p>
-        </div>
-        {canWrite && (
-          <Link href="/customers/new" className="inline-flex items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-            <Plus className="h-3 w-3" />
-            Nuevo Cliente
-          </Link>
-        )}
-      </div>
+      <PageHeader
+        title="Clientes"
+        description="Cartera de clientes de las tres sucursales."
+        actions={
+          canWrite ? (
+            <Link href="/customers/new" className={buttonVariants({ size: "sm" })}>
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Nuevo Cliente
+            </Link>
+          ) : null
+        }
+      />
+
+      <StatRow>
+        <StatCard label="En esta vista" value={result.rows.length} icon={<Users className="h-4 w-4" />} />
+        <StatCard label="Activos" value={activeCount} tone="green" icon={<UserCheck className="h-4 w-4" />} />
+        <StatCard label="Inactivos" value={inactiveCount} tone="neutral" icon={<UserX className="h-4 w-4" />} />
+        <StatCard label="Total en cartera" value={result.total} hint={`${result.pageCount} página(s)`} />
+      </StatRow>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
         {[
           { label: "Todos", status: undefined },
           { label: "Activos", status: "activo" },
@@ -82,7 +93,11 @@ export default async function CustomersPage({
             <Link
               key={f.label}
               href={s ? `/customers?${s}` : "/customers"}
-              className={`rounded px-2 py-1 text-xs ${active ? "bg-muted font-medium" : "hover:bg-muted"}`}
+              className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
+                active
+                  ? "bg-primary/10 font-medium text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
             >
               {f.label}
             </Link>
@@ -105,27 +120,35 @@ export default async function CustomersPage({
           <TableBody>
             {result.rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-12 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    {filtered ? "No se encontraron resultados" : "Aún no hay clientes"}
-                  </p>
-                  {!filtered && canWrite && (
-                    <Link href="/customers/new" className="mt-2 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90">
-                      <Plus className="h-3 w-3" />
-                      Crear primer cliente
-                    </Link>
-                  )}
+                <TableCell colSpan={5} className="py-8">
+                  <EmptyState
+                    icon={<Users className="h-8 w-8" />}
+                    title={filtered ? "Sin resultados" : "Aún no hay clientes"}
+                    description={
+                      filtered
+                        ? "Ajusta los filtros o la búsqueda para encontrar el cliente."
+                        : "Registra tu primer cliente para empezar a cotizar."
+                    }
+                    action={
+                      !filtered && canWrite ? (
+                        <Link href="/customers/new" className={buttonVariants({ size: "sm" })}>
+                          <Plus className="mr-1 h-3.5 w-3.5" />
+                          Crear primer cliente
+                        </Link>
+                      ) : null
+                    }
+                  />
                 </TableCell>
               </TableRow>
             ) : (
               result.rows.map((customer) => (
-                <TableRow key={customer.id}>
+                <TableRow key={customer.id} className="hover:bg-muted/40">
                   <TableCell>
                     <Link href={`/customers/${customer.id}`} className="font-medium hover:underline">
                       {customer.legalName}
                     </Link>
                     {customer.code && (
-                      <div className="text-xs text-muted-foreground">{customer.code}</div>
+                      <div className="font-mono text-[11px] text-muted-foreground">{customer.code}</div>
                     )}
                   </TableCell>
                   <TableCell className="text-xs">
@@ -156,9 +179,14 @@ export default async function CustomersPage({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={customer.status === "activo" ? "default" : "secondary"}>
+                    <span className="inline-flex items-center gap-1.5 text-xs">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          customer.status === "activo" ? "bg-emerald-500" : "bg-gray-400"
+                        }`}
+                      />
                       {CUSTOMER_STATUS_LABELS[customer.status as keyof typeof CUSTOMER_STATUS_LABELS]}
-                    </Badge>
+                    </span>
                   </TableCell>
                 </TableRow>
               ))
@@ -171,6 +199,24 @@ export default async function CustomersPage({
       {result.pageCount > 1 && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{result.total} resultados · Página {page} de {result.pageCount}</span>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <Link
+                href={`/customers?page=${page - 1}${q ? `&q=${q}` : ""}${status ? `&status=${status}` : ""}`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Anterior
+              </Link>
+            )}
+            {page < result.pageCount && (
+              <Link
+                href={`/customers?page=${page + 1}${q ? `&q=${q}` : ""}${status ? `&status=${status}` : ""}`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Siguiente
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </div>
