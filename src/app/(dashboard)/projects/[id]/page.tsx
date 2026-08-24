@@ -6,6 +6,8 @@ import { ProjectStatusActions } from "@/features/projects/project-status-actions
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatCard, StatRow } from "@/components/shared/ui-patterns";
+import { PageHeader } from "@/components/layout/page-header";
 import {
   Table,
   TableBody,
@@ -30,6 +32,7 @@ import {
   listAttachableOrders,
   listAttachableQuotes,
 } from "@/server/services/projects";
+import { Calendar, Users, FileText, FolderOpen, CheckCircle, Clock } from "lucide-react";
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -40,6 +43,14 @@ function Field({ label, value }: { label: string; value?: string | null }) {
       <p className="mt-1 text-sm">{value || "—"}</p>
     </div>
   );
+}
+
+function statusTone(status: ProjectStatus) {
+  if (status === "completado") return "emerald";
+  if (status === "activo") return "blue";
+  if (status === "pausado") return "amber";
+  if (status === "cancelado") return "red";
+  return "gray";
 }
 
 export default async function ProjectDetailPage({
@@ -60,38 +71,83 @@ export default async function ProjectDetailPage({
   const attachableQuotes = editable ? await listAttachableQuotes(project.id) : [];
   const attachableOrders = editable ? await listAttachableOrders(project.id) : [];
 
+  const tone = statusTone(project.status as ProjectStatus);
+
+  // KPIs calculados de los datos ya traídos
+  const quoteCount = project.quotes.length;
+  const orderCount = project.orders.length;
+  const documentCount = project.documents.length;
+  const activityCount = activity.length;
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{project.code}</h2>
-            <Badge variant="secondary">
-              {PROJECT_STATUS_LABELS[project.status as ProjectStatus]}
-            </Badge>
-            {project.isDemo ? <Badge variant="outline">DEMO</Badge> : null}
+      <PageHeader
+        title={project.code}
+        description={`${project.name} · ${project.customerName}`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href="/projects" className={buttonVariants({ variant: "outline" })}>
+              Volver
+            </Link>
+            {editable ? (
+              <Link
+                href={`/projects/${project.id}/edit`}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                Editar
+              </Link>
+            ) : null}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {project.name} ·{" "}
-            <Link href={`/customers/${project.customerId}`} className="hover:underline">
-              {project.customerName}
-            </Link>
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/projects" className={buttonVariants({ variant: "outline" })}>
-            Volver
-          </Link>
-          {editable ? (
-            <Link
-              href={`/projects/${project.id}/edit`}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Editar
-            </Link>
-          ) : null}
-        </div>
+        }
+      />
+
+      {/* Status badges */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 text-sm">
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${
+              tone === "emerald"
+                ? "bg-emerald-500"
+                : tone === "blue"
+                  ? "bg-blue-500"
+                  : tone === "amber"
+                    ? "bg-amber-500"
+                    : tone === "red"
+                      ? "bg-red-500"
+                      : "bg-gray-400"
+            }`}
+          />
+          <Badge variant="secondary">
+            {PROJECT_STATUS_LABELS[project.status as ProjectStatus]}
+          </Badge>
+        </span>
+        {project.isDemo ? <Badge variant="outline">DEMO</Badge> : null}
       </div>
+
+      {/* KPIs */}
+      <StatRow>
+        <StatCard
+          label="RFQ asociadas"
+          value={quoteCount}
+          icon={<FileText className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Órdenes de trabajo"
+          value={orderCount}
+          icon={<FolderOpen className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Documentos"
+          value={documentCount}
+          icon={<FileText className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Actividad"
+          value={activityCount}
+          icon={<Clock className="h-4 w-4" />}
+          hint="registros"
+        />
+      </StatRow>
 
       <ProjectStatusActions
         projectId={project.id}
@@ -169,7 +225,7 @@ export default async function ProjectDetailPage({
               </TableHeader>
               <TableBody>
                 {project.quotes.map((quote) => (
-                  <TableRow key={quote.id}>
+                  <TableRow key={quote.id} className="hover:bg-muted/40">
                     <TableCell>
                       {canReadQuotes ? (
                         <Link href={`/quotes/${quote.id}`} className="font-medium hover:underline">
@@ -215,7 +271,7 @@ export default async function ProjectDetailPage({
               </TableHeader>
               <TableBody>
                 {project.orders.map((order) => (
-                  <TableRow key={order.id}>
+                  <TableRow key={order.id} className="hover:bg-muted/40">
                     <TableCell>
                       {canReadOrders ? (
                         <Link href={`/orders/${order.id}`} className="font-medium hover:underline">

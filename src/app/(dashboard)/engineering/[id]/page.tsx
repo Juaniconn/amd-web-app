@@ -7,6 +7,8 @@ import { EngineeringStatusActions } from "@/features/engineering/engineering-sta
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/page-header";
+import { StatCard, StatRow } from "@/components/shared/ui-patterns";
 import { requirePermission } from "@/lib/auth/session";
 import {
   canEditEngineering,
@@ -26,6 +28,14 @@ import {
   getEngineeringRequestById,
   listUsersForAssignment,
 } from "@/server/services/engineering";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Timer,
+  User,
+} from "lucide-react";
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -36,6 +46,12 @@ function Field({ label, value }: { label: string; value?: string | null }) {
       <p className="mt-1 text-sm">{value || "—"}</p>
     </div>
   );
+}
+
+function statusSemaforo(status: EngineeringStatus) {
+  if (status === "liberado") return "bg-emerald-500";
+  if (status === "cancelado") return "bg-red-500";
+  return "bg-amber-500";
 }
 
 export default async function EngineeringDetailPage({
@@ -56,45 +72,79 @@ export default async function EngineeringDetailPage({
   const editable = canUpdate && canEditEngineering(status) && !request.deletedAt;
   const canHours = canUpdate && canLogEngineeringHours(status);
 
+  const hoursDisplay = formatHoursMinutes(hoursToMinutes(Number(request.hoursLogged)));
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{request.number}</h2>
-            <Badge variant="secondary">{ENGINEERING_STATUS_LABELS[status]}</Badge>
-            {request.isDemo ? <Badge variant="outline">DEMO</Badge> : null}
-            {request.deletedAt ? <Badge variant="destructive">Archivada</Badge> : null}
+    <div className="space-y-4">
+      <PageHeader
+        title={request.number}
+        description={`${ENGINEERING_STATUS_LABELS[status]}${request.isDemo ? " · DEMO" : ""}${request.deletedAt ? " · Archivada" : ""}`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href="/engineering" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              Volver
+            </Link>
+            {editable ? (
+              <Link
+                href={`/engineering/${request.id}/edit`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Editar
+              </Link>
+            ) : null}
+            {canDelete &&
+            !request.deletedAt &&
+            (status === "pendiente" || status === "cancelado") ? (
+              <ArchiveEngineeringButton requestId={request.id} number={request.number} />
+            ) : null}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            <Link href={`/customers/${request.customerId}`} className="hover:underline">
-              {request.customerName}
-            </Link>
-            {" · "}
-            <Link href={`/quotes/${request.quoteId}`} className="hover:underline">
-              {request.quoteNumber}
-            </Link>
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/engineering" className={buttonVariants({ variant: "outline" })}>
-            Volver
-          </Link>
-          {editable ? (
-            <Link
-              href={`/engineering/${request.id}/edit`}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Editar
-            </Link>
-          ) : null}
-          {canDelete &&
-          !request.deletedAt &&
-          (status === "pendiente" || status === "cancelado") ? (
-            <ArchiveEngineeringButton requestId={request.id} number={request.number} />
-          ) : null}
-        </div>
+        }
+      />
+
+      {/* Semáforo status bar */}
+      <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+        <span className={`h-2.5 w-2.5 rounded-full ${statusSemaforo(status)}`} />
+        <span className="text-sm font-medium">{ENGINEERING_STATUS_LABELS[status]}</span>
+        {request.isDemo && <Badge variant="outline">DEMO</Badge>}
+        {request.deletedAt && <Badge variant="destructive">Archivada</Badge>}
       </div>
+
+      {/* Breadcrumb / contexto */}
+      <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+        <Link href={`/customers/${request.customerId}`} className="hover:underline">
+          {request.customerName}
+        </Link>
+        <span>·</span>
+        <Link href={`/quotes/${request.quoteId}`} className="hover:underline">
+          {request.quoteNumber}
+        </Link>
+      </div>
+
+      {/* KPIs */}
+      <StatRow>
+        <StatCard
+          label="Estado"
+          value={ENGINEERING_STATUS_LABELS[status]}
+          tone={status === "liberado" ? "green" : status === "cancelado" ? "red" : "amber"}
+          icon={<AlertCircle className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Prioridad"
+          value={ENGINEERING_PRIORITY_LABELS[request.priority]}
+          tone={request.priority === "alta" ? "red" : request.priority === "media" ? "amber" : "neutral"}
+          icon={<Clock className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Horas registradas"
+          value={hoursDisplay}
+          icon={<Timer className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Responsable"
+          value={request.assigneeName ?? "Sin asignar"}
+          icon={<User className="h-4 w-4" />}
+        />
+      </StatRow>
 
       {!request.deletedAt ? (
         <EngineeringStatusActions
@@ -107,11 +157,14 @@ export default async function EngineeringDetailPage({
       ) : null}
 
       {status === "liberado" ? (
-        <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          Plano liberado. Los planos pasan a la cotización, se generan las partidas
-          y la calculadora arma el precio. La orden de trabajo futura nacerá con origen{" "}
-          <span className="font-medium">RFQ + Ingeniería</span>.
-        </p>
+        <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm flex items-start gap-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+          <span>
+            Plano liberado. Los planos pasan a la cotización, se generan las partidas
+            y la calculadora arma el precio. La orden de trabajo futura nacerá con origen{" "}
+            <span className="font-medium">RFQ + Ingeniería</span>.
+          </span>
+        </div>
       ) : null}
 
       <Card>
@@ -133,7 +186,7 @@ export default async function EngineeringDetailPage({
           />
           <Field
             label="Horas"
-            value={formatHoursMinutes(hoursToMinutes(Number(request.hoursLogged)))}
+            value={hoursDisplay}
           />
           <Field
             label="Liberado"

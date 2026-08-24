@@ -9,6 +9,8 @@ import { ProductionRecordPanel } from "@/features/production/production-record-p
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/page-header";
+import { StatCard, StatRow } from "@/components/shared/ui-patterns";
 import { requirePermission } from "@/lib/auth/session";
 import {
   PRODUCTION_MONITORING_LABELS,
@@ -45,6 +47,16 @@ import {
   type InspectionResult,
   type InspectionType,
 } from "@/lib/quality/catalog";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Cog,
+  Package,
+  PauseCircle,
+  PlayCircle,
+  XCircle,
+} from "lucide-react";
 
 function Field({
   label,
@@ -69,6 +81,21 @@ function Field({
       )}
     </div>
   );
+}
+
+function statusSemaforo(status: string) {
+  if (status === "terminada" || status === "entregada") return "bg-emerald-500";
+  if (status === "cancelada" || status === "esperando_material") return "bg-red-500";
+  return "bg-amber-500";
+}
+
+function statusIcon(status: string) {
+  if (status === "terminada" || status === "entregada") return <CheckCircle2 className="h-4 w-4" />;
+  if (status === "cancelada") return <XCircle className="h-4 w-4" />;
+  if (status === "en_produccion") return <PlayCircle className="h-4 w-4" />;
+  if (status === "pausada") return <PauseCircle className="h-4 w-4" />;
+  if (status === "esperando_material") return <AlertCircle className="h-4 w-4" />;
+  return <Clock className="h-4 w-4" />;
 }
 
 export default async function ProductionDetailPage({
@@ -112,58 +139,100 @@ export default async function ProductionDetailPage({
   const editable = canUpdate && canEditProduction(status);
   const assignable = canAssignProduction(status);
 
+  // Calcular progreso
+  const progress =
+    order.operations && order.operations.length > 0
+      ? Math.round(
+          (order.operations.filter((op: { status: string }) => op.status === "terminado").length /
+            order.operations.length) *
+            100,
+        )
+      : 0;
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Número de parte
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{partId}</h2>
-            <Badge variant="secondary">{PRODUCTION_STATUS_LABELS[status]}</Badge>
-            <Badge variant="outline">{PRODUCTION_MONITORING_LABELS[order.monitoring]}</Badge>
-            {order.isDemo ? <Badge variant="outline">DEMO</Badge> : null}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            <Link href={`/customers/${order.customerId}`} className="hover:underline">
-              {order.customerName}
+    <div className="space-y-4">
+      <PageHeader
+        title={partId}
+        description={`${PRODUCTION_STATUS_LABELS[status as keyof typeof PRODUCTION_STATUS_LABELS]}${order.isDemo ? " · DEMO" : ""}`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/orders/${order.orderId}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              Volver
             </Link>
-            {" · "}
-            <Link href={`/orders/${order.orderId}`} className="hover:underline">
-              {parentOt}
-            </Link>
-            {" · "}
-            <Link href={`/quotes/${order.quoteId}`} className="hover:underline">
-              {order.quoteNumber}
-            </Link>
-            {order.engineeringNumber ? (
-              <>
-                {" · "}
-                <Link
-                  href={`/engineering/${order.engineeringRequestId}`}
-                  className="hover:underline"
-                >
-                  {order.engineeringNumber}
-                </Link>
-              </>
+            {editable ? (
+              <Link
+                href={`/production/${order.id}/edit`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Editar
+              </Link>
             ) : null}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href={`/orders/${order.orderId}`} className={buttonVariants({ variant: "outline" })}>
-            Volver
-          </Link>
-          {editable ? (
-            <Link
-              href={`/production/${order.id}/edit`}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Editar
-            </Link>
-          ) : null}
-        </div>
+          </div>
+        }
+      />
+
+      {/* Semáforo status bar */}
+      <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+        <span className={`h-2.5 w-2.5 rounded-full ${statusSemaforo(status)}`} />
+        <span className="text-sm font-medium">
+          {PRODUCTION_STATUS_LABELS[status as keyof typeof PRODUCTION_STATUS_LABELS]}
+        </span>
+        <Badge variant="outline">{PRODUCTION_MONITORING_LABELS[order.monitoring]}</Badge>
+        {order.isDemo && <Badge variant="outline">DEMO</Badge>}
       </div>
+
+      {/* Breadcrumb / contexto */}
+      <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+        <Link href={`/customers/${order.customerId}`} className="hover:underline">
+          {order.customerName}
+        </Link>
+        <span>·</span>
+        <Link href={`/orders/${order.orderId}`} className="hover:underline">
+          {parentOt}
+        </Link>
+        <span>·</span>
+        <Link href={`/quotes/${order.quoteId}`} className="hover:underline">
+          {order.quoteNumber}
+        </Link>
+        {order.engineeringNumber && (
+          <>
+            <span>·</span>
+            <Link
+              href={`/engineering/${order.engineeringRequestId}`}
+              className="hover:underline"
+            >
+              {order.engineeringNumber}
+            </Link>
+          </>
+        )}
+      </div>
+
+      {/* KPIs */}
+      <StatRow>
+        <StatCard
+          label="Estado"
+          value={PRODUCTION_STATUS_LABELS[status as keyof typeof PRODUCTION_STATUS_LABELS]}
+          tone={status === "terminada" || status === "entregada" ? "green" : status === "cancelada" ? "red" : "amber"}
+          icon={statusIcon(status)}
+        />
+        <StatCard
+          label="Prioridad"
+          value={PRODUCTION_PRIORITY_LABELS[order.priority]}
+          tone={order.priority === "urgente" ? "red" : order.priority === "compromiso_inmediato" ? "amber" : "neutral"}
+          icon={<AlertCircle className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Progreso"
+          value={order.operations && order.operations.length > 0 ? `${progress}%` : "—"}
+          tone={progress === 100 ? "green" : progress > 0 ? "amber" : "neutral"}
+          icon={<Cog className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Cantidad"
+          value={`${displayQty(order.quantity)} ${order.unit}`}
+          icon={<Package className="h-4 w-4" />}
+        />
+      </StatRow>
 
       <ProductionStatusActions
         productionOrderId={order.id}
@@ -179,27 +248,27 @@ export default async function ProductionDetailPage({
             el número de parte pasa a Programada si el material de la OT ya está
             reservado. El operador lo inicia desde aquí o desde Mis números de parte.
           </p>
-        <ProductionAssignPanel
-          productionOrderId={order.id}
-          workCenterId={order.workCenterId}
-          machineId={order.machineId}
-          operatorUserId={order.operatorUserId}
-          workCenters={workCenters}
-          machines={machines.map((machine) => ({
-            id: machine.id,
-            name: machine.name,
-            workCenterId: machine.workCenterId,
-            status: machine.status,
-          }))}
-          users={users}
-          canAssignCenter={access.permissions.includes(PERMISSION_IDS.productionSchedule)}
-          canAssignMachine={access.permissions.includes(
-            PERMISSION_IDS.productionAssignMachine,
-          )}
-          canAssignOperator={access.permissions.includes(
-            PERMISSION_IDS.productionAssignOperator,
-          )}
-        />
+          <ProductionAssignPanel
+            productionOrderId={order.id}
+            workCenterId={order.workCenterId}
+            machineId={order.machineId}
+            operatorUserId={order.operatorUserId}
+            workCenters={workCenters}
+            machines={machines.map((machine) => ({
+              id: machine.id,
+              name: machine.name,
+              workCenterId: machine.workCenterId,
+              status: machine.status,
+            }))}
+            users={users}
+            canAssignCenter={access.permissions.includes(PERMISSION_IDS.productionSchedule)}
+            canAssignMachine={access.permissions.includes(
+              PERMISSION_IDS.productionAssignMachine,
+            )}
+            canAssignOperator={access.permissions.includes(
+              PERMISSION_IDS.productionAssignOperator,
+            )}
+          />
         </div>
       ) : null}
 
@@ -233,7 +302,7 @@ export default async function ProductionDetailPage({
               </Badge>
             </div>
           </div>
-          <Field label="Estado" value={PRODUCTION_STATUS_LABELS[status]} />
+          <Field label="Estado" value={PRODUCTION_STATUS_LABELS[status as keyof typeof PRODUCTION_STATUS_LABELS]} />
           <Field label="Centro" value={order.workCenterName} />
           <Field label="Máquina" value={order.machineName} />
           <Field label="Operador" value={order.operatorName} />

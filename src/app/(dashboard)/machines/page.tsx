@@ -23,6 +23,8 @@ import {
   parsePageSize,
 } from "@/lib/ui/pagination";
 import { listMachines } from "@/server/services/production-catalogs";
+import { Cog, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { StatCard, StatRow } from "@/components/shared/ui-patterns";
 
 export default async function MachinesPage({
   searchParams,
@@ -51,6 +53,13 @@ export default async function MachinesPage({
   if (q) query.set("q", q);
   query.set("perPage", String(pageSize));
 
+  // KPIs sobre la página actual (datos reales visibles)
+  const operational = result.rows.filter(
+    (m) => m.status === "disponible" || m.status === "en_produccion" || m.status === "ocupada",
+  ).length;
+  const maintenance = result.rows.filter((m) => m.status === "mantenimiento").length;
+  const outOfService = result.rows.filter((m) => m.status === "fuera_de_servicio").length;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -69,6 +78,14 @@ export default async function MachinesPage({
           </>
         }
       />
+
+      <StatRow>
+        <StatCard label="En esta vista" value={result.rows.length} icon={<Cog className="h-4 w-4" />} />
+        <StatCard label="Operativas" value={operational} tone="green" icon={<CheckCircle2 className="h-4 w-4" />} />
+        <StatCard label="Mantenimiento" value={maintenance} tone="amber" icon={<AlertTriangle className="h-4 w-4" />} />
+        <StatCard label="Fuera de servicio" value={outOfService} tone="red" icon={<XCircle className="h-4 w-4" />} />
+      </StatRow>
+
       <ListSearchForm
         action="/machines"
         q={q}
@@ -102,7 +119,7 @@ export default async function MachinesPage({
               />
             ) : (
               result.rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow key={row.id} className="hover:bg-muted/40">
                   <TableCell>
                     <Link href={`/machines/${row.id}`} className="font-medium hover:underline">
                       {row.name}
@@ -113,7 +130,18 @@ export default async function MachinesPage({
                     {row.hourlyCost ? displayMoney(row.hourlyCost, "mxn") : "—"}
                   </TableCell>
                   <TableCell>
-                    {MACHINE_STATUS_LABELS[row.status as MachineStatus]}
+                    <span className="inline-flex items-center gap-1.5 text-xs">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          row.status === "disponible" || row.status === "en_produccion" || row.status === "ocupada"
+                            ? "bg-emerald-500"
+                            : row.status === "mantenimiento"
+                            ? "bg-amber-500"
+                            : "bg-red-500"
+                        }`}
+                      />
+                      {MACHINE_STATUS_LABELS[row.status as MachineStatus]}
+                    </span>
                   </TableCell>
                   <TableCell>{displayQty(row.hoursPerShift)}</TableCell>
                   <TableCell>{row.active ? "Sí" : "No"}</TableCell>

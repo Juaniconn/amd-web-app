@@ -10,7 +10,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CreditCard, Calendar, FileWarning } from "lucide-react";
+import { EmptyState, StatCard, StatRow } from "@/components/shared/ui-patterns";
+import { PageHeader } from "@/components/layout/page-header";
+import { CreditCard, Calendar, FileWarning, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import { INVOICE_STATUS_LABELS } from "@/lib/billing/catalog";
@@ -38,17 +40,30 @@ export default async function BillingPage({
   const canWrite = access.permissions.includes(PERMISSION_IDS.billingWrite);
   const pending = canWrite ? await listPendingToInvoice() : [];
 
+  // KPIs sobre la página actual (datos reales visibles)
+  const paidCount = result.rows.filter((i) => i.status === "pagada").length;
+  const overdueCount = result.rows.filter((i) => {
+    if (i.status !== "emitida" && i.status !== "parcial") return false;
+    return i.dueDate && new Date(i.dueDate) < new Date();
+  }).length;
+  const openCount = result.rows.filter((i) => i.status === "emitida" || i.status === "parcial").length;
+  const draftCount = result.rows.filter((i) => i.status === "borrador").length;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Facturación</h1>
-          <p className="text-xs text-muted-foreground">
-            {result.total} facturas · sin CFDI, la factura real se hace en CONTPAQi
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Facturación"
+        description="Facturas emitidas y borradores del sistema."
+      />
 
+      <StatRow>
+        <StatCard label="En esta vista" value={result.rows.length} icon={<CreditCard className="h-4 w-4" />} />
+        <StatCard label="Pagadas" value={paidCount} tone="green" icon={<CheckCircle className="h-4 w-4" />} />
+        <StatCard label="Vencidas" value={overdueCount} tone="red" icon={<AlertCircle className="h-4 w-4" />} />
+        <StatCard label="Pendientes de facturar" value={pending.length} tone="amber" icon={<FileWarning className="h-4 w-4" />} />
+      </StatRow>
+
+      {/* Pendientes de facturar — tarjeta funcional intacta */}
       {canWrite ? (
         <Card className="border-amber-500/40">
           <CardContent className="pt-6">
@@ -121,6 +136,7 @@ export default async function BillingPage({
         </Card>
       ) : null}
 
+      {/* Tabla de facturas */}
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
@@ -136,14 +152,17 @@ export default async function BillingPage({
           <TableBody>
             {result.rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center">
-                  <CreditCard className="mx-auto h-8 w-8 text-muted-foreground" />
-                  <p className="mt-2 text-sm text-muted-foreground">Sin facturas</p>
+                <TableCell colSpan={6} className="py-8">
+                  <EmptyState
+                    icon={<CreditCard className="h-8 w-8" />}
+                    title="Sin facturas"
+                    description="No hay facturas registradas. Genera un borrador desde la sección de pendientes."
+                  />
                 </TableCell>
               </TableRow>
             ) : (
               result.rows.map((invoice) => (
-                <TableRow key={invoice.id}>
+                <TableRow key={invoice.id} className="hover:bg-muted/40">
                   <TableCell>
                     <Link href={`/billing/${invoice.id}`} className="font-medium hover:underline">
                       {invoice.number}
@@ -159,9 +178,20 @@ export default async function BillingPage({
                     {displayMoney(invoice.paidTotal, invoice.currency)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={invoice.status === "pagada" ? "default" : invoice.status === "emitida" ? "secondary" : "outline"}>
+                    <span className="inline-flex items-center gap-1.5 text-xs">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          invoice.status === "pagada"
+                            ? "bg-emerald-500"
+                            : invoice.status === "cancelada"
+                              ? "bg-gray-400"
+                              : invoice.dueDate && new Date(invoice.dueDate) < new Date()
+                                ? "bg-red-500"
+                                : "bg-amber-500"
+                        }`}
+                      />
                       {INVOICE_STATUS_LABELS[invoice.status as keyof typeof INVOICE_STATUS_LABELS]}
-                    </Badge>
+                    </span>
                   </TableCell>
                   <TableCell className="text-xs">
                     {invoice.dueDate ? (
@@ -179,6 +209,36 @@ export default async function BillingPage({
           </TableBody>
         </Table>
       </div>
+
+      {/* Nota sobre CONTPAQi */}
+      <p className="text-xs text-muted-foreground">
+        sin CFDI, la factura real se hace en CONTPAQi
+      </p>
+
+      {/* Pagination */}
+      {result.pageCount > 1 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{result.total} resultados · Página {page} de {result.pageCount}</span>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <Link
+                href={`/billing?page=${page - 1}${q ? `&q=${q}` : ""}`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Anterior
+              </Link>
+            )}
+            {page < result.pageCount && (
+              <Link
+                href={`/billing?page=${page + 1}${q ? `&q=${q}` : ""}`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Siguiente
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

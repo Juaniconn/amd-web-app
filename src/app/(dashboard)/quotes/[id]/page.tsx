@@ -7,6 +7,8 @@ import { QuoteStatusActions } from "@/features/quotes/quote-status-actions";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatCard, StatRow } from "@/components/shared/ui-patterns";
+import { PageHeader } from "@/components/layout/page-header";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import { ENGINEERING_STATUS_LABELS, type EngineeringStatus } from "@/lib/engineering/status";
@@ -24,6 +26,7 @@ import { displayMoney } from "@/lib/quotes/money";
 import { workOrderNumber } from "@/lib/production/ot-number";
 import { listQuoteActivity } from "@/server/services/activity";
 import { getQuoteById } from "@/server/services/quotes";
+import { Calendar, DollarSign, FileText, Clock, CheckCircle, AlertCircle } from "lucide-react";
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -34,6 +37,13 @@ function Field({ label, value }: { label: string; value?: string | null }) {
       <p className="mt-1 text-sm">{value || "—"}</p>
     </div>
   );
+}
+
+function statusTone(status: string) {
+  if (status === "aprobada" || status === "convertida") return "emerald";
+  if (status === "enviada" || status === "en_revision") return "amber";
+  if (status === "rechazada" || status === "expirada") return "red";
+  return "gray";
 }
 
 export default async function QuoteDetailPage({
@@ -68,56 +78,103 @@ export default async function QuoteDetailPage({
       ? "Diseño + fabricación: las partidas se generan cuando Ingeniería libera el plano PDF."
       : undefined;
 
+  const tone = statusTone(quote.status);
+
+  // KPIs calculados de los datos ya traídos
+  const itemCount = quote.items.length;
+  const activityCount = activity.length;
+  const hasEngineering = quote.requiresEngineering;
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{quote.number}</h2>
-            <Badge variant="secondary">{QUOTE_STATUS_LABELS[quote.status]}</Badge>
-            {quote.isDemo ? <Badge variant="outline">DEMO</Badge> : null}
-            {quote.deletedAt ? <Badge variant="destructive">Archivada</Badge> : null}
+      <PageHeader
+        title={quote.number}
+        description={`Cotización para ${quote.customerName}${quote.customerCode ? ` · ${quote.customerCode}` : ""}`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href="/quotes" className={buttonVariants({ variant: "outline" })}>
+              Volver
+            </Link>
+            {editable ? (
+              <Link
+                href={`/quotes/${quote.id}/edit`}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                Editar
+              </Link>
+            ) : null}
+            {canWrite && !quote.deletedAt && quote.status !== "convertida" ? (
+              <ArchiveQuoteButton quoteId={quote.id} number={quote.number} />
+            ) : null}
+            {!quote.deletedAt ? (
+              <Link
+                href={`/quotes/${quote.id}/vista`}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                Vista
+              </Link>
+            ) : null}
+            {!quote.deletedAt ? (
+              <a
+                href={`/api/quotes/${quote.id}/pdf`}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                Descargar PDF
+              </a>
+            ) : null}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            <Link href={`/customers/${quote.customerId}`} className="hover:underline">
-              {quote.customerName}
-            </Link>
-            {quote.customerCode ? ` · ${quote.customerCode}` : ""}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/quotes" className={buttonVariants({ variant: "outline" })}>
-            Volver
-          </Link>
-          {editable ? (
-            <Link
-              href={`/quotes/${quote.id}/edit`}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Editar
-            </Link>
-          ) : null}
-          {canWrite && !quote.deletedAt && quote.status !== "convertida" ? (
-            <ArchiveQuoteButton quoteId={quote.id} number={quote.number} />
-          ) : null}
-          {!quote.deletedAt ? (
-            <Link
-              href={`/quotes/${quote.id}/vista`}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Vista
-            </Link>
-          ) : null}
-          {!quote.deletedAt ? (
-            <a
-              href={`/api/quotes/${quote.id}/pdf`}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Descargar PDF
-            </a>
-          ) : null}
-        </div>
+        }
+      />
+
+      {/* Status badges */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 text-sm">
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${
+              tone === "emerald"
+                ? "bg-emerald-500"
+                : tone === "amber"
+                  ? "bg-amber-500"
+                  : tone === "red"
+                    ? "bg-red-500"
+                    : "bg-gray-400"
+            }`}
+          />
+          <Badge variant="secondary">{QUOTE_STATUS_LABELS[quote.status]}</Badge>
+        </span>
+        {quote.isDemo ? <Badge variant="outline">DEMO</Badge> : null}
+        {quote.deletedAt ? <Badge variant="destructive">Archivada</Badge> : null}
+        <Badge variant="outline" className="text-[10px]">
+          {RFQ_TYPE_LABELS[quote.rfqType]}
+        </Badge>
       </div>
+
+      {/* KPIs */}
+      <StatRow>
+        <StatCard
+          label="Total"
+          value={displayMoney(quote.total, quote.currency)}
+          icon={<DollarSign className="h-4 w-4" />}
+          tone="green"
+        />
+        <StatCard
+          label="Partidas"
+          value={itemCount}
+          icon={<FileText className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Vigencia"
+          value={quote.validUntil ? new Date(quote.validUntil).toLocaleDateString("es-MX") : "—"}
+          icon={<Calendar className="h-4 w-4" />}
+          tone={quote.validUntil && new Date(quote.validUntil) < new Date() ? "red" : "neutral"}
+        />
+        <StatCard
+          label="Actividad"
+          value={activityCount}
+          icon={<Clock className="h-4 w-4" />}
+          hint="registros"
+        />
+      </StatRow>
 
       {canWrite && !quote.deletedAt ? (
         <QuoteStatusActions

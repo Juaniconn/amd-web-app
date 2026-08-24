@@ -8,6 +8,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import { EmptyState, StatCard, StatRow } from "@/components/shared/ui-patterns";
+import { PageHeader } from "@/components/layout/page-header";
 import {
   ClipboardList,
   Calendar,
@@ -15,6 +18,9 @@ import {
   Wrench,
   Factory,
   FileText,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/orders/status";
@@ -28,6 +34,38 @@ function statusVariant(status: OrderStatus) {
   if (status === "completado") return "default" as const;
   if (status === "pendiente" || status === "borrador") return "outline" as const;
   return "secondary" as const;
+}
+
+/** Semáforo de estatus: verde = terminada/entregada, ámbar = en proceso, rojo = cancelada/atrasada */
+function StatusDot({ status, isDelayed }: { status: OrderStatus; isDelayed: boolean }) {
+  if (isDelayed) {
+    return <span className="h-2 w-2 rounded-full bg-red-500" />;
+  }
+  if (status === "completado") {
+    return <span className="h-2 w-2 rounded-full bg-emerald-500" />;
+  }
+  if (status === "cancelado") {
+    return <span className="h-2 w-2 rounded-full bg-red-500" />;
+  }
+  return <span className="h-2 w-2 rounded-full bg-amber-500" />;
+}
+
+/** Barra de progreso con color según porcentaje */
+function ProgressBar({ percent }: { percent: number }) {
+  const color =
+    percent >= 70
+      ? "bg-emerald-500"
+      : percent >= 30
+        ? "bg-amber-500"
+        : "bg-red-500";
+  return (
+    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+      <div
+        className={`h-full transition-all ${color}`}
+        style={{ width: `${percent}%` }}
+      />
+    </div>
+  );
 }
 
 export default async function OrdersPage({
@@ -60,10 +98,16 @@ export default async function OrdersPage({
   });
 
   const now = new Date();
-  const pendingCount = result.rows.filter(
-    (r) => r.status === "pendiente" || r.status === "aprobado",
+  const totalOTs = result.rows.length;
+  const enProduccion = result.rows.filter((r) => r.status === "en_produccion").length;
+  const terminadas = result.rows.filter((r) => r.status === "completado").length;
+  const atrasadas = result.rows.filter(
+    (r) =>
+      r.promisedDate !== null &&
+      new Date(r.promisedDate) < now &&
+      r.status !== "completado" &&
+      r.status !== "cancelado",
   ).length;
-  const inProductionCount = result.rows.filter((r) => r.status === "en_produccion").length;
 
   function buildQuery(overrides: Record<string, string | undefined>) {
     const sp = new URLSearchParams();
@@ -80,22 +124,45 @@ export default async function OrdersPage({
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Órdenes de Trabajo</h1>
-          <p className="text-xs text-muted-foreground">
-            {result.total} OT · {pendingCount} pendientes · {inProductionCount} en producción
-          </p>
-        </div>
-        <Link
-          href="/quotes"
-          className="inline-flex items-center justify-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted"
-        >
-          <FileText className="h-3 w-3" />
-          Cotizaciones
-        </Link>
-      </div>
+      <PageHeader
+        title="Órdenes de Trabajo"
+        description="Seguimiento de todas las órdenes de trabajo activas."
+        actions={
+          <Link
+            href="/quotes"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            <FileText className="mr-1 h-3.5 w-3.5" />
+            Cotizaciones
+          </Link>
+        }
+      />
+
+      <StatRow>
+        <StatCard
+          label="Total OTs"
+          value={totalOTs}
+          icon={<ClipboardList className="h-4 w-4" />}
+        />
+        <StatCard
+          label="En producción"
+          value={enProduccion}
+          tone="amber"
+          icon={<Clock className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Terminadas"
+          value={terminadas}
+          tone="green"
+          icon={<CheckCircle2 className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Atrasadas"
+          value={atrasadas}
+          tone="red"
+          icon={<AlertTriangle className="h-4 w-4" />}
+        />
+      </StatRow>
 
       {/* Jerarquía explicativa */}
       <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
@@ -170,22 +237,24 @@ export default async function OrdersPage({
           <TableBody>
             {result.rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="py-12 text-center">
-                  <ClipboardList className="mx-auto h-8 w-8 text-muted-foreground" />
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {filtered
-                      ? "No hay OT con esos filtros"
-                      : "Aún no hay Órdenes de Trabajo"}
-                  </p>
-                  {!filtered && (
-                    <Link
-                      href="/quotes"
-                      className="mt-2 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
-                    >
-                      <FileText className="h-3 w-3" />
-                      Convertir una cotización
-                    </Link>
-                  )}
+                <TableCell colSpan={8} className="py-8">
+                  <EmptyState
+                    icon={<ClipboardList className="h-8 w-8" />}
+                    title={filtered ? "Sin resultados" : "Aún no hay Órdenes de Trabajo"}
+                    description={
+                      filtered
+                        ? "Ajusta los filtros o la búsqueda para encontrar la orden."
+                        : "Crea tu primera orden de trabajo desde una cotización."
+                    }
+                    action={
+                      !filtered ? (
+                        <Link href="/quotes" className={buttonVariants({ size: "sm" })}>
+                          <FileText className="mr-1 h-3.5 w-3.5" />
+                          Convertir una cotización
+                        </Link>
+                      ) : null
+                    }
+                  />
                 </TableCell>
               </TableRow>
             ) : (
@@ -204,7 +273,10 @@ export default async function OrdersPage({
                   row.status !== "cancelado";
 
                 return (
-                  <TableRow key={row.id} className={isDelayed ? "bg-red-50/40" : ""}>
+                  <TableRow
+                    key={row.id}
+                    className={`hover:bg-muted/40 ${isDelayed ? "bg-red-50/40" : ""}`}
+                  >
                     <TableCell>
                       <Link
                         href={`/orders/${row.id}`}
@@ -253,12 +325,7 @@ export default async function OrdersPage({
                     <TableCell>
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className={`h-full transition-all ${progress === 100 ? "bg-green-500" : "bg-blue-500"}`}
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
+                          <ProgressBar percent={progress} />
                           <span className="text-xs font-medium">{progress}%</span>
                         </div>
                         <div className="text-[10px] text-muted-foreground">
@@ -282,9 +349,10 @@ export default async function OrdersPage({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(row.status as OrderStatus)}>
+                      <span className="inline-flex items-center gap-1.5 text-xs">
+                        <StatusDot status={row.status as OrderStatus} isDelayed={isDelayed} />
                         {ORDER_STATUS_LABELS[row.status as OrderStatus]}
-                      </Badge>
+                      </span>
                     </TableCell>
                     <TableCell className="text-xs">
                       {row.promisedDate ? (
@@ -319,7 +387,7 @@ export default async function OrdersPage({
             {page > 1 && (
               <Link
                 href={`/orders${buildQuery({ page: String(page - 1) })}`}
-                className="rounded-md border px-2 py-1 hover:bg-muted"
+                className={buttonVariants({ variant: "outline", size: "sm" })}
               >
                 Anterior
               </Link>
@@ -327,7 +395,7 @@ export default async function OrdersPage({
             {page < result.pageCount && (
               <Link
                 href={`/orders${buildQuery({ page: String(page + 1) })}`}
-                className="rounded-md border px-2 py-1 hover:bg-muted"
+                className={buttonVariants({ variant: "outline", size: "sm" })}
               >
                 Siguiente
               </Link>

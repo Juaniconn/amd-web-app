@@ -8,6 +8,8 @@ import { SendToDeliveryButton } from "@/features/orders/send-to-delivery-button"
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/page-header";
+import { StatCard, StatRow } from "@/components/shared/ui-patterns";
 import {
   Table,
   TableBody,
@@ -47,6 +49,16 @@ import { listPurchaseRequestsForOrder } from "@/server/services/purchasing";
 import { getDeliveryByOrderId } from "@/server/services/deliveries";
 import { displayQty } from "@/lib/inventory/catalog";
 import { displayMoney } from "@/lib/quotes/money";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Cog,
+  FileText,
+  Package,
+  PlayCircle,
+  XCircle,
+} from "lucide-react";
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -57,6 +69,18 @@ function Field({ label, value }: { label: string; value?: string | null }) {
       <p className="mt-1 text-sm">{value || "—"}</p>
     </div>
   );
+}
+
+function statusSemaforo(status: OrderStatus) {
+  if (status === "completado") return "bg-emerald-500";
+  if (status === "cancelado") return "bg-red-500";
+  return "bg-amber-500";
+}
+
+function partStatusSemaforo(status: ProductionStatus) {
+  if (status === "terminada" || status === "entregada") return "bg-emerald-500";
+  if (status === "cancelada" || status === "esperando_material") return "bg-red-500";
+  return "bg-amber-500";
 }
 
 export default async function OrderDetailPage({
@@ -134,48 +158,89 @@ export default async function OrderDetailPage({
     activeParts.length > 0 &&
     activeParts.every((ot) => ot.status === "terminada" || ot.status === "entregada");
 
+  // KPIs
+  const totalParts = order.productionOrders.length;
+  const completedParts = order.productionOrders.filter(
+    (ot) => ot.status === "terminada" || ot.status === "entregada",
+  ).length;
+  const inProgressParts = order.productionOrders.filter(
+    (ot) => ot.status === "en_produccion",
+  ).length;
+  const cancelledParts = order.productionOrders.filter((ot) => ot.status === "cancelada").length;
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Orden de trabajo
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{titleNumber}</h2>
-            <Badge variant="secondary">
-              {ORDER_STATUS_LABELS[order.status as OrderStatus]}
-            </Badge>
-            {order.isDemo ? <Badge variant="outline">DEMO</Badge> : null}
+    <div className="space-y-4">
+      <PageHeader
+        title={titleNumber}
+        description={`${ORDER_STATUS_LABELS[order.status as OrderStatus]}${order.isDemo ? " · DEMO" : ""}`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href="/orders" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              Volver
+            </Link>
+            {editable ? (
+              <Link
+                href={`/orders/${order.id}/edit`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Editar
+              </Link>
+            ) : null}
+            {canSendToDelivery ? <SendToDeliveryButton orderId={order.id} /> : null}
+            {delivery ? (
+              <Link href={`/deliveries/${delivery.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                Ver entrega {delivery.number}
+              </Link>
+            ) : null}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            <Link href={`/customers/${order.customerId}`} className="hover:underline">
-              {order.customerName}
-            </Link>
-            {order.customerCode ? ` · ${order.customerCode}` : ""}
-            {` · ${drawingCountLabel}`}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/orders" className={buttonVariants({ variant: "outline" })}>
-            Volver
-          </Link>
-          {editable ? (
-            <Link
-              href={`/orders/${order.id}/edit`}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Editar
-            </Link>
-          ) : null}
-          {canSendToDelivery ? <SendToDeliveryButton orderId={order.id} /> : null}
-          {delivery ? (
-            <Link href={`/deliveries/${delivery.id}`} className={buttonVariants({ variant: "outline" })}>
-              Ver entrega {delivery.number}
-            </Link>
-          ) : null}
-        </div>
+        }
+      />
+
+      {/* Semáforo status bar */}
+      <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+        <span className={`h-2.5 w-2.5 rounded-full ${statusSemaforo(order.status as OrderStatus)}`} />
+        <span className="text-sm font-medium">
+          {ORDER_STATUS_LABELS[order.status as OrderStatus]}
+        </span>
+        {order.isDemo && <Badge variant="outline">DEMO</Badge>}
       </div>
+
+      {/* Breadcrumb / contexto */}
+      <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+        <Link href={`/customers/${order.customerId}`} className="hover:underline">
+          {order.customerName}
+        </Link>
+        {order.customerCode && <span>· {order.customerCode}</span>}
+        <span>·</span>
+        <span>{drawingCountLabel}</span>
+      </div>
+
+      {/* KPIs */}
+      <StatRow>
+        <StatCard
+          label="Estado"
+          value={ORDER_STATUS_LABELS[order.status as OrderStatus]}
+          tone={order.status === "completado" ? "green" : order.status === "cancelado" ? "red" : "amber"}
+          icon={<AlertCircle className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Planos"
+          value={order.drawingCount}
+          icon={<FileText className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Números de Parte"
+          value={`${completedParts}/${totalParts}`}
+          tone={completedParts === totalParts && totalParts > 0 ? "green" : "neutral"}
+          icon={<Cog className="h-4 w-4" />}
+        />
+        <StatCard
+          label="En producción"
+          value={inProgressParts}
+          tone={inProgressParts > 0 ? "amber" : "neutral"}
+          icon={<PlayCircle className="h-4 w-4" />}
+        />
+      </StatRow>
 
       <OrderStatusActions
         orderId={order.id}
@@ -287,13 +352,13 @@ export default async function OrderDetailPage({
       </Card>
 
       {order.projectId && canReadProjects ? (
-        <p className="text-sm">
+        <div className="rounded-lg border bg-card px-3 py-2 text-sm">
           Agrupado en{" "}
           <Link href={`/projects/${order.projectId}`} className="font-medium hover:underline">
             {order.projectCode}
           </Link>
           .
-        </p>
+        </div>
       ) : null}
 
       {order.notes ? (
@@ -325,6 +390,7 @@ export default async function OrderDetailPage({
         </CardContent>
       </Card>
 
+      {/* Números de Parte - Tabla con PN Plano como columna primaria y Progreso */}
       <Card>
         <CardHeader>
           <CardTitle>Números de Parte ({order.productionOrders.length})</CardTitle>
@@ -345,151 +411,128 @@ export default async function OrderDetailPage({
               )}
             </div>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {order.productionOrders.map((ot) => {
-                const progress =
-                  ot.operationsTotal > 0
-                    ? Math.round((ot.operationsDone / ot.operationsTotal) * 100)
-                    : 0;
-                const isClosed = ot.status === "terminada" || ot.status === "entregada";
-                const isCancelled = ot.status === "cancelada";
-                const priorityLabel =
-                  ot.priority === "urgente"
-                    ? "Urgente"
-                    : ot.priority === "compromiso_inmediato"
-                      ? "Compromiso"
-                      : ot.priority === "programada"
-                        ? "Programada"
-                        : "Normal";
-                const priorityColor =
-                  ot.priority === "urgente"
-                    ? "bg-red-100 text-red-700"
-                    : ot.priority === "compromiso_inmediato"
-                      ? "bg-amber-100 text-amber-700"
-                      : ot.priority === "programada"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-gray-100 text-gray-600";
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>PN Plano</TableHead>
+                    <TableHead>Descripción</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Proceso Actual</TableHead>
+                    <TableHead>Progreso</TableHead>
+                    <TableHead>Prometida</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {order.productionOrders.map((ot) => {
+                    const progress =
+                      ot.operationsTotal > 0
+                        ? Math.round((ot.operationsDone / ot.operationsTotal) * 100)
+                        : 0;
+                    const isClosed = ot.status === "terminada" || ot.status === "entregada";
+                    const isCancelled = ot.status === "cancelada";
 
-                return (
-                  <div
-                    key={ot.id}
-                    className={`rounded-lg border bg-card p-3 transition-shadow hover:shadow-sm ${
-                      isCancelled ? "opacity-60" : ""
-                    }`}
-                  >
-                    {/* Fila 1: PN + prioridad */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        {canReadProduction ? (
-                          <Link
-                            href={`/production/${ot.id}`}
-                            className="font-mono text-sm font-bold text-blue-600 hover:underline"
-                          >
-                            {ot.partNumber ?? ot.number}
-                          </Link>
-                        ) : (
-                          <span className="font-mono text-sm font-bold">
-                            {ot.partNumber ?? ot.number}
-                          </span>
-                        )}
-                        <p className="truncate text-xs text-muted-foreground">
+                    return (
+                      <TableRow key={ot.id} className={isCancelled ? "opacity-60" : ""}>
+                        {/* PN Plano - columna primaria */}
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${partStatusSemaforo(ot.status as ProductionStatus)}`} />
+                            {canReadProduction ? (
+                              <Link
+                                href={`/production/${ot.id}`}
+                                className="font-mono text-sm font-bold text-blue-600 hover:underline"
+                              >
+                                {ot.partNumber ?? ot.number}
+                              </Link>
+                            ) : (
+                              <span className="font-mono text-sm font-bold">
+                                {ot.partNumber ?? ot.number}
+                              </span>
+                            )}
+                          </div>
+                          <div className="ml-4 text-xs text-muted-foreground">
+                            Cant: {Number(ot.quantity)} {ot.unit}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
                           {ot.description}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${priorityColor}`}
-                      >
-                        {priorityLabel}
-                      </span>
-                    </div>
-
-                    {/* Fila 2: cantidad + estado */}
-                    <div className="mt-2 flex items-center gap-3 text-xs">
-                      <span className="text-muted-foreground">
-                        Cant:{" "}
-                        <span className="font-medium text-foreground">
-                          {Number(ot.quantity)} {ot.unit}
-                        </span>
-                      </span>
-                      <Badge
-                        variant={isCancelled ? "destructive" : isClosed ? "default" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {PRODUCTION_STATUS_LABELS[ot.status as ProductionStatus]}
-                      </Badge>
-                    </div>
-
-                    {/* Fila 3: proceso actual */}
-                    <div className="mt-2 rounded-md bg-muted/50 px-2 py-1.5">
-                      {ot.currentOperationName ? (
-                        <>
-                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            Proceso actual
-                          </p>
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${
-                                ot.currentOperationStatus === "en_proceso"
-                                  ? "bg-amber-500"
-                                  : "bg-gray-400"
-                              }`}
-                            />
-                            <span className="text-xs font-medium">
-                              {ot.currentOperationPosition}. {ot.currentOperationName}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={isCancelled ? "destructive" : isClosed ? "default" : "secondary"}
+                            className="text-[10px]"
+                          >
+                            {PRODUCTION_STATUS_LABELS[ot.status as ProductionStatus]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {ot.currentOperationName ? (
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                  ot.currentOperationStatus === "en_proceso"
+                                    ? "bg-amber-500"
+                                    : "bg-gray-400"
+                                }`}
+                              />
+                              <div className="min-w-0">
+                                <div className="truncate text-xs font-medium max-w-[140px]">
+                                  {ot.currentOperationPosition}. {ot.currentOperationName}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  {ot.currentOperationStatus === "en_proceso"
+                                    ? "en curso"
+                                    : "pendiente"}
+                                  {ot.currentOperationOperator
+                                    ? ` · ${ot.currentOperationOperator}`
+                                    : ""}
+                                </div>
+                              </div>
+                            </div>
+                          ) : ot.operationsTotal > 0 ? (
+                            <span className="text-xs font-medium text-green-600">
+                              Todos los procesos terminados
                             </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {ot.currentOperationStatus === "en_proceso"
-                                ? "en curso"
-                                : "pendiente"}
+                          ) : (
+                            <span className="text-xs italic text-muted-foreground">
+                              Sin procesos definidos
                             </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {ot.operationsTotal > 0 ? (
+                            <div className="space-y-1 min-w-[100px]">
+                              <div className="flex items-center gap-2">
+                                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                                  <div
+                                    className={`h-full transition-all ${
+                                      progress === 100 ? "bg-green-500" : "bg-blue-500"
+                                    }`}
+                                    style={{ width: `${progress}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs font-medium w-8 text-right">{progress}%</span>
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">
+                                {ot.operationsDone}/{ot.operationsTotal} procesos
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            {new Date(ot.promisedDate).toLocaleDateString("es-MX")}
                           </div>
-                          <p className="text-[10px] text-muted-foreground">
-                            {ot.currentOperationWorkCenter ?? "Sin centro"}
-                            {ot.currentOperationOperator
-                              ? ` · ${ot.currentOperationOperator}`
-                              : " · sin operador"}
-                          </p>
-                        </>
-                      ) : ot.operationsTotal > 0 ? (
-                        <p className="text-xs font-medium text-green-600">
-                          Todos los procesos terminados
-                        </p>
-                      ) : (
-                        <p className="text-xs italic text-muted-foreground">
-                          Sin procesos definidos
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Fila 4: progreso + fecha */}
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      {ot.operationsTotal > 0 ? (
-                        <div className="flex flex-1 items-center gap-2">
-                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className={`h-full transition-all ${
-                                progress === 100 ? "bg-green-500" : "bg-blue-500"
-                              }`}
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] font-medium">
-                            {ot.operationsDone}/{ot.operationsTotal}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {progress}%
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="flex-1 text-[10px] text-muted-foreground">—</span>
-                      )}
-                      <span className="shrink-0 text-[10px] text-muted-foreground">
-                        {new Date(ot.promisedDate).toLocaleDateString("es-MX")}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>

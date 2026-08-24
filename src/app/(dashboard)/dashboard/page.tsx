@@ -19,6 +19,7 @@ import {
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import { getCommandCenterData } from "@/server/services/command-center";
+import { StatCard } from "@/components/shared/ui-patterns";
 
 export default async function DashboardPage() {
   const { access } = await requirePermission(PERMISSION_IDS.dashboardRead);
@@ -88,6 +89,16 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-2xl">
+          <h2 className="text-2xl font-semibold tracking-tight">Centro de Operaciones</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Resumen de operaciones AMD. Datos en tiempo real.
+          </p>
+        </div>
+      </div>
+
       {/* ALERTAS */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">
@@ -117,31 +128,28 @@ export default async function DashboardPage() {
       {/* VENTAS */}
       {can(PERMISSION_IDS.quotesRead) && (
         <Section title="Ventas" href="/quotes">
-          <Stat
+          <StatCard
             label="Cotizaciones"
             value={data.ventas.quotesTotal}
-            sub={`${data.ventas.quotesOpen} abiertas`}
+            hint={`${data.ventas.quotesOpen} abiertas`}
             icon={<FileText className="h-4 w-4" />}
-            href="/quotes"
           />
-          <Stat
+          <StatCard
             label="Órdenes de Trabajo"
             value={data.ventas.ordersActive}
-            sub={
+            hint={
               data.ventas.ordersDelayed > 0
                 ? `${data.ventas.ordersDelayed} atrasadas`
                 : `${data.ventas.ordersTotal} en total`
             }
-            tone={data.ventas.ordersDelayed > 0 ? "urgent" : undefined}
+            tone={data.ventas.ordersDelayed > 0 ? "red" : undefined}
             icon={<ClipboardList className="h-4 w-4" />}
-            href="/orders"
           />
-          <Stat
+          <StatCard
             label="Clientes"
             value={data.ventas.customersTotal}
-            sub={`${data.ventas.customersNewThisMonth} nuevos este mes`}
+            hint={`${data.ventas.customersNewThisMonth} nuevos este mes`}
             icon={<Users className="h-4 w-4" />}
-            href="/customers"
           />
         </Section>
       )}
@@ -149,36 +157,33 @@ export default async function DashboardPage() {
       {/* PRODUCCIÓN */}
       {can(PERMISSION_IDS.productionView) && (
         <Section title="Producción" href="/production">
-          <Stat
+          <StatCard
             label="Números de Parte activos"
             value={data.produccion.partsActive}
-            sub={
+            hint={
               data.produccion.partsUrgent > 0
                 ? `${data.produccion.partsUrgent} urgentes`
                 : `${data.produccion.partsTotal} en total`
             }
-            tone={data.produccion.partsUrgent > 0 ? "warning" : undefined}
+            tone={data.produccion.partsUrgent > 0 ? "amber" : undefined}
             icon={<Layers className="h-4 w-4" />}
-            href="/production"
           />
-          <Stat
+          <StatCard
             label="En piso"
             value={data.produccion.partsInProduction}
-            sub={`${data.produccion.opsInProgress} procesos en curso`}
+            hint={`${data.produccion.opsInProgress} procesos en curso`}
             icon={<Settings className="h-4 w-4" />}
-            href="/production?status=en_produccion"
           />
-          <Stat
+          <StatCard
             label="Máquinas ocupadas"
             value={`${data.produccion.machinesBusy}/${data.produccion.machinesTotal}`}
-            sub={
+            hint={
               data.produccion.machinesDown > 0
                 ? `${data.produccion.machinesDown} detenidas`
                 : "todas operativas"
             }
-            tone={data.produccion.machinesDown > 0 ? "urgent" : undefined}
+            tone={data.produccion.machinesDown > 0 ? "red" : undefined}
             icon={<Factory className="h-4 w-4" />}
-            href="/machines"
           />
         </Section>
       )}
@@ -186,19 +191,18 @@ export default async function DashboardPage() {
       {/* INGENIERÍA */}
       {can(PERMISSION_IDS.engineeringRead) && (
         <Section title="Ingeniería" href="/engineering">
-          <Stat
+          <StatCard
             label="Solicitudes abiertas"
             value={data.ingenieria.requestsOpen}
-            sub="en diseño o revisión"
+            hint="en diseño o revisión"
             icon={<Wrench className="h-4 w-4" />}
-            href="/engineering"
           />
-          <Stat
+          <StatCard
             label="Liberados"
             value={data.ingenieria.requestsReleased}
-            sub="listos para producción"
+            hint="listos para producción"
+            tone="green"
             icon={<CheckCircle className="h-4 w-4" />}
-            href="/engineering"
           />
         </Section>
       )}
@@ -206,31 +210,28 @@ export default async function DashboardPage() {
       {/* INVENTARIO Y COMPRAS */}
       {can(PERMISSION_IDS.inventoryRead) && (
         <Section title="Inventario y Compras" href="/inventory">
-          <Stat
+          <StatCard
             label="Materiales"
             value={data.inventario.materialsTotal}
-            sub={`${data.inventario.materialsCritical} críticos`}
+            hint={`${data.inventario.materialsCritical} críticos`}
             icon={<Package className="h-4 w-4" />}
-            href="/inventory"
           />
-          <Stat
+          <StatCard
             label="Bajo mínimo"
             value={data.inventario.materialsLowStock}
-            sub={
+            hint={
               data.inventario.materialsLowStock > 0
                 ? "requieren compra"
                 : "stock suficiente"
             }
-            tone={data.inventario.materialsLowStock > 0 ? "warning" : undefined}
+            tone={data.inventario.materialsLowStock > 0 ? "amber" : undefined}
             icon={<AlertTriangle className="h-4 w-4" />}
-            href="/inventory?critical=1"
           />
-          <Stat
+          <StatCard
             label="OC abiertas"
             value={data.compras.poOpen}
-            sub={`${data.compras.poPendingReceive} por recibir`}
+            hint={`${data.compras.poPendingReceive} por recibir`}
             icon={<ShoppingCart className="h-4 w-4" />}
-            href="/purchasing"
           />
         </Section>
       )}
@@ -238,33 +239,30 @@ export default async function DashboardPage() {
       {/* LOGÍSTICA */}
       {can(PERMISSION_IDS.deliveriesRead) && (
         <Section title="Logística y Cobranza" href="/deliveries">
-          <Stat
+          <StatCard
             label="Entregas en tránsito"
             value={data.logistica.deliveriesInTransit}
-            sub={
+            hint={
               data.logistica.deliveriesIncidents > 0
                 ? `${data.logistica.deliveriesIncidents} con incidencia`
                 : "sin incidencias"
             }
-            tone={data.logistica.deliveriesIncidents > 0 ? "urgent" : undefined}
+            tone={data.logistica.deliveriesIncidents > 0 ? "red" : undefined}
             icon={<Truck className="h-4 w-4" />}
-            href="/deliveries"
           />
-          <Stat
+          <StatCard
             label="Facturas abiertas"
             value={data.logistica.invoicesOpen}
-            sub={`${data.logistica.invoicesOverdue} vencidas`}
-            tone={data.logistica.invoicesOverdue > 0 ? "urgent" : undefined}
+            hint={`${data.logistica.invoicesOverdue} vencidas`}
+            tone={data.logistica.invoicesOverdue > 0 ? "red" : undefined}
             icon={<CreditCard className="h-4 w-4" />}
-            href="/billing"
           />
-          <Stat
+          <StatCard
             label="CxC vencida"
             value={formatMoneyShort(data.logistica.receivableOverdue)}
-            sub="por cobrar"
-            tone={data.logistica.receivableOverdue > 0 ? "urgent" : undefined}
+            hint="por cobrar"
+            tone={data.logistica.receivableOverdue > 0 ? "red" : undefined}
             icon={<AlertCircle className="h-4 w-4" />}
-            href="/billing"
           />
         </Section>
       )}
@@ -301,51 +299,6 @@ function Section({
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
     </section>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  sub,
-  icon,
-  href,
-  tone,
-}: {
-  label: string;
-  value: number | string;
-  sub: string;
-  icon: React.ReactNode;
-  href: string;
-  tone?: "urgent" | "warning";
-}) {
-  const toneRing =
-    tone === "urgent"
-      ? "border-red-200"
-      : tone === "warning"
-        ? "border-amber-200"
-        : "";
-  const iconTone =
-    tone === "urgent"
-      ? "bg-red-50 text-red-600"
-      : tone === "warning"
-        ? "bg-amber-50 text-amber-600"
-        : "bg-muted text-muted-foreground";
-
-  return (
-    <Link
-      href={href}
-      className={`flex items-center gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40 ${toneRing}`}
-    >
-      <div className={`flex h-9 w-9 items-center justify-center rounded-md ${iconTone}`}>
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-xl font-bold leading-tight">{value}</p>
-        <p className="truncate text-xs font-medium">{label}</p>
-        <p className="truncate text-[10px] text-muted-foreground">{sub}</p>
-      </div>
-    </Link>
   );
 }
 

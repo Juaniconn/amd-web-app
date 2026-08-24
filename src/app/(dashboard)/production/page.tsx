@@ -15,7 +15,15 @@ import {
   Calendar,
   Plus,
   Clock,
+  AlertCircle,
+  CheckCircle2,
+  PauseCircle,
+  PlayCircle,
+  XCircle,
 } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { PageHeader } from "@/components/layout/page-header";
+import { StatCard, StatRow } from "@/components/shared/ui-patterns";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import {
@@ -34,6 +42,21 @@ function statusVariant(status: ProductionStatus) {
   if (status === "entregada" || status === "terminada") return "default" as const;
   if (status === "pendiente") return "outline" as const;
   return "secondary" as const;
+}
+
+function statusSemaforo(status: ProductionStatus) {
+  if (status === "terminada" || status === "entregada") return "bg-emerald-500";
+  if (status === "cancelada" || status === "esperando_material") return "bg-red-500";
+  return "bg-amber-500";
+}
+
+function statusIcon(status: ProductionStatus) {
+  if (status === "terminada" || status === "entregada") return <CheckCircle2 className="h-4 w-4" />;
+  if (status === "cancelada") return <XCircle className="h-4 w-4" />;
+  if (status === "en_produccion") return <PlayCircle className="h-4 w-4" />;
+  if (status === "pausada") return <PauseCircle className="h-4 w-4" />;
+  if (status === "esperando_material") return <AlertCircle className="h-4 w-4" />;
+  return <Clock className="h-4 w-4" />;
 }
 
 export default async function ProductionPage({
@@ -81,39 +104,69 @@ export default async function ProductionPage({
     redirect("/production/kanban");
   }
 
+  // KPIs
+  const enProduccion = result.rows.filter((r) => r.status === "en_produccion").length;
+  const terminadas = result.rows.filter((r) => r.status === "terminada" || r.status === "entregada").length;
+  const atrasadas = result.rows.filter((r) => r.status === "esperando_material" || r.status === "cancelada").length;
+  const pendientes = result.rows.filter((r) => r.status === "pendiente" || r.status === "liberada" || r.status === "programada").length;
+
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Producción</h1>
-          <p className="text-xs text-muted-foreground">
-            {result.total} números de parte · {result.rows.filter((r) => r.status === "en_produccion").length} en producción
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-md border p-0.5">
-            <Link href="/production" className="rounded-sm bg-muted p-1" aria-label="Vista tabla">
-              <List className="h-3.5 w-3.5" />
-            </Link>
-            <Link href="/production/kanban" className="rounded-sm p-1 text-muted-foreground hover:bg-muted" aria-label="Vista Kanban">
-              <LayoutGrid className="h-3.5 w-3.5" />
-            </Link>
-            <Link href="/production/calendar" className="rounded-sm p-1 text-muted-foreground hover:bg-muted" aria-label="Vista Calendario">
-              <Calendar className="h-3.5 w-3.5" />
-            </Link>
-            <Link href="/production/gantt" className="rounded-sm p-1 text-muted-foreground hover:bg-muted" aria-label="Vista Gantt">
-              <Clock className="h-3.5 w-3.5" />
-            </Link>
+      <PageHeader
+        title="Producción"
+        description={`${result.total} números de parte · ${enProduccion} en producción`}
+        actions={
+          <div className="flex items-center gap-2">
+            {/* View controls - conservados */}
+            <div className="flex rounded-md border p-0.5">
+              <Link href="/production" className="rounded-sm bg-muted p-1" aria-label="Vista tabla">
+                <List className="h-3.5 w-3.5" />
+              </Link>
+              <Link href="/production/kanban" className="rounded-sm p-1 text-muted-foreground hover:bg-muted" aria-label="Vista Kanban">
+                <LayoutGrid className="h-3.5 w-3.5" />
+              </Link>
+              <Link href="/production/calendar" className="rounded-sm p-1 text-muted-foreground hover:bg-muted" aria-label="Vista Calendario">
+                <Calendar className="h-3.5 w-3.5" />
+              </Link>
+              <Link href="/production/gantt" className="rounded-sm p-1 text-muted-foreground hover:bg-muted" aria-label="Vista Gantt">
+                <Clock className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            {canCreate && (
+              <Link href="/production/new" className={buttonVariants({ size: "sm" })}>
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Nuevo
+              </Link>
+            )}
           </div>
-          {canCreate && (
-            <a href="/production/new" className="inline-flex items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              <Plus className="h-3 w-3" />
-              Nuevo
-            </a>
-          )}
-        </div>
-      </div>
+        }
+      />
+
+      <StatRow>
+        <StatCard
+          label="En esta vista"
+          value={result.rows.length}
+          icon={<List className="h-4 w-4" />}
+        />
+        <StatCard
+          label="En producción"
+          value={enProduccion}
+          tone="amber"
+          icon={<PlayCircle className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Terminadas"
+          value={terminadas}
+          tone="green"
+          icon={<CheckCircle2 className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Atrasadas / Canceladas"
+          value={atrasadas}
+          tone="red"
+          icon={<AlertCircle className="h-4 w-4" />}
+        />
+      </StatRow>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2">
@@ -191,10 +244,10 @@ export default async function ProductionPage({
                   {filtered ? "No se encontraron resultados" : "Aún no hay números de parte"}
                 </p>
                 {!filtered && canCreate && (
-                  <a href="/production/new" className="mt-2 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90">
-                    <Plus className="h-3 w-3" />
+                  <Link href="/production/new" className={`${buttonVariants({ size: "sm" })} mt-2 inline-flex`}>
+                    <Plus className="mr-1 h-3 w-3" />
                     Crear primer OT
-                  </a>
+                  </Link>
                 )}
               </TableCell>
             </TableRow>
@@ -208,14 +261,19 @@ export default async function ProductionPage({
                 return (
                 <TableRow key={row.id}>
                   <TableCell>
-                    <Link
-                      href={`/production/${row.id}`}
-                      className="font-mono text-sm font-medium text-blue-600 hover:underline"
-                    >
-                      {row.partNumber || row.number}
-                    </Link>
-                    <div className="truncate text-xs text-muted-foreground max-w-[220px]">
-                      {row.description}
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${statusSemaforo(row.status as ProductionStatus)}`} />
+                      <div>
+                        <Link
+                          href={`/production/${row.id}`}
+                          className="font-mono text-sm font-medium text-blue-600 hover:underline"
+                        >
+                          {row.partNumber || row.number}
+                        </Link>
+                        <div className="truncate text-xs text-muted-foreground max-w-[220px]">
+                          {row.description}
+                        </div>
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>
