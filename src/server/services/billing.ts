@@ -5,6 +5,7 @@ import { db } from "@/db";
 import {
   branches,
   customers,
+  deliveries,
   invoiceItems,
   invoicePayments,
   invoices,
@@ -39,7 +40,8 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
-export async function listOrdersForBilling() {
+export async function listPendingToInvoice() {
+  // OTs entregadas que aún no tienen borrador de facturación
   const invoiced = await db.select({ orderId: invoices.orderId }).from(invoices);
   const invoicedIds = new Set(invoiced.map((row) => row.orderId));
   const rows = await db
@@ -47,15 +49,24 @@ export async function listOrdersForBilling() {
       id: orders.id,
       number: orders.number,
       customerName: customers.legalName,
+      customerRfc: customers.rfc,
       total: orders.total,
       currency: orders.currency,
       status: orders.status,
+      deliveryNumber: deliveries.number,
+      deliveredAt: deliveries.deliveredAt,
+      branchCode: branches.code,
     })
     .from(orders)
     .innerJoin(customers, eq(customers.id, orders.customerId))
+    .innerJoin(
+      deliveries,
+      and(eq(deliveries.orderId, orders.id), eq(deliveries.status, "entregado")),
+    )
+    .leftJoin(branches, eq(branches.id, orders.branchId))
     .where(ne(orders.status, "cancelado"))
-    .orderBy(desc(orders.createdAt))
-    .limit(200);
+    .orderBy(desc(deliveries.deliveredAt))
+    .limit(100);
   return rows.filter((row) => !invoicedIds.has(row.id));
 }
 

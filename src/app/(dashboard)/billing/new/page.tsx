@@ -3,7 +3,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { InvoiceFromOrderForm } from "@/features/billing/invoice-from-order-form";
 import { requirePermission } from "@/lib/auth/session";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
-import { listOrdersForBilling } from "@/server/services/billing";
+import { listPendingToInvoice } from "@/server/services/billing";
 
 export default async function NewInvoicePage({
   searchParams,
@@ -13,7 +13,7 @@ export default async function NewInvoicePage({
   await requirePermission(PERMISSION_IDS.billingWrite);
   const params = await searchParams;
   const orderId = Array.isArray(params.order) ? params.order[0] : params.order;
-  const orders = await listOrdersForBilling();
+  const orders = await listPendingToInvoice();
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
