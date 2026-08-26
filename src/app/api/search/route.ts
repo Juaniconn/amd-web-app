@@ -12,7 +12,14 @@ export async function GET(request: Request) {
     const q = searchParams.get("q") ?? "";
     const results = await globalSearch(q);
     return NextResponse.json({ results });
-  } catch {
-    return NextResponse.json({ results: [] }, { status: 200 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "No autenticado.") {
+      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "Sin permiso.") {
+      return NextResponse.json({ error: "Sin permiso." }, { status: 403 });
+    }
+    console.error("[search] Error inesperado:", error);
+    return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
   }
 }

@@ -15,7 +15,14 @@ export async function GET() {
     return NextResponse.json({
       alerts: merged.sort((a, b) => b.sortKey - a.sortKey).slice(0, 30),
     });
-  } catch {
-    return NextResponse.json({ alerts: [] }, { status: 200 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "No autenticado.") {
+      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "Sin permiso.") {
+      return NextResponse.json({ error: "Sin permiso." }, { status: 403 });
+    }
+    console.error("[alerts] Error inesperado:", error);
+    return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
   }
 }
