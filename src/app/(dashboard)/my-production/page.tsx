@@ -42,7 +42,7 @@ export default async function MyProductionPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div className="rounded-lg border bg-card p-3 text-center">
           <p className="text-2xl font-bold text-green-600">{summary.inProgress}</p>
           <p className="text-[10px] text-muted-foreground">En curso</p>

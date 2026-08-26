@@ -30,7 +30,7 @@ export function UserMenu({ name, email, roles }: UserMenuProps) {
       <form action={signOutAction}>
         <button
           type="submit"
-          className="rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-1.5 text-[11px] font-medium text-gray-400 transition-all hover:border-white/10 hover:bg-white/[0.04] hover:text-gray-300"
+          className="rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-2 text-[11px] font-medium text-gray-400 transition-all hover:border-white/10 hover:bg-white/[0.04] hover:text-gray-300 sm:py-1.5"
         >
           Salir
         </button>

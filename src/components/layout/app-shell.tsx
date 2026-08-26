@@ -50,6 +50,10 @@ export function AppShell({
   const [commandOpen, setCommandOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [alertCount, setAlertCount] = useState(0);
+  // Drawer del sidebar en móvil (por debajo de lg). En desktop es irrelevante.
+  // No hace falta cerrarlo al navegar con un efecto: cada Link del sidebar
+  // llama onMobileClose, y el backdrop también.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Atajo global ⌘K / Ctrl+K para abrir la búsqueda
   useEffect(() => {
@@ -114,6 +118,8 @@ export function AppShell({
         pathname={pathname}
         permissions={permissions}
         onSearch={() => setCommandOpen(true)}
+        mobileOpen={sidebarOpen}
+        onMobileClose={() => setSidebarOpen(false)}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <AppHeader
@@ -124,8 +130,15 @@ export function AppShell({
           alertCount={alertCount}
           onSearch={() => setCommandOpen(true)}
           onNotifications={() => setNotifOpen(true)}
+          onMenu={() => setSidebarOpen(true)}
         />
-        <main className="flex-1 overflow-y-auto bg-background p-6">{children}</main>
+        {/*
+          Padding progresivo: 16px en móvil (aprovecha el ancho de 360px),
+          24px desde tablet. min-w-0 evita que tablas anchas desborden el flex.
+        */}
+        <main className="min-w-0 flex-1 overflow-y-auto bg-background p-4 sm:p-6">
+          {children}
+        </main>
       </div>
       <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
       <NotificationCenter open={notifOpen} onClose={() => setNotifOpen(false)} />

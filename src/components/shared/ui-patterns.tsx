@@ -42,10 +42,10 @@ export function StatCard({
   );
 }
 
-/** Fila de tarjetas KPI. */
+/** Fila de tarjetas KPI. 2 columnas ya en móvil para no apilar 4 tarjetas. */
 export function StatRow({ children }: { children: ReactNode }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
+    <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">{children}</div>
   );
 }
 
@@ -62,7 +62,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-card/50 py-14 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-card/50 px-4 py-10 text-center sm:py-14">
       {icon ? <div className="text-muted-foreground">{icon}</div> : null}
       <p className="text-sm font-medium">{title}</p>
       {description ? (
@@ -75,8 +75,9 @@ export function EmptyState({
 
 /**
  * Pestañas de filtro consistentes: chips dentro de una barra.
- * `filters` son los estados posibles; `activeValues` dice cuáles query params
- * están activos para marcar el chip activo.
+ *
+ * En móvil los chips se vuelven una tira con scroll horizontal en lugar de
+ * envolver en 4 líneas y empujar la tabla fuera de la pantalla.
  */
 export function FilterBar({
   children,
@@ -86,9 +87,11 @@ export function FilterBar({
   search?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
-      {children}
-      {search ? <div className="ml-auto">{search}</div> : null}
+    <div className="flex flex-col gap-2 rounded-lg border bg-card p-2 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="-mx-2 flex items-center gap-2 overflow-x-auto px-2 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+        {children}
+      </div>
+      {search ? <div className="sm:ml-auto">{search}</div> : null}
     </div>
   );
 }

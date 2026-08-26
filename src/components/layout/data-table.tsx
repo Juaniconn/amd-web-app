@@ -5,12 +5,27 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { PageSizeSelect } from "@/components/layout/page-size-select";
 import { hiddenQueryFields, pagerHref } from "@/lib/ui/pagination";
 
+/**
+ * Contenedor de tabla con scroll horizontal.
+ *
+ * En móvil las tablas del ERP tienen más columnas que ancho de pantalla.
+ * `overflow-x-auto` permite arrastrar de lado, y `[&_table]:min-w-[640px]`
+ * evita que el navegador comprima las columnas hasta hacerlas ilegibles:
+ * mejor scroll horizontal explícito que texto amontonado.
+ *
+ * `-mx-4 sm:mx-0` hace que la tarjeta llegue al borde en móvil, ganando
+ * los 32px de padding del main para mostrar más columnas.
+ */
 export function TableCard({ children }: { children: ReactNode }) {
-  return <div className="overflow-x-auto rounded-lg border bg-card">{children}</div>;
+  return (
+    <div className="-mx-4 overflow-x-auto rounded-none border-x-0 border-y bg-card sm:mx-0 sm:rounded-lg sm:border-x [&_table]:min-w-[640px]">
+      {children}
+    </div>
+  );
 }
 
 export function FilterBar({ children }: { children: ReactNode }) {
-  return <div className="rounded-lg border bg-card px-4 py-3">{children}</div>;
+  return <div className="rounded-lg border bg-card px-3 py-3 sm:px-4">{children}</div>;
 }
 
 export function EmptyTable({

@@ -10,9 +10,18 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
       data-slot="table-container"
       className="relative w-full overflow-x-auto"
     >
+      {/*
+        min-w-[640px] en móvil: las tablas del ERP tienen 5-8 columnas y sin
+        ancho mínimo el navegador las comprime hasta que el texto se parte
+        letra por letra. Con esto se arrastra de lado y todo queda legible.
+        Desde sm el ancho vuelve a ser 100% del contenedor.
+      */}
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn(
+          "w-full min-w-[640px] caption-bottom text-sm sm:min-w-0",
+          className,
+        )}
         {...props}
       />
     </div>
