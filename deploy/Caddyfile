@@ -1,0 +1,79 @@
+# Caddy — HTTPS automático para erp.amdmexico.com
+#
+# Caddy saca y renueva el certificado de Let's Encrypt solo, sin cron ni
+# certbot. Es la razón por la que se elige sobre Nginx en este despliegue.
+#
+# Requisitos previos:
+#   1. El DNS de erp.amdmexico.com debe apuntar a la IP pública del VPS
+#      (registro A). Sin eso Let's Encrypt no puede validar el dominio.
+#   2. Puertos 80 y 443 abiertos en la Security List de Oracle Y en iptables
+#      del propio Ubuntu (Oracle trae iptables cerrado por defecto —
+#      ver scripts/deploy/setup-vps.sh).
+#
+# Instalar en el VPS como /etc/caddy/Caddyfile y recargar:
+#   sudo caddy validate --config /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+
+erp.amdmexico.com {
+	# Proxy al Next.js standalone que corre en localhost:3000
+	reverse_proxy 127.0.0.1:3000 {
+		# Cabeceras para que Next.js/Better Auth sepan el host y esquema real.
+		# Sin X-Forwarded-Proto, Better Auth cree que es http y las cookies
+		# Secure se descartan → el login responde 200 pero no persiste sesión.
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote}
+		header_up X-Forwarded-Proto {scheme}
+
+		# El ERP genera PDFs y sube planos: subimos los tiempos de espera.
+		transport http {
+			read_timeout 300s
+			write_timeout 300s
+		}
+	}
+
+	# Límite de subida: planos DXF y PDFs de ingeniería.
+	request_body {
+		max_size 50MB
+	}
+
+	# Compresión (las tablas del ERP son HTML grande).
+	encode zstd gzip
+
+	# Cabeceras de seguridad. Las de next.config.ts (X-Frame-Options,
+	# nosniff, Referrer-Policy, Permissions-Policy) siguen aplicando;
+	# aquí se añade HSTS, que solo tiene sentido con TLS real.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Oculta que el backend es Next.js
+		-Server
+		-X-Powered-By
+	}
+
+	# Los estáticos de Next llevan hash en el nombre: caché agresiva.
+	@static {
+		path /_next/static/* /favicon.ico
+	}
+	header @static Cache-Control "public, max-age=31536000, immutable"
+
+	log {
+		output file /var/log/caddy/erp-access.log {
+			roll_size 50MiB
+			roll_keep 5
+		}
+		format json
+		# No registrar el cuerpo de las peticiones de login
+		level INFO
+	}
+}
+
+# Acceso directo por IP mientras el DNS propaga (HTTP, sin TLS).
+# COMENTA este bloque en cuanto el dominio funcione: sin HTTPS las cookies
+# de sesión no llevan Secure y el login por IP no persiste.
+#
+# :80 {
+# 	reverse_proxy 127.0.0.1:3000 {
+# 		header_up Host {host}
+# 		header_up X-Forwarded-Proto http
+# 	}
+# }

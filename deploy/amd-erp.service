@@ -1,0 +1,79 @@
+# Servicio systemd para el ERP de AMD en el VPS de Oracle.
+#
+# Instalar:
+#   sudo cp deploy/amd-erp.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now amd-erp
+#
+# Ver estado y logs:
+#   sudo systemctl status amd-erp
+#   sudo journalctl -u amd-erp -f
+
+[Unit]
+Description=AMD Operations ERP (Next.js standalone)
+Documentation=https://github.com/Juaniconn/amd-web-app
+# Arranca después de la red y de Docker (PostgreSQL corre en Docker)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/amd-erp/current
+
+# Variables de entorno. El archivo lo crea scripts/deploy/setup-vps.sh a
+# partir de .env.production.example y debe tener permisos 600.
+EnvironmentFile=/opt/amd-erp/shared/.env.production
+
+# El server.js de Next standalone respeta PORT y HOSTNAME.
+# 127.0.0.1 a propósito: solo Caddy debe alcanzarlo, nunca internet directo.
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+
+ExecStart=/usr/bin/node server.js
+
+# Reinicio automático ante cualquier caída.
+Restart=always
+RestartSec=5
+# Si falla 5 veces en 60s, deja de intentar (evita loop infinito)
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Espera a que la app responda antes de considerarla arriba
+TimeoutStartSec=90
+TimeoutStopSec=30
+
+# --- Endurecimiento (Fase 12.5) ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+# Rutas donde SÍ puede escribir: uploads y caché de Next
+ReadWritePaths=/opt/amd-erp/shared/uploads
+ReadWritePaths=/opt/amd-erp/current/.next/cache
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+# La app necesita red (Postgres local + API de Cursor)
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Límites de recursos. La A1.Flex tiene 24 GB: 4 GB de techo sobra y protege
+# al host de una fuga de memoria.
+MemoryMax=4G
+MemoryHigh=3G
+# El ERP hace muchas conexiones concurrentes en el dashboard de TV
+LimitNOFILE=65535
+
+# Logs a journald (rotación la maneja systemd)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=amd-erp
+
+[Install]
+WantedBy=multi-user.target

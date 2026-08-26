@@ -52,3 +52,6 @@ next-env.d.ts
 
 # Cloudflare Workers / OpenNext (estado local, no versionar)
 .wrangler
+
+# Entorno de produccion (secretos del VPS) - NUNCA versionar
+.env.production

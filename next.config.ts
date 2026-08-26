@@ -1,6 +1,21 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /*
+    Empaquetado independiente para el VPS de Oracle Cloud.
+
+    `standalone` hace que `next build` genere `.next/standalone/` con un
+    `server.js` mínimo y SOLO los node_modules que el runtime necesita
+    (~150 MB en vez de los 1.1 GB de node_modules completo). Eso permite
+    desplegar sin correr `npm install` en el servidor.
+
+    Tras el build hay que copiar a mano `public/` y `.next/static/`
+    (el server.js no los incluye) — el script scripts/deploy/build.sh lo hace.
+
+    Arranque: PORT=3000 HOSTNAME=0.0.0.0 node server.js
+  */
+  output: "standalone",
+
   serverExternalPackages: ["pdf-parse", "dxf-parser", "@cursor/sdk", "jszip"],
   allowedDevOrigins: [
     "192.168.*.*",
