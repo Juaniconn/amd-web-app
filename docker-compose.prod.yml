@@ -34,7 +34,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
-    # Con 24 GB de RAM en la A1.Flex, dejamos 2 GB para Postgres.
+    # Con 12 GB de RAM en la A1.Flex, dejamos 2 GB para Postgres.
     # Ajusta si la planta crece mucho.
     command:
       - "postgres"

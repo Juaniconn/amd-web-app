@@ -37,7 +37,7 @@ RAM_GB=$(free -g | awk '/^Mem:/{print $2}')
 if (( RAM_GB < 3 )); then
   warn "Solo ${RAM_GB}GB de RAM. El build de Next.js necesita ~2GB."
   warn "Si estás en la instancia Micro (1GB), NO va a funcionar."
-  warn "Usa VM.Standard.A1.Flex con 4 OCPU / 24 GB."
+  warn "Usa VM.Standard.A1.Flex con 2 OCPU / 12 GB."
 fi
 
 # ---------------------------------------------------------------------------
