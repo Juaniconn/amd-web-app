@@ -9,9 +9,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/layout/page-header";
+import { StatCard, StatRow } from "@/components/shared/ui-patterns";
+import { EmptyState } from "@/components/shared/ui-patterns";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import { requirePermission } from "@/lib/auth/session";
 import { listUsers } from "@/server/services/dashboard";
+import { Users } from "lucide-react";
 
 export default async function UsersPage({
   searchParams,
@@ -45,13 +49,20 @@ export default async function UsersPage({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Usuarios</h1>
-          <p className="text-xs text-muted-foreground">{filtered.length} usuarios</p>
-        </div>
-        {access.permissions.includes(PERMISSION_IDS.usersWrite) && <CreateUserDialog />}
-      </div>
+      <PageHeader
+        title="Usuarios"
+        description={`${filtered.length} usuarios en el sistema`}
+        actions={
+          access.permissions.includes(PERMISSION_IDS.usersWrite) ? (
+            <CreateUserDialog />
+          ) : undefined
+        }
+      />
+
+      <StatRow>
+        <StatCard label="Total" value={filtered.length} icon={<Users className="h-4 w-4" />} />
+        <StatCard label="Página" value={`${page} / ${pageCount}`} />
+      </StatRow>
 
       <div className="rounded-lg border bg-card">
         <Table>
@@ -68,7 +79,11 @@ export default async function UsersPage({
             {paginated.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="py-12 text-center">
-                  <p className="text-sm text-muted-foreground">No se encontraron usuarios</p>
+                  <EmptyState
+                    icon={<Users className="h-8 w-8" />}
+                    title="Sin resultados"
+                    description="No se encontraron usuarios con ese criterio."
+                  />
                 </TableCell>
               </TableRow>
             ) : (

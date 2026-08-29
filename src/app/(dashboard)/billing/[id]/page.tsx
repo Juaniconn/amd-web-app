@@ -11,6 +11,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/layout/page-header";
+import { StatCard, StatRow } from "@/components/shared/ui-patterns";
 import { InvoiceActions } from "@/features/billing/invoice-actions";
 import { requirePermission } from "@/lib/auth/session";
 import { INVOICE_STATUS_LABELS, type InvoiceStatus } from "@/lib/billing/catalog";
@@ -42,31 +44,35 @@ export default async function InvoiceDetailPage({
   const canWrite = access.permissions.includes(PERMISSION_IDS.billingWrite);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Solicitud de facturación
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{invoice.number}</h2>
-            <Badge variant="secondary">
-              {INVOICE_STATUS_LABELS[invoice.status as InvoiceStatus]}
-            </Badge>
+    <div className="space-y-4">
+      <PageHeader
+        title={invoice.number}
+        description={`${INVOICE_STATUS_LABELS[invoice.status as InvoiceStatus]}`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/billing/${invoice.id}/vista`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              Vista
+            </Link>
+            <Link href="/billing" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              Volver
+            </Link>
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/billing/${invoice.id}/vista`}
-            className={buttonVariants({ variant: "outline" })}
-          >
-            Vista
-          </Link>
-          <Link href="/billing" className={buttonVariants({ variant: "outline" })}>
-            Volver
-          </Link>
-        </div>
-      </div>
+        }
+      />
+
+      <StatRow>
+        <StatCard
+          label="Estado"
+          value={INVOICE_STATUS_LABELS[invoice.status as InvoiceStatus]}
+          tone={invoice.status === "pagada" ? "green" : invoice.status === "cancelada" ? "red" : "amber"}
+        />
+        <StatCard label="Total" value={displayMoney(invoice.total, invoice.currency)} />
+        <StatCard label="OT" value={workOrderNumber(invoice.orderNumber)} />
+      </StatRow>
+
       <Card>
         <CardHeader>
           <CardTitle>Encabezado</CardTitle>

@@ -22,10 +22,12 @@ type TvOrder = {
   isDelayed: boolean;
 };
 
-type TvDashboard = {
+export type TvDashboard = {
   generatedAt: string;
   orders: TvOrder[];
   machines: TvMachineStatus[];
+  operators: TvOperator[];
+  materialAlerts: TvMaterialAlert[];
   metrics: {
     activeParts: number;
     delayedParts: number;
@@ -33,7 +35,24 @@ type TvDashboard = {
     laborHoursToday: number;
     partsInProgress: number;
     partsInQuality: number;
+    activeOperators: number;
   };
+};
+
+type TvOperator = {
+  id: string;
+  name: string;
+  activeOperations: number;
+  currentPartNumber: string | null;
+};
+
+type TvMaterialAlert = {
+  id: string;
+  materialName: string;
+  code: string;
+  currentStock: number;
+  minStock: number;
+  tone: "urgent" | "warning";
 };
 
 const MACHINE_STATUS_LABELS: Record<string, string> = {
@@ -159,14 +178,81 @@ export function TvDashboardView({ initialData }: { initialData: TvDashboard }) {
           <p className="text-sm text-muted-foreground">Atrasados</p>
         </div>
         <div className="rounded-lg border bg-card p-4 text-center">
+          <p className="text-4xl font-bold">{data.metrics.activeOperators}</p>
+          <p className="text-sm text-muted-foreground">Operadores activos</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4 text-center">
           <p className="text-4xl font-bold">{Math.round(data.metrics.machineHoursToday / 60)}h</p>
           <p className="text-sm text-muted-foreground">Horas máquina hoy</p>
         </div>
-        <div className="rounded-lg border bg-card p-4 text-center">
-          <p className="text-4xl font-bold">{Math.round(data.metrics.laborHoursToday / 60)}h</p>
-          <p className="text-sm text-muted-foreground">Horas hombre hoy</p>
-        </div>
       </div>
+
+      {/* Material Alerts section */}
+      {data.materialAlerts.length > 0 && (
+        <div>
+          <h2 className="text-xl font-semibold mb-3">Alertas de Material Faltante</h2>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {data.materialAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className={`rounded-lg border bg-card p-4 ${
+                  alert.tone === "urgent" ? "border-red-500" : "border-amber-500"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-semibold text-sm truncate">{alert.materialName}</h4>
+                    <p className="text-xs text-muted-foreground font-mono">{alert.code}</p>
+                  </div>
+                  <span className={`h-3 w-3 rounded-full shrink-0 ${
+                    alert.tone === "urgent" ? "bg-red-500" : "bg-amber-500"
+                  }`} />
+                </div>
+                <div className="mt-2 text-xs">
+                  <span className={alert.currentStock === 0 ? "text-red-500 font-bold" : "text-amber-500 font-bold"}>
+                    Stock: {alert.currentStock}
+                  </span>
+                  <span className="text-muted-foreground"> / Min: {alert.minStock}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Operators section */}
+      {data.operators.length > 0 && (
+        <div>
+          <h2 className="text-xl font-semibold mb-3">Operadores en Producción</h2>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {data.operators.map((op) => (
+              <div
+                key={op.id}
+                className={`rounded-lg border bg-card p-4 ${
+                  op.activeOperations > 0 ? "border-emerald-500" : ""
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`h-3 w-3 rounded-full ${
+                    op.activeOperations > 0 ? "bg-emerald-500" : "bg-gray-400"
+                  }`} />
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-semibold text-sm truncate">{op.name}</h4>
+                    <p className="text-xs text-muted-foreground">
+                      {op.activeOperations} operación(es) activa(s)
+                    </p>
+                    {op.currentPartNumber && (
+                      <p className="text-xs font-mono text-blue-500 truncate">
+                        {op.currentPartNumber}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Machines section */}
       <div>

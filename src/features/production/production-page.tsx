@@ -203,6 +203,12 @@ export function ProductionPage({
                       icon={<ClipboardList className="h-8 w-8" />}
                       title="Aún no hay Órdenes de Trabajo"
                       description="Las OTs se crean desde cotizaciones convertidas."
+                      action={
+                        <Link href="/quotes" className={buttonVariants({ variant: "default", size: "sm" })}>
+                          <Plus className="mr-1 h-3.5 w-3.5" />
+                          Crear desde cotización
+                        </Link>
+                      }
                     />
                   </TableCell>
                 </TableRow>

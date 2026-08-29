@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/page-header";
+import { StatCard, StatRow } from "@/components/shared/ui-patterns";
 import { DeliveryStatusActions } from "@/features/deliveries/delivery-status-actions";
 import { requirePermission } from "@/lib/auth/session";
 import {
@@ -49,30 +51,34 @@ export default async function DeliveryDetailPage({
   const canConfirm = access.permissions.includes(PERMISSION_IDS.deliveriesConfirm);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Entrega
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{delivery.number}</h2>
-            <Badge variant={status === "incidencia" ? "outline" : "secondary"}>
-              {DELIVERY_STATUS_LABELS[status]}
-            </Badge>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/deliveries" className={buttonVariants({ variant: "outline" })}>
-            Volver
-          </Link>
-        {canWrite ? (
-            <Link href={`/deliveries/${delivery.id}/edit`} className={buttonVariants()}>
-              Programar fecha
+    <div className="space-y-4">
+      <PageHeader
+        title={delivery.number}
+        description={`${DELIVERY_STATUS_LABELS[status]}`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href="/deliveries" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              Volver
             </Link>
-          ) : null}
-        </div>
-      </div>
+            {canWrite ? (
+              <Link href={`/deliveries/${delivery.id}/edit`} className={buttonVariants({ size: "sm" })}>
+                Programar fecha
+              </Link>
+            ) : null}
+          </div>
+        }
+      />
+
+      <StatRow>
+        <StatCard
+          label="Estado"
+          value={DELIVERY_STATUS_LABELS[status]}
+          tone={status === "entregado" ? "green" : status === "incidencia" ? "red" : "amber"}
+        />
+        <StatCard label="OT" value={workOrderNumber(delivery.orderNumber)} />
+        <StatCard label="Partes" value={delivery.parts?.length ?? 0} />
+      </StatRow>
+
       <Card>
         <CardHeader>
           <CardTitle>Datos de envío</CardTitle>

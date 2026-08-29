@@ -20,6 +20,7 @@ import {
   Building2,
   Calculator,
   Layers,
+  BarChart3,
   X,
 } from "lucide-react";
 import { PERMISSION_IDS, type PermissionId } from "@/lib/permissions/catalog";
@@ -42,6 +43,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Principal",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+      { href: "/tv", label: "Dashboard TV", icon: <BarChart3 className="h-4 w-4" />, permission: PERMISSION_IDS.productionView },
       { href: "/my-production", label: "Mis Procesos", icon: <Hammer className="h-4 w-4" />, permission: PERMISSION_IDS.productionMyWork },
     ],
   },
@@ -69,6 +71,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/quality", label: "Calidad", icon: <CheckCircle className="h-4 w-4" />, permission: PERMISSION_IDS.qualityRead },
       { href: "/deliveries", label: "Entregas", icon: <Truck className="h-4 w-4" />, permission: PERMISSION_IDS.deliveriesRead },
+      { href: "/skydropx", label: "Skydropx", icon: <Truck className="h-4 w-4" />, permission: PERMISSION_IDS.deliveriesRead },
       { href: "/billing", label: "Facturación", icon: <CreditCard className="h-4 w-4" />, permission: PERMISSION_IDS.billingRead },
     ],
   },

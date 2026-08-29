@@ -1,18 +1,22 @@
 import "server-only";
 
-import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   customers,
+  inventoryBalances,
   laborHours,
   machineHours,
   machines,
+  materials,
   orders,
+  productionOperations,
   productionOrders,
+  userRoles,
   users,
   workCenters,
 } from "@/db/schema";
-import { ACTIVE_PRODUCTION_STATUSES } from "@/lib/production/status";
+import { ACTIVE_PRODUCTION_STATUSES, OPERATION_ACTIVE_STATUSES } from "@/lib/production/status";
 
 export type TvMachineStatus = {
   id: string;
@@ -38,6 +42,8 @@ export type TvDashboard = {
   generatedAt: string;
   orders: TvOrder[];
   machines: TvMachineStatus[];
+  operators: TvOperator[];
+  materialAlerts: TvMaterialAlert[];
   metrics: {
     activeParts: number;
     delayedParts: number;
@@ -45,7 +51,24 @@ export type TvDashboard = {
     laborHoursToday: number;
     partsInProgress: number;
     partsInQuality: number;
+    activeOperators: number;
   };
+};
+
+export type TvOperator = {
+  id: string;
+  name: string;
+  activeOperations: number;
+  currentPartNumber: string | null;
+};
+
+export type TvMaterialAlert = {
+  id: string;
+  materialName: string;
+  code: string;
+  currentStock: number;
+  minStock: number;
+  tone: "urgent" | "warning";
 };
 
 export async function getTvDashboard(): Promise<TvDashboard> {
@@ -184,10 +207,93 @@ export async function getTvDashboard(): Promise<TvDashboard> {
     }),
   );
 
+  const operatorRows = await db
+    .select({
+      id: users.id,
+      name: users.name,
+    })
+    .from(users)
+    .innerJoin(userRoles, eq(users.id, userRoles.userId))
+    .where(eq(userRoles.roleId, "produccion"))
+    .orderBy(users.name);
+
+  const operatorsWithLoad: TvOperator[] = await Promise.all(
+    operatorRows.map(async (op) => {
+      const activeOps = await db
+        .select({ id: productionOperations.id })
+        .from(productionOperations)
+        .where(
+          and(
+            eq(productionOperations.operatorUserId, op.id),
+            inArray(productionOperations.status, OPERATION_ACTIVE_STATUSES),
+          ),
+        );
+      const currentJob = await db
+        .select({ number: productionOrders.number })
+        .from(productionOrders)
+        .innerJoin(
+          productionOperations,
+          eq(productionOrders.id, productionOperations.productionOrderId),
+        )
+        .where(
+          and(
+            eq(productionOperations.operatorUserId, op.id),
+            inArray(productionOperations.status, OPERATION_ACTIVE_STATUSES),
+          ),
+        )
+        .limit(1);
+      return {
+        id: op.id,
+        name: op.name,
+        activeOperations: activeOps.length,
+        currentPartNumber: currentJob[0]?.number ?? null,
+      };
+    }),
+  );
+
+  const activeOperators = operatorsWithLoad.filter((op) => op.activeOperations > 0).length;
+
+  const lowStockMaterials = await db
+    .select({
+      id: materials.id,
+      materialName: materials.description,
+      code: materials.code,
+      minStock: materials.minStock,
+    })
+    .from(materials)
+    .where(
+      and(
+        eq(materials.active, true),
+        sql`${materials.minStock} is not null`,
+      ),
+    );
+
+  const materialAlerts: TvMaterialAlert[] = [];
+  for (const mat of lowStockMaterials) {
+    const [balance] = await db
+      .select({ onHand: sql<number>`coalesce(sum(${inventoryBalances.onHand}), 0)` })
+      .from(inventoryBalances)
+      .where(eq(inventoryBalances.materialId, mat.id));
+    const onHand = Number(balance?.onHand ?? 0);
+    const minStock = Number(mat.minStock ?? 0);
+    if (onHand < minStock) {
+      materialAlerts.push({
+        id: mat.id,
+        materialName: mat.materialName,
+        code: mat.code ?? "",
+        currentStock: onHand,
+        minStock,
+        tone: onHand === 0 ? "urgent" : "warning",
+      });
+    }
+  }
+
   return {
     generatedAt: now.toISOString(),
     orders: orderProgress,
     machines: machinesWithParts,
+    operators: operatorsWithLoad,
+    materialAlerts,
     metrics: {
       activeParts,
       delayedParts,
@@ -195,6 +301,7 @@ export async function getTvDashboard(): Promise<TvDashboard> {
       laborHoursToday,
       partsInProgress,
       partsInQuality,
+      activeOperators,
     },
   };
 }

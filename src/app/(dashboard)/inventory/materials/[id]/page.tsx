@@ -4,6 +4,8 @@ import { StockMovementForms } from "@/features/inventory/stock-movement-forms";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/page-header";
+import { StatCard, StatRow } from "@/components/shared/ui-patterns";
 import { requirePermission } from "@/lib/auth/session";
 import {
   displayQty,
@@ -11,6 +13,7 @@ import {
 } from "@/lib/inventory/catalog";
 import { PERMISSION_IDS } from "@/lib/permissions/catalog";
 import { getMaterialById, listMovements } from "@/server/services/inventory";
+import { Package, AlertTriangle } from "lucide-react";
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -37,121 +40,56 @@ export default async function MaterialDetailPage({
   const canAdjust = access.permissions.includes(PERMISSION_IDS.inventoryAdjust);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Material
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{material.code}</h2>
-            <Badge variant="secondary">
-              {MATERIAL_CATEGORY_LABELS[material.category]}
-            </Badge>
-            {material.isCritical ? <Badge>Crítico</Badge> : null}
-            {material.isDemo ? <Badge variant="outline">DEMO</Badge> : null}
-            {material.usedInCalculator ? <Badge variant="outline">Calculadora</Badge> : null}
-            {!material.active ? <Badge variant="outline">Inactivo</Badge> : null}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">{material.description}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/inventory" className={buttonVariants({ variant: "outline" })}>
-            Volver
-          </Link>
-          {canWrite ? (
-            <Link
-              href={`/inventory/materials/${material.id}/edit`}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Editar
+    <div className="space-y-4">
+      <PageHeader
+        title={material.code}
+        description={material.description || MATERIAL_CATEGORY_LABELS[material.category]}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href="/inventory" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              Volver
             </Link>
-          ) : null}
-        </div>
-      </div>
+            {canAdjust ? (
+              <Link
+                href={`/inventory/materials/${material.id}/edit`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Editar
+              </Link>
+            ) : null}
+          </div>
+        }
+      />
+
+      <StatRow>
+        <StatCard label="Categoría" value={MATERIAL_CATEGORY_LABELS[material.category]} icon={<Package className="h-4 w-4" />} />
+        <StatCard label="Stock" value={`${material.onHand} ${material.unitCode ?? ""}`} tone={Number(material.onHand) <= Number(material.minStock ?? 0) ? "amber" : "green"} />
+        <StatCard label="Movimientos" value={movements.total} />
+        {material.isCritical ? <StatCard label="Crítico" value="Sí" tone="red" icon={<AlertTriangle className="h-4 w-4" />} /> : null}
+      </StatRow>
 
       <Card>
         <CardHeader>
-          <CardTitle>Existencias</CardTitle>
+          <CardTitle>Información del material</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Sucursal" value={material.branchName} />
-          <Field label="Almacén" value={material.warehouseName} />
-          <Field
-            label="Existencia"
-            value={`${displayQty(material.onHand)} ${material.unitCode}`}
-          />
-          <Field
-            label="Reservado"
-            value={`${displayQty(material.reserved)} ${material.unitCode}`}
-          />
-          <Field
-            label="Disponible"
-            value={`${displayQty(material.available)} ${material.unitCode}`}
-          />
-          <Field
-            label="Stock mínimo"
-            value={material.minStock ? displayQty(material.minStock) : "—"}
-          />
-          <Field label="Observaciones" value={material.notes} />
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <Field label="Código" value={material.code} />
+          <Field label="Descripción" value={material.description} />
+          <Field label="Unidad" value={material.unitCode} />
+          <Field label="Stock" value={`${material.onHand} ${material.unitCode ?? ""}`} />
+          <Field label="Punto de reorden" value={material.minStock ? `${material.minStock} ${material.unitCode ?? ""}` : null} />
+          <Field label="Costo por kg" value={material.costPerKg ? `$${material.costPerKg}` : null} />
+          <Field label="Categoría" value={MATERIAL_CATEGORY_LABELS[material.category]} />
+          <Field label="Estado" value={material.active ? "Activo" : "Inactivo"} />
         </CardContent>
       </Card>
-
-      {material.grade || material.supplierId ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Proveedor</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Proveedor" value={material.supplierName} />
-            <Field label="Grado" value={material.grade} />
-            <Field label="Espesor in" value={material.thicknessIn} />
-            <Field label="MXN / kg" value={material.costPerKg} />
-            <Field
-              label="Hoja"
-              value={
-                material.sheetWidthIn && material.sheetLengthIn
-                  ? `${material.sheetWidthIn} × ${material.sheetLengthIn} in`
-                  : null
-              }
-            />
-            <Field label="Densidad g/cm³" value={material.densityGCm3} />
-          </CardContent>
-        </Card>
-      ) : null}
 
       <Card>
         <CardHeader>
           <CardTitle>Movimientos</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <StockMovementForms
-            materialId={material.id}
-            canWrite={canWrite}
-            canAdjust={canAdjust}
-          />
-          {movements.rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sin movimientos.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {movements.rows.map((row) => (
-                <li key={row.id} className="rounded-lg border px-3 py-2">
-                  {row.createdAt.toLocaleString("es-MX")} · {row.typeLabel} ·{" "}
-                  {displayQty(row.quantity)} {row.unitCode}
-                  {row.productionOrderNumber ? ` · ${row.productionOrderNumber}` : ""}
-                  {row.reason ? ` · ${row.reason}` : ""}
-                </li>
-              ))}
-            </ul>
-          )}
-          {movements.total > movements.rows.length ? (
-            <Link
-              href={`/inventory/movements?materialId=${material.id}`}
-              className="text-sm hover:underline"
-            >
-              Ver todos
-            </Link>
-          ) : null}
+        <CardContent>
+          <StockMovementForms materialId={material.id} canWrite={canWrite} canAdjust={canAdjust} />
         </CardContent>
       </Card>
     </div>

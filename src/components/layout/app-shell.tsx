@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { NotificationCenter } from "@/components/layout/notification-center";
+import { AIAssistant } from "@/components/ai/ai-assistant";
 import type { PermissionId } from "@/lib/permissions/catalog";
 
 type AppShellProps = {
@@ -142,6 +143,7 @@ export function AppShell({
       </div>
       <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
       <NotificationCenter open={notifOpen} onClose={() => setNotifOpen(false)} />
+      <AIAssistant />
     </div>
   );
 }
