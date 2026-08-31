@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 const TONES = {
   neutral: "text-foreground",
@@ -25,9 +26,9 @@ export function StatCard({
   icon?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm transition-all hover:shadow-md">
       {icon ? (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
           {icon}
         </div>
       ) : null}
@@ -35,17 +36,17 @@ export function StatCard({
         <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
-        <p className={`text-xl font-semibold leading-tight ${TONES[tone]}`}>{value}</p>
+        <p className={`text-xl font-bold leading-tight ${TONES[tone]}`}>{value}</p>
         {hint ? <p className="truncate text-[11px] text-muted-foreground">{hint}</p> : null}
       </div>
     </div>
   );
 }
 
-/** Fila de tarjetas KPI. 2 columnas ya en móvil para no apilar 4 tarjetas. */
+/** Fila de tarjetas KPI. */
 export function StatRow({ children }: { children: ReactNode }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">{children}</div>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{children}</div>
   );
 }
 
@@ -62,7 +63,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-card/50 px-4 py-10 text-center sm:py-14">
+    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/50 px-4 py-12 text-center">
       {icon ? <div className="text-muted-foreground">{icon}</div> : null}
       <p className="text-sm font-medium">{title}</p>
       {description ? (
@@ -73,12 +74,7 @@ export function EmptyState({
   );
 }
 
-/**
- * Pestañas de filtro consistentes: chips dentro de una barra.
- *
- * En móvil los chips se vuelven una tira con scroll horizontal en lugar de
- * envolver en 4 líneas y empujar la tabla fuera de la pantalla.
- */
+/** Pestañas de filtro consistentes. */
 export function FilterBar({
   children,
   search,
@@ -87,11 +83,73 @@ export function FilterBar({
   search?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-card p-2 sm:flex-row sm:flex-wrap sm:items-center">
-      <div className="-mx-2 flex items-center gap-2 overflow-x-auto px-2 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-2 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="flex items-center gap-2 overflow-x-auto px-2 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
         {children}
       </div>
       {search ? <div className="sm:ml-auto">{search}</div> : null}
     </div>
+  );
+}
+
+/** Premium card wrapper */
+export function PremiumCard({
+  children,
+  className,
+  index = 0,
+}: {
+  children: ReactNode;
+  className?: string;
+  index?: number;
+}) {
+  return (
+    <div
+      className={cn("card-premium", className)}
+      style={{ animationDelay: `${index * 50}ms` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Premium table components */
+export function PremiumTable({ children }: { children: ReactNode }) {
+  return <div className="overflow-hidden rounded-xl border border-border">{children}</div>;
+}
+
+export function PremiumTableHeader({ children }: { children: ReactNode }) {
+  return <div className="grid bg-muted/50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{children}</div>;
+}
+
+export function PremiumTableTh({ children, align = "left" }: { children: ReactNode; align?: "left" | "right" }) {
+  return <div className={cn("text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", align === "right" && "text-right")}>{children}</div>;
+}
+
+export function PremiumTableBody({ children }: { children: ReactNode }) {
+  return <div className="divide-y divide-border">{children}</div>;
+}
+
+export function PremiumTableRow({ children, onClick, index = 0 }: { children: ReactNode; onClick?: () => void; index?: number }) {
+  return (
+    <div
+      onClick={onClick}
+      className={cn(
+        "grid items-center px-4 py-3 transition-colors hover:bg-muted/30",
+        onClick && "cursor-pointer"
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function PremiumTableCell({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("text-sm", className)}>{children}</div>;
+}
+
+/** Skeleton loader */
+export function Skeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn("animate-pulse rounded-xl bg-muted", className)} />
   );
 }

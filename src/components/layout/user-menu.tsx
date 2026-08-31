@@ -24,13 +24,13 @@ export function UserMenu({ name, email, roles }: UserMenuProps) {
           {roles.join(" · ") || email}
         </p>
       </div>
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-[10px] font-bold text-white shadow-sm">
+      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary text-[10px] font-bold text-white shadow-md shadow-brand/20">
         {initials}
       </div>
       <form action={signOutAction}>
         <button
           type="submit"
-          className="rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-2 text-[11px] font-medium text-gray-400 transition-all hover:border-white/10 hover:bg-white/[0.04] hover:text-gray-300 sm:py-1.5"
+          className="rounded-xl border border-sidebar-border bg-white/[0.03] px-2.5 py-2 text-[11px] font-medium text-gray-400 transition-all hover:border-white/10 hover:bg-white/[0.06] hover:text-gray-300 sm:py-1.5"
         >
           Salir
         </button>

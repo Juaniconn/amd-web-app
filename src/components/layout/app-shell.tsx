@@ -34,6 +34,7 @@ const TITLES: Record<string, string> = {
   "/quality": "Calidad",
   "/deliveries": "Entregas",
   "/billing": "Facturación",
+  "/ebay": "eBay Listings",
   "/settings/users": "Usuarios",
   "/settings/roles": "Roles",
   "/settings/branches": "Sucursales",
@@ -51,12 +52,8 @@ export function AppShell({
   const [commandOpen, setCommandOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [alertCount, setAlertCount] = useState(0);
-  // Drawer del sidebar en móvil (por debajo de lg). En desktop es irrelevante.
-  // No hace falta cerrarlo al navegar con un efecto: cada Link del sidebar
-  // llama onMobileClose, y el backdrop también.
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Atajo global ⌘K / Ctrl+K para abrir la búsqueda
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -68,7 +65,6 @@ export function AppShell({
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Conteo de alertas: al montar y cada 60s
   useEffect(() => {
     let active = true;
     const load = () => {
@@ -109,9 +105,11 @@ export function AppShell({
                       ? "Entrega"
                       : pathname.startsWith("/billing")
                         ? "Factura"
-                        : pathname.startsWith("/settings")
-                          ? "Configuración"
-                          : "AMD Operations");
+                        : pathname.startsWith("/ebay")
+                          ? "eBay"
+                          : pathname.startsWith("/settings")
+                            ? "Configuración"
+                            : "AMD Operations");
 
   return (
     <div className="flex h-screen bg-background">
@@ -133,11 +131,7 @@ export function AppShell({
           onNotifications={() => setNotifOpen(true)}
           onMenu={() => setSidebarOpen(true)}
         />
-        {/*
-          Padding progresivo: 16px en móvil (aprovecha el ancho de 360px),
-          24px desde tablet. min-w-0 evita que tablas anchas desborden el flex.
-        */}
-        <main className="min-w-0 flex-1 overflow-y-auto bg-background p-4 sm:p-6">
+        <main className="min-w-0 flex-1 overflow-y-auto bg-background p-4 sm:p-6 lg:p-8">
           {children}
         </main>
       </div>

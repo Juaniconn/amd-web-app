@@ -40,18 +40,27 @@ const buttonVariants = cva(
   }
 )
 
+type ButtonProps = ButtonPrimitive.Props & VariantProps<typeof buttonVariants> & {
+  icon?: React.ReactNode;
+};
+
 function Button({
   className,
   variant = "default",
   size = "default",
+  icon,
+  children,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonProps) {
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    />
+    >
+      {icon}
+      {children}
+    </ButtonPrimitive>
   )
 }
 
