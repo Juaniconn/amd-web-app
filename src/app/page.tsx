@@ -11,8 +11,6 @@ export default async function HomePage() {
 
   if (!session) redirect("/login");
 
-  // Cada rol aterriza donde realmente puede trabajar:
-  // administración -> /dashboard, operador de piso -> /my-production
   const access = await getUserAccess(session.user.id);
   redirect(landingPathFor(access.permissions));
 }
