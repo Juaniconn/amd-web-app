@@ -209,7 +209,7 @@
   border-bottom: none;
 }
 .premium-table tr:hover td {
-  background: var(--muted/50);
+  background: oklch(from var(--muted) l c h / 50%);
 }
 
 /* Scrollbar */
