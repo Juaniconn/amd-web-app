@@ -1,17 +1,31 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Save, Package, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Package, Loader2, Tag, Globe } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, Input, Textarea } from "@/components/ui";
 
+type Product = {
+  id: string;
+  brand: string;
+  partNumber: string;
+  quantity: number;
+  description: string;
+  origin: string;
+  image: string;
+  ebayCategory?: string;
+  ebayCategoryId?: number;
+  estimatedPriceUSD?: number;
+  keywords?: string;
+};
+
 export default function EditProductPage() {
   const params = useParams();
   const router = useRouter();
   const [id, setId] = useState<string>("");
-  const [product, setProduct] = useState<any>(null);
+  const [product, setProduct] = useState<Product | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -29,21 +43,14 @@ export default function EditProductPage() {
 
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/ebay/products/${id}`)
+    fetch("/inventory-ebay.json")
       .then((r) => r.json())
       .then((data) => {
-        if (data.product) {
-          setProduct({
-            sku: data.product.sku || "",
-            title: data.product.producto || "",
-            description: `${data.product.producto} - ${data.product.fabricante} ${data.product.modelo}`,
-            manufacturer: data.product.fabricante || "",
-            model: data.product.modelo || "",
-            quantity: data.product.cantidad || 1,
-            price: data.product.precio || 0,
-            category: data.product.categoria || "",
-            condition: "new",
-          });
+        const found = data.find((p: Product) => p.id === id);
+        if (found) {
+          setProduct(found);
+        } else {
+          showToast("Producto no encontrado", "error");
         }
       })
       .catch(() => showToast("Error al cargar producto", "error"));
@@ -53,17 +60,10 @@ export default function EditProductPage() {
     if (!product) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/ebay/products/${id}`, {
+      const res = await fetch("/api/ebay/inventory/update", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          producto: product.title,
-          fabricante: product.manufacturer,
-          modelo: product.model,
-          cantidad: product.quantity,
-          precio: product.price,
-          categoria: product.category,
-        }),
+        body: JSON.stringify({ id, ...product }),
       });
       const data = await res.json();
       if (data.success) {
@@ -114,7 +114,7 @@ export default function EditProductPage() {
         </Link>
         <div className="flex-1">
           <h1 className="text-xl font-bold tracking-tight">Editar Producto</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{product.sku}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{product.id}</p>
         </div>
       </motion.div>
 
@@ -123,24 +123,14 @@ export default function EditProductPage() {
         <div className="card-premium p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
-              label="Título"
-              value={product.title}
-              onChange={(e) => setProduct({ ...product, title: e.target.value })}
+              label="Marca"
+              value={product.brand}
+              onChange={(e) => setProduct({ ...product, brand: e.target.value })}
             />
             <Input
-              label="SKU"
-              value={product.sku}
-              onChange={(e) => setProduct({ ...product, sku: e.target.value })}
-            />
-            <Input
-              label="Fabricante"
-              value={product.manufacturer}
-              onChange={(e) => setProduct({ ...product, manufacturer: e.target.value })}
-            />
-            <Input
-              label="Modelo"
-              value={product.model}
-              onChange={(e) => setProduct({ ...product, model: e.target.value })}
+              label="Número de Parte"
+              value={product.partNumber}
+              onChange={(e) => setProduct({ ...product, partNumber: e.target.value })}
             />
             <Input
               label="Cantidad"
@@ -151,8 +141,29 @@ export default function EditProductPage() {
             <Input
               label="Precio (USD)"
               type="number"
-              value={product.price}
-              onChange={(e) => setProduct({ ...product, price: parseFloat(e.target.value) || 0 })}
+              value={product.estimatedPriceUSD || ""}
+              onChange={(e) => setProduct({ ...product, estimatedPriceUSD: parseFloat(e.target.value) || 0 })}
+            />
+            <Input
+              label="Categoría eBay"
+              value={product.ebayCategory || ""}
+              onChange={(e) => setProduct({ ...product, ebayCategory: e.target.value })}
+            />
+            <Input
+              label="ID de Categoría"
+              type="number"
+              value={product.ebayCategoryId || ""}
+              onChange={(e) => setProduct({ ...product, ebayCategoryId: parseInt(e.target.value) || undefined })}
+            />
+            <Input
+              label="Origen"
+              value={product.origin || ""}
+              onChange={(e) => setProduct({ ...product, origin: e.target.value })}
+            />
+            <Input
+              label="URL de Imagen"
+              value={product.image || ""}
+              onChange={(e) => setProduct({ ...product, image: e.target.value })}
             />
             <div className="sm:col-span-2">
               <Textarea
@@ -160,6 +171,14 @@ export default function EditProductPage() {
                 value={product.description}
                 onChange={(e) => setProduct({ ...product, description: e.target.value })}
                 rows={3}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Textarea
+                label="Keywords de búsqueda"
+                value={product.keywords || ""}
+                onChange={(e) => setProduct({ ...product, keywords: e.target.value })}
+                rows={2}
               />
             </div>
           </div>

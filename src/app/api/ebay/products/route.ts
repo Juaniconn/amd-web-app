@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const DATA_DIR = path.join(process.cwd(), "..", "ebay-automation", "src", "data");
-const INVENTORY_FILE = path.join(DATA_DIR, "inventory.json");
+const DATA_DIR = path.join(process.cwd(), "public");
+const INVENTORY_FILE = path.join(DATA_DIR, "inventory-ebay.json");
 
 function loadInventory(): any[] {
   if (!fs.existsSync(INVENTORY_FILE)) return [];

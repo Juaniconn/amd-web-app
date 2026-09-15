@@ -74,10 +74,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "E-Commerce",
     items: [
-      { href: "/ebay", label: "eBay Dashboard", icon: <ShoppingBag className="h-4 w-4" />, permission: PERMISSION_IDS.inventoryRead },
-      { href: "/ebay/listings", label: "Listados", icon: <ShoppingBag className="h-4 w-4" />, permission: PERMISSION_IDS.inventoryRead },
-      { href: "/ebay/orders", label: "Órdenes", icon: <ShoppingCart className="h-4 w-4" />, permission: PERMISSION_IDS.inventoryRead },
-      { href: "/ebay/inventory", label: "Inventario", icon: <Package className="h-4 w-4" />, permission: PERMISSION_IDS.inventoryRead },
+      { href: "/ebay", label: "eBay", icon: <ShoppingBag className="h-4 w-4" />, permission: PERMISSION_IDS.inventoryRead },
     ],
   },
   {

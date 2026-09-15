@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const EBAY_ENV_PATH = path.join(process.cwd(), "..", "ebay-automation", ".env.local");
+const EBAY_ENV_PATH = path.join(process.cwd(), ".env.local");
 
 function readEnvVar(varName: string): string {
   try {

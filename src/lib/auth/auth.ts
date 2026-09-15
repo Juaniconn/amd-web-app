@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth/trusted-hosts";
 
 export const auth = betterAuth({
+  trustHost: true,
   database: drizzleAdapter(db, {
     provider: "pg",
     usePlural: true,

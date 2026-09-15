@@ -50,7 +50,7 @@ export function AIAssistant() {
       {/* Botón flotante */}
       <button
         onClick={() => setOpen(!open)}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-500/30 transition-all hover:bg-blue-700 hover:shadow-xl"
+        className="fixed bottom-24 left-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-500/30 transition-all hover:bg-blue-700 hover:shadow-xl"
         aria-label="Asistente IA"
       >
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
@@ -58,7 +58,7 @@ export function AIAssistant() {
 
       {/* Panel de chat */}
       {open && (
-        <Card className="fixed bottom-24 right-6 z-50 flex h-[500px] w-[380px] flex-col shadow-2xl">
+        <Card className="fixed bottom-24 left-6 z-50 flex h-[500px] w-[380px] flex-col shadow-2xl">
           <div className="flex items-center gap-2 border-b px-4 py-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
               <MessageCircle className="h-4 w-4 text-blue-600" />

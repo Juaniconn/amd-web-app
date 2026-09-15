@@ -55,3 +55,9 @@ next-env.d.ts
 
 # Entorno de produccion (secretos del VPS) - NUNCA versionar
 .env.production
+
+# Secretos (SSH keys, API keys, cloudflared) - NUNCA versionar
+.secrets/
+cloudflared.exe
+public/inventory-photos/
+public/inventory-ebay.json

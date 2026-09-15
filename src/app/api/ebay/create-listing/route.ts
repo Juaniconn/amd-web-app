@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const EBAY_ENV_PATH = path.join(process.cwd(), "..", "ebay-automation", ".env.local");
-const EBAY_DATA_DIR = path.join(process.cwd(), "..", "ebay-automation", "src", "data");
+const EBAY_ENV_PATH = path.join(process.cwd(), ".env.local");
+const EBAY_DATA_DIR = path.join(process.cwd(), "public");
 
 function readEnvVar(varName: string): string {
   try {
@@ -39,7 +39,7 @@ function getEbayApiBaseUrl(): string {
 }
 
 function loadItemsForPublishing() {
-  const filePath = path.join(EBAY_DATA_DIR, "inventory.json");
+  const filePath = path.join(EBAY_DATA_DIR, "inventory-ebay.json");
   if (!fs.existsSync(filePath)) return [];
   const items = JSON.parse(fs.readFileSync(filePath, "utf-8"));
   return items.map((item: any) => ({
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Producto no encontrado", itemId }, { status: 404 });
     }
 
-    const imageUrl = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/inventory-images/${item.image}`;
+    const imageUrl = `${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/images/${item.image}`;
 
     // Step 1: Create/Update Inventory Item
     const inventoryPayload = createInventoryPayload(item, imageUrl);
@@ -172,8 +172,8 @@ export async function POST(req: NextRequest) {
 
     const publishData = await publishRes.json();
 
-    // Update inventory.json status
-    const invPath = path.join(EBAY_DATA_DIR, "inventory.json");
+    // Update inventory-ebay.json status
+    const invPath = path.join(EBAY_DATA_DIR, "inventory-ebay.json");
     const inventoryItems = JSON.parse(fs.readFileSync(invPath, "utf-8"));
     if (inventoryItems[itemId]) {
       inventoryItems[itemId].status = "published";

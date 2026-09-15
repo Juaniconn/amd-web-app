@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const DATA_DIR = path.join(process.cwd(), "..", "ebay-automation", "src", "data");
-const INVENTORY_FILE = path.join(DATA_DIR, "inventory.json");
-const EBAY_ENV_PATH = path.join(process.cwd(), "..", "ebay-automation", ".env.local");
+const DATA_DIR = path.join(process.cwd(), "public");
+const INVENTORY_FILE = path.join(DATA_DIR, "inventory-ebay.json");
+const EBAY_ENV_PATH = path.join(process.cwd(), ".env.local");
 
 function readEnvVar(varName: string): string {
   try {

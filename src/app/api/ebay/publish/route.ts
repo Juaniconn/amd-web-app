@@ -4,7 +4,7 @@ import path from "path";
 
 function getToken(): string {
   try {
-    const envPath = path.join(process.cwd(), "..", "ebay-automation", ".env.local");
+    const envPath = path.join(process.cwd(), ".env.local");
     const envContent = fs.readFileSync(envPath, "utf-8");
     const match = envContent.match(/^EBAY_OAUTH_TOKEN=(.+)$/m) || envContent.match(/^EBAY_AUTH_TOKEN=(.+)$/m);
     return match ? match[1].trim() : "";
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const token = getToken();
     if (!token) return NextResponse.json({ error: "Token not configured" }, { status: 401 });
 
-    const invPath = path.join(process.cwd(), "..", "ebay-automation", "src", "data", "inventory.json");
+    const invPath = path.join(process.cwd(), "..", "ebay-automation", "src", "data", "inventory-ebay.json");
     const items = JSON.parse(fs.readFileSync(invPath, "utf-8"));
     const item = items[itemId];
     if (!item) return NextResponse.json({ error: "Product not found" }, { status: 404 });
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     <Currency>USD</Currency>
     <ListingDuration>GTC</ListingDuration>
     <ListingType>FixedPriceItem</ListingType>
-    <PictureDetails><PictureURL>http://localhost:3000/inventory-images/${item.imagen}</PictureURL></PictureDetails>
+    <PictureDetails><PictureURL>http://localhost:3000/images/${item.imagen}</PictureURL></PictureDetails>
     <PostalCode>88200</PostalCode>
     <Location>Ciudad Juarez, CH</Location>
     <DispatchTimeMax>3</DispatchTimeMax>
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  const invPath = path.join(process.cwd(), "..", "ebay-automation", "src", "data", "inventory.json");
+  const invPath = path.join(process.cwd(), "..", "ebay-automation", "src", "data", "inventory-ebay.json");
   const items = JSON.parse(fs.readFileSync(invPath, "utf-8"));
   const publishItems = items.map((item: any, index: number) => ({
     id: index,

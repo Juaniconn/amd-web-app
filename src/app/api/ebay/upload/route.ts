@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const UPLOAD_DIR = path.join(process.cwd(), "..", "ebay-automation", "public", "inventory-images");
+const UPLOAD_DIR = path.join(process.cwd(), "public", "images");
 
 // Asegurar que el directorio existe
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       filename,
-      url: `/inventory-images/${filename}`,
+      url: `/images/${filename}`,
       size: file.size,
     });
   } catch (error: any) {
@@ -59,7 +59,7 @@ export async function GET() {
       .filter((f) => /\.(jpg|jpeg|png|webp|gif)$/i.test(f))
       .map((f) => ({
         filename: f,
-        url: `/inventory-images/${f}`,
+        url: `/images/${f}`,
       }));
     return NextResponse.json({ images, total: images.length });
   } catch (error: any) {
